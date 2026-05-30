@@ -178,7 +178,12 @@ function _routeAction(action, payload, profile) {
 
     case 'CREATE_PERIOD':
       requireAccess(['isKoordinator'], profile);
-      return createPeriod({ ...payload, createdBy: profile.email });
+      return createPeriod({
+        namaPeriode:    payload.nama_periode,
+        tanggalMulai:   payload.tanggal_mulai,
+        tanggalSelesai: payload.tanggal_selesai,
+        createdBy:      profile.email,
+      });
 
     case 'UPDATE_PERIOD':
       requireAccess(['isKoordinator'], profile);
