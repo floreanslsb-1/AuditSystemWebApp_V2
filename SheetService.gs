@@ -483,6 +483,14 @@ function updatePeriodStatus(periodId, status) {
     _updateCell(sheet, period._rowIndex, C.COMPLETED_AT + 1, now());
   return { success: true };
 }
+function activatePeriod(periodId) {
+  const existing = getAllPeriods(false).find(p => p.status === CONFIG.PERIOD_STATUS.ACTIVE);
+  if (existing && existing.period_id !== periodId) {
+    throw new Error('Sudah ada periode ACTIVE: ' + existing.nama_periode + '. Selesaikan dulu sebelum mengaktifkan yang baru.');
+  }
+  updatePeriodStatus(periodId, CONFIG.PERIOD_STATUS.ACTIVE);
+  return { success: true };
+}
 
 function archivePeriod(periodId) {
   const sheet  = _getMasterSheet(CONFIG.SHEETS.AUDIT_REGISTRY);
@@ -493,6 +501,17 @@ function archivePeriod(periodId) {
   const C = CONFIG.COLS.AUDIT_REGISTRY;
   _updateCell(sheet, period._rowIndex, C.ARCHIVED    + 1, true);
   _updateCell(sheet, period._rowIndex, C.ARCHIVED_AT + 1, now());
+  return { success: true };
+}
+
+function updatePeriod(periodId, updates) {
+  const sheet  = _getMasterSheet(CONFIG.SHEETS.AUDIT_REGISTRY);
+  const period = getAllPeriods(true).find(p => p.period_id === periodId);
+  if (!period) throw new Error('Periode tidak ditemukan: ' + periodId);
+  const C = CONFIG.COLS.AUDIT_REGISTRY;
+  if (updates.nama_periode    !== undefined) _updateCell(sheet, period._rowIndex, C.NAMA_PERIODE    + 1, updates.nama_periode);
+  if (updates.tanggal_mulai   !== undefined) _updateCell(sheet, period._rowIndex, C.TANGGAL_MULAI   + 1, updates.tanggal_mulai);
+  if (updates.tanggal_selesai !== undefined) _updateCell(sheet, period._rowIndex, C.TANGGAL_SELESAI + 1, updates.tanggal_selesai);
   return { success: true };
 }
 
