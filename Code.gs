@@ -193,6 +193,17 @@ function _routeAction(action, payload, profile) {
       requireAccess(['isKoordinator'], profile);
       return activatePeriod(payload.period_id);
 
+    // Alias untuk Page_Admin yang masih pakai UPDATE_PERIOD_STATUS
+    case 'UPDATE_PERIOD_STATUS':
+      requireAccess(['isKoordinator'], profile);
+      if (payload.status === CONFIG.PERIOD_STATUS.ACTIVE) {
+        return activatePeriod(payload.period_id);
+      }
+      if (payload.status === CONFIG.PERIOD_STATUS.COMPLETED) {
+        return completePeriod(payload.period_id, profile.email);
+      }
+      return updatePeriodStatus(payload.period_id, payload.status);
+
     case 'COMPLETE_PERIOD':
       requireAccess(['isKoordinator'], profile);
       return completePeriod(payload.period_id, profile.email);
@@ -200,6 +211,14 @@ function _routeAction(action, payload, profile) {
     case 'DELETE_PERIOD':
       requireAccess(['isKoordinator'], profile);
       return deletePeriod(payload.period_id);
+
+    case 'ARCHIVE_PERIOD':
+      requireAccess(['isKoordinator'], profile);
+      return archivePeriod(payload.period_id);
+
+    case 'RESTORE_ARCHIVED_PERIOD':
+      requireAccess(['isKoordinator'], profile);
+      return restoreArchivedPeriod(payload.period_id);
 
     // ── Audit Agenda ──────────────────────────────────────────
     case 'GET_AGENDAS_BY_PERIOD': {
