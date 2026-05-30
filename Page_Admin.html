@@ -1432,9 +1432,9 @@ async function _togglePeriodExpand(periodId, namaPeriode) {
             kategori:       kategoriLabel,
             auditor_emails: ag.auditor_emails,
             lead_auditor:   ag.lead_auditor,
-            session_id:     ag.session_id || '',
+            status:         ag.status || 'PLANNED',
             period_id:      periodId,
-            period_status:  results[0] ? '' : '', // diisi di bawah
+            period_status:  results[0] ? ''
           }).replace(/'/g, "&#39;");
 
           return '<tr>' +
@@ -2366,7 +2366,7 @@ async function _saveEditAgenda(btn) {
   var selectedIds = Object.keys(s.selected).filter(function(id) { return s.selected[id]; });
   if (selectedIds.length === 0) return toast('Pilih minimal 1 checklist item.', 'error');
 
-  var hasSession = !!s.ag.session_id;
+  var needReset = (s.ag.status === 'STARTED') && checklistChanged;
 
   // Cek apa yang berubah
   var originalEmails  = (s.ag.auditor_emails || '').split(',').map(function(e){ return e.trim(); }).filter(Boolean).sort();
