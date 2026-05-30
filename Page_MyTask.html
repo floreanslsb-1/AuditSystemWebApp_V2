@@ -1,0 +1,1093 @@
+<script>
+// ============================================================
+//  Page_MyTask.html
+//  Semua task yang perlu ditindaklanjuti user
+// ============================================================
+
+Pages['mytask'] = async function(container) {
+  container.innerHTML =
+    '<div class="page-loader"><div class="spinner dark"></div><span>Memuat tugas...</span></div>';
+
+  var period = App.activePeriod;
+  if (!period) {
+    container.innerHTML =
+      '<div class="empty-state">' +
+        '<i data-lucide="calendar-off" style="width:48px;height:48px;opacity:.3;margin-bottom:16px"></i>' +
+        '<div class="empty-title">Tidak Ada Periode Aktif</div>' +
+        '<div class="empty-desc">My Task hanya tersedia saat periode audit aktif.</div>' +
+      '</div>';
+    lucide.createIcons();
+    return;
+  }
+
+  try {
+    var results  = await Promise.all([
+      cachedApi('GET_AGENDAS_BY_PERIOD',     { period_id: period.period_id }, 30),
+      cachedApi('GET_ALL_FINDINGS_BY_PERIOD', { period_id: period.period_id }, 15),
+    ]);
+    var agendas  = results[0];
+    var findings = results[1];
+
+    findings.forEach(function(f) {
+      f._agenda = agendas.find(function(a) { return a.agenda_id === f.agenda_id; });
+    });
+
+    var tasks = await _buildTaskList(findings, agendas, period);
+
+    _renderMyTask(container, tasks, period);
+  } catch(err) {
+    container.innerHTML =
+      '<div class="empty-state">' +
+        '<i data-lucide="alert-triangle" style="width:48px;height:48px;opacity:.3;margin-bottom:16px"></i>' +
+        '<div class="empty-title">Gagal Memuat</div>' +
+        '<div class="empty-desc">' + escHtml(err.message) + '</div>' +
+      '</div>';
+    lucide.createIcons();
+  }
+};
+
+// ── Build task list ───────────────────────────────────────────
+
+async function _buildTaskList(findings, agendas, period) {
+  var p     = App.profile || {};
+  var tasks = [];
+
+  // ── 1. VERIFIKASI TEMUAN (Koordinator) ───────────────────
+  if (p.isKoordinator) {
+    var pendingVerif = {};
+    findings
+      .filter(function(f) {
+        return f.finding_status === 'PENDING_VERIFICATION';
+      })
+      .forEach(function(f) {
+        var aid = f.agenda_id;
+        if (!pendingVerif[aid]) {
+          pendingVerif[aid] = {
+            type:       'VERIFIKASI',
+            badge:      'badge-amber',
+            label:      'Verifikasi Temuan',
+            agenda:     f._agenda,
+            agenda_id:  aid,
+            period_id:  period.period_id,
+            findings:   [],
+            icon:       'shield-check',
+          };
+        }
+        pendingVerif[aid].findings.push(f);
+      });
+    Object.values(pendingVerif).forEach(function(t) { tasks.push(t); });
+  }
+
+  // ── 2. ISI TPP (Auditee) ─────────────────────────────────
+  if (p.isAuditee) {
+    findings
+      .filter(function(f) {
+        return f.finding_status === 'OPEN' &&
+          f._agenda && _isAuditeeOf(f._agenda, p.email);
+      })
+      .forEach(function(f) {
+        tasks.push({
+          type:       'ISI_TPP',
+          badge:      'badge-blue',
+          label:      'Isi TPP',
+          agenda:     f._agenda,
+          agenda_id:  f.agenda_id,
+          period_id:  period.period_id,
+          finding:    f,
+          result_id:  f.result_id,
+          icon:       'wrench',
+          desc:       '#' + f.nomor_persyaratan + '.' + f.check_item_no +
+                      ' · ' + escHtml(f._agenda ? f._agenda.dept : ''),
+        });
+      });
+  }
+
+  // ── 3. UPLOAD IMPLEMENTASI (Auditee) ─────────────────────
+  if (p.isAuditee) {
+    findings
+      .filter(function(f) {
+        return f.finding_status === 'TPP_APPROVED' &&
+          f._agenda && _isAuditeeOf(f._agenda, p.email);
+      })
+      .forEach(function(f) {
+        tasks.push({
+          type:       'UPLOAD_IMPL',
+          badge:      'badge-purple',
+          label:      'Upload Implementasi',
+          agenda:     f._agenda,
+          agenda_id:  f.agenda_id,
+          period_id:  period.period_id,
+          finding:    f,
+          result_id:  f.result_id,
+          icon:       'camera',
+          desc:       '#' + f.nomor_persyaratan + '.' + f.check_item_no +
+                      ' · ' + escHtml(f._agenda ? f._agenda.dept : ''),
+        });
+      });
+  }
+
+// ── 4 & 5. APPROVAL TPP / IMPLEMENTASI ───────────────────
+  var approvalFindings = findings.filter(function(f) {
+    return f.finding_status === 'PENDING_TPP' || f.finding_status === 'PENDING_IMPL';
+  });
+
+  // Muat approval log untuk tiap result (paralel)
+  var logs = await Promise.all(approvalFindings.map(function(f) {
+    return api('GET_APPROVAL_LOG', {
+      period_id: period.period_id,
+      result_id: f.result_id,
+    }).catch(function() { return []; });
+  }));
+
+  approvalFindings.forEach(function(f, idx) {
+    var ag    = f._agenda;
+    var stage = f.finding_status === 'PENDING_TPP' ? 'TPP' : 'IMPL';
+    var next  = _nextApprovalLevel(logs[idx], stage);
+    if (!next) return;
+    if (!_userMatchesLevel(next, p, ag)) return;
+
+    tasks.push({
+      type:       stage === 'TPP' ? 'APPROVAL_TPP' : 'APPROVAL_IMPL',
+      badge:      stage === 'TPP' ? 'badge-teal' : 'badge-emerald',
+      label:      stage === 'TPP' ? 'Approval TPP' : 'Approval Implementasi',
+      level:      next,
+      agenda:     ag,
+      agenda_id:  f.agenda_id,
+      period_id:  period.period_id,
+      finding:    f,
+      result_id:  f.result_id,
+      icon:       stage === 'TPP' ? 'check-circle' : 'upload-cloud',
+      desc:       '#' + f.nomor_persyaratan + '.' + f.check_item_no +
+                  ' · ' + escHtml(ag ? ag.dept : ''),
+    });
+  });
+
+  return tasks;
+}
+
+var APPROVAL_CHAIN = ['DeptHead', 'Auditor', 'Koordinator'];
+
+// Level berikutnya yang harus approve untuk satu stage, dihitung dari log.
+// Mengembalikan 'DeptHead' | 'Auditor' | 'Koordinator', atau null kalau rantai selesai.
+function _nextApprovalLevel(log, stage) {
+  var approved = (log || [])
+    .filter(function(l) {
+      return l.stage === stage && l.action === 'APPROVED';
+    })
+    .map(function(l) { return l.level; });
+  for (var i = 0; i < APPROVAL_CHAIN.length; i++) {
+    if (approved.indexOf(APPROVAL_CHAIN[i]) === -1) return APPROVAL_CHAIN[i];
+  }
+  return null;
+}
+
+// Apakah `email` memenuhi syarat sebagai `level` untuk session ini.
+function _userMatchesLevel(level, profile, agenda) {
+  if (level === 'Koordinator') return !!profile.isKoordinator;
+  if (level === 'DeptHead') {
+    return !!profile.isDeptHead && agenda &&
+      profile.deptHeadAreas && profile.deptHeadAreas.indexOf(agenda.area_id) !== -1;
+  }
+  if (level === 'Auditor') {
+    return !!profile.isAuditor && agenda &&
+      _emailInCsv(agenda.auditor_emails, profile.email);
+  }
+  return false;
+}
+
+
+function _isAuditeeOf(agenda, email) {
+  if (!agenda || !agenda.auditee_emails || !email) return false;
+  var target = String(email).trim().toLowerCase();
+  return String(agenda.auditee_emails).split(',')
+    .map(function(e) { return e.trim().toLowerCase(); })
+    .indexOf(target) !== -1;
+}
+
+function _emailInCsv(csv, email) {
+  if (!csv || !email) return false;
+  var target = String(email).trim().toLowerCase();
+  return String(csv).split(',')
+    .map(function(e) { return e.trim().toLowerCase(); })
+    .indexOf(target) !== -1;
+}
+
+// ── Render My Task ────────────────────────────────────────────
+
+function _renderMyTask(container, tasks, period) {
+  var totalTasks = tasks.length;
+
+  var listHtml = '';
+  if (!tasks.length) {
+    listHtml =
+      '<div class="card"><div class="card-body empty-state" style="padding:60px">' +
+        '<i data-lucide="party-popper" style="width:48px;height:48px;opacity:.2;margin-bottom:16px"></i>' +
+        '<div class="empty-title">Tidak Ada Tugas</div>' +
+        '<div class="empty-desc">Semua sudah beres. Tidak ada yang perlu ditindaklanjuti saat ini.</div>' +
+      '</div></div>';
+  } else {
+    // Group by type untuk mass approve
+    var verifikasiTasks = tasks.filter(function(t) { return t.type === 'VERIFIKASI'; });
+    var approvalTppTasks = tasks.filter(function(t) { return t.type === 'APPROVAL_TPP'; });
+    var approvalImplTasks = tasks.filter(function(t) { return t.type === 'APPROVAL_IMPL'; });
+
+    listHtml =
+      '<div class="card">' +
+        // Mass approve bar — hanya kalau ada approval tasks
+        ((approvalTppTasks.length > 1 || approvalImplTasks.length > 1) && App.profile.isKoordinator
+          ? '<div style="padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg);' +
+              'display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
+              '<span style="font-size:12px;color:var(--text-muted)">Mass approve:</span>' +
+              (approvalTppTasks.length > 1
+                ? '<button class="btn btn-outline btn-sm" onclick="_massApproveAll(\'TPP\')">' +
+                    '<i data-lucide="check-circle" style="width:13px;height:13px"></i> ' +
+                    'Approve Semua TPP (' + approvalTppTasks.length + ')' +
+                  '</button>'
+                : '') +
+              (approvalImplTasks.length > 1
+                ? '<button class="btn btn-outline btn-sm" onclick="_massApproveAll(\'IMPL\')">' +
+                    '<i data-lucide="check-circle" style="width:13px;height:13px"></i> ' +
+                    'Approve Semua Implementasi (' + approvalImplTasks.length + ')' +
+                  '</button>'
+                : '') +
+            '</div>'
+          : '') +
+        '<div class="table-wrap"><table>' +
+          '<thead><tr>' +
+            '<th style="width:130px">Tipe</th>' +
+            '<th>Detail</th>' +
+            '<th style="width:140px">Area</th>' +
+            '<th style="width:100px">Role</th>' +
+            '<th style="width:48px"></th>' +
+          '</tr></thead>' +
+          '<tbody>' +
+            tasks.map(function(t, idx) {
+              var areaName = t.agenda ? escHtml(t.agenda.dept) : '—';
+              var roleLabel = t.level || (t.type === 'ISI_TPP' || t.type === 'UPLOAD_IMPL' ? 'Auditee' : 'Koordinator');
+              var detailHtml = '';
+
+              if (t.type === 'VERIFIKASI') {
+                detailHtml = '<strong>' + t.findings.length + ' temuan</strong> menunggu verifikasi';
+              } else {
+                detailHtml = '<span class="td-mono" style="font-size:11px">' +
+                  escHtml(t.result_id ? t.result_id.split('_').slice(-2).join('_') : '') +
+                  '</span>' +
+                  (t.finding ? ' · ' + statusBadge(t.finding.status) : '');
+              }
+
+              return '<tr style="cursor:pointer" onclick="_openTaskDetail(' + idx + ')" ' +
+                'onmouseover="this.style.background=\'var(--bg)\'" ' +
+                'onmouseout="this.style.background=\'\'">' +
+                '<td>' +
+                  '<span class="badge ' + t.badge + '" style="display:inline-flex;align-items:center;gap:5px">' +
+                    '<i data-lucide="' + t.icon + '" style="width:11px;height:11px"></i>' +
+                    escHtml(t.label) +
+                  '</span>' +
+                '</td>' +
+                '<td>' + detailHtml + '</td>' +
+                '<td class="text-sm">' + areaName + '</td>' +
+                '<td><span class="badge badge-slate" style="font-size:10px">' + escHtml(roleLabel) + '</span></td>' +
+                '<td><i data-lucide="chevron-right" style="width:14px;height:14px;color:var(--text-muted)"></i></td>' +
+              '</tr>';
+            }).join('') +
+          '</tbody>' +
+        '</table></div>' +
+      '</div>';
+  }
+
+  container.innerHTML =
+    '<div class="page-hero mb-24">' +
+      '<h1 style="display:flex;align-items:center;gap:10px">' +
+        '<i data-lucide="list-checks" style="width:24px;height:24px"></i> My Task' +
+      '</h1>' +
+      '<p>Periode: <strong style="color:#fff">' + escHtml(period.nama_periode) + '</strong>' +
+        (totalTasks > 0
+          ? ' · <strong style="color:#fff">' + totalTasks + '</strong> tugas perlu ditindaklanjuti'
+          : ' · Tidak ada tugas') +
+      '</p>' +
+    '</div>' +
+    listHtml;
+
+  // Simpan tasks ke window untuk dipakai saat klik
+  window._myTaskList = tasks;
+  window._myTaskPeriod = period;
+
+  lucide.createIcons();
+}
+
+// ── Task Detail (sub-page) ────────────────────────────────────
+
+function _openTaskDetail(idx) {
+  var task   = window._myTaskList[idx];
+  var period = window._myTaskPeriod;
+  if (!task) return;
+
+  var container = document.getElementById('page-content');
+  window._myTaskReturnIdx = idx;
+
+  switch (task.type) {
+    case 'VERIFIKASI':    _renderVerifikasiPage(container, task, period); break;
+    case 'ISI_TPP':       _renderIsiTppPage(container, task, period);     break;
+    case 'UPLOAD_IMPL':   _renderUploadImplPage(container, task, period); break;
+    case 'APPROVAL_TPP':
+    case 'APPROVAL_IMPL': _renderApprovalPage(container, task, period);   break;
+  }
+}
+
+function _backToMyTask() {
+  navigateTo('mytask');
+}
+
+function _subPageHeader(title, subtitle) {
+  return '<div style="display:flex;align-items:center;gap:12px;margin-bottom:24px">' +
+    '<button class="btn btn-ghost btn-icon" onclick="_backToMyTask()" title="Kembali">' +
+      '<i data-lucide="arrow-left" style="width:16px;height:16px"></i>' +
+    '</button>' +
+    '<div>' +
+      '<div style="font-size:15px;font-weight:700">' + title + '</div>' +
+      '<div style="font-size:12px;color:var(--text-muted)">' + subtitle + '</div>' +
+    '</div>' +
+  '</div>';
+}
+
+// ════════════════════════════════════════════════════════════
+//  SUB-PAGE: VERIFIKASI TEMUAN (Koordinator)
+// ════════════════════════════════════════════════════════════
+
+async function _renderVerifikasiPage(container, task, period) {
+  container.innerHTML =
+    '<div class="page-loader"><div class="spinner dark"></div><span>Memuat temuan...</span></div>';
+
+  try {
+    var findings = await api('GET_FINDINGS_BY_AGENDA', {
+      period_id: period.period_id,
+      agenda_id: task.agenda_id,
+    });
+    var pendingFindings = findings.filter(function(f) {
+      return f.finding_status === 'PENDING_VERIFICATION';
+    });
+
+    var cardsHtml = pendingFindings.map(function(f, i) {
+      return '<div class="card mb-12" id="verif-card-' + i + '">' +
+        '<div class="card-body">' +
+          '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">' +
+            statusBadge(f.status) +
+            '<span class="td-mono" style="font-size:11px">#' + f.nomor_persyaratan + '.' + f.check_item_no + '</span>' +
+            '<span style="font-size:12px;color:var(--text-muted);flex:1">' + escHtml(f.result_id) + '</span>' +
+          '</div>' +
+          // Deskripsi temuan (editable)
+          '<div class="form-group">' +
+            '<label class="form-label">Deskripsi Temuan</label>' +
+            '<textarea class="form-control" id="verif-desc-' + i + '" rows="3">' +
+              escHtml(f.deskripsi_temuan) +
+            '</textarea>' +
+          '</div>' +
+          // Status persyaratan (editable, dengan aturan transisi)
+          '<div class="form-group">' +
+            '<label class="form-label">Jenis Temuan</label>' +
+            '<select class="form-control" id="verif-status-' + i + '" style="max-width:200px">' +
+              _buildStatusOptions(f.status) +
+            '</select>' +
+            '<div class="form-hint">Non Comply ↔ OFI diperbolehkan. Comply = temuan langsung ditutup.</div>' +
+          '</div>' +
+          // Foto
+          (f.foto_urls
+            ? '<div class="form-group">' +
+                '<label class="form-label">Foto Bukti (existing)</label>' +
+                '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+                  f.foto_urls.split(',').filter(Boolean).map(function(url) {
+                    return '<a href="' + url + '" target="_blank" class="btn btn-outline btn-sm">' +
+                      '<i data-lucide="image" style="width:12px;height:12px"></i> Lihat Foto' +
+                    '</a>';
+                  }).join('') +
+                '</div>' +
+              '</div>'
+            : '') +
+          // Hapus temuan
+          '<button class="btn btn-ghost btn-sm" style="color:var(--rose)" ' +
+            'onclick="_confirmDeleteFinding(\'' + f.result_id + '\',\'' + period.period_id + '\',' + i + ')">' +
+            '<i data-lucide="trash-2" style="width:13px;height:13px"></i> Hapus Temuan Ini' +
+          '</button>' +
+        '</div>' +
+        '<input type="hidden" id="verif-fid-' + i + '" value="' + escHtml(f.result_id) + '">' +
+      '</div>';
+    }).join('');
+
+    container.innerHTML =
+      _subPageHeader(
+        'Verifikasi Temuan — ' + escHtml(task.agenda ? task.agenda.dept : ''),
+        pendingFindings.length + ' temuan menunggu verifikasi'
+      ) +
+      (pendingFindings.length === 0
+        ? '<div class="card"><div class="card-body empty-state"><div class="empty-desc">Tidak ada temuan yang perlu diverifikasi.</div></div></div>'
+        : cardsHtml +
+          '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px">' +
+            '<button class="btn btn-outline" onclick="_backToMyTask()">Batal</button>' +
+            '<button class="btn btn-primary" id="verif-submit-btn" ' +
+              'onclick="singleClick(this,function(){ _submitVerifikasi(' +
+                pendingFindings.length + ',\'' + task.agenda_id + '\',\'' + period.period_id + '\') })">' +
+              '<i data-lucide="shield-check" style="width:14px;height:14px"></i> Verifikasi Semua' +
+            '</button>' +
+          '</div>'
+      );
+    lucide.createIcons();
+  } catch(err) {
+    container.innerHTML = _subPageHeader('Verifikasi Temuan', '') +
+      '<div class="empty-state"><div class="empty-desc">' + escHtml(err.message) + '</div></div>';
+    lucide.createIcons();
+  }
+}
+
+function _buildStatusOptions(current) {
+  var options = ['Non Comply', 'OFI', 'Comply'];
+  return options.map(function(s) {
+    return '<option value="' + s + '" ' + (s === current ? 'selected' : '') + '>' + s + '</option>';
+  }).join('');
+}
+
+async function _confirmDeleteFinding(resultId, periodId, cardIdx) {
+  var ok = await showConfirm({
+    title:       'Hapus Temuan',
+    message:     'Hapus temuan ini?',
+    detail:      'Check item akan dikembalikan ke status Comply.',
+    confirmText: 'Hapus',
+    danger:      true,
+  });
+  if (!ok) return;
+  try {
+    await api('VERIFY_FINDINGS', {
+      period_id: periodId,
+      agenda_id: window._myTaskPeriod && window._myTaskList
+        ? (window._myTaskList.find(function(t) { return t.type === 'VERIFIKASI'; }) || {}).agenda_id || ''
+        : '',
+      updates: [{ result_id: resultId, final_status: 'Comply' }],
+    });
+    var card = document.getElementById('verif-card-' + cardIdx);
+    if (card) card.remove();
+    clearCache('GET_ALL_FINDINGS_BY_PERIOD');
+    clearCache('GET_FINDINGS_BY_AGENDA');
+    toast('Temuan dihapus. Check item dikembalikan ke Comply.', 'success');
+  } catch(err) { toast(err.message, 'error'); }
+}
+
+async function _submitVerifikasi(count, agendaId, periodId) {
+  var updates = [];
+  for (var i = 0; i < count; i++) {
+    var fidEl  = document.getElementById('verif-fid-'    + i);
+    var descEl = document.getElementById('verif-desc-'   + i);
+    var statEl = document.getElementById('verif-status-' + i);
+    if (!fidEl) continue; // sudah dihapus
+    updates.push({
+      result_id:          fidEl.value,
+      deskripsi_temuan:   descEl ? descEl.value.trim() : '',
+      final_status:       statEl ? statEl.value : '',
+    });
+  }
+  if (!updates.length) return toast('Tidak ada temuan yang perlu diverifikasi.', 'error');
+
+  var btn     = document.getElementById('verif-submit-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner" style="width:13px;height:13px;border-width:2px"></div> Memverifikasi...';
+
+  try {
+    await api('VERIFY_FINDINGS', {
+      period_id: periodId,
+      agenda_id: agendaId,
+      updates:   updates,
+    });
+    clearCache('GET_ALL_FINDINGS_BY_PERIOD');
+    clearCache('GET_FINDINGS_BY_AGENDA');
+    toast('Verifikasi berhasil. Temuan sekarang bisa ditindaklanjuti auditee.', 'success');
+    navigateTo('mytask');
+  } catch(err) {
+    toast(err.message, 'error');
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="shield-check" style="width:14px;height:14px"></i> Verifikasi Semua';
+    lucide.createIcons();
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  SUB-PAGE: ISI TPP (Auditee)
+// ════════════════════════════════════════════════════════════
+
+async function _renderIsiTppPage(container, task, period) {
+  container.innerHTML =
+    '<div class="page-loader"><div class="spinner dark"></div><span>Memuat...</span></div>';
+
+  try {
+    // Cek apakah sudah ada TPP sebelumnya (resubmit setelah reject)
+    var existingItems = await api('GET_TPP_ITEMS', {
+      period_id: period.period_id,
+      result_id: task.result_id,
+    });
+    var log = await api('GET_APPROVAL_LOG', {
+      period_id: period.period_id,
+      result_id: task.result_id,
+    });
+
+    var f          = task.finding;
+    var isResubmit = existingItems.length > 0;
+
+    // Render history reject kalau ada
+    var historyHtml = _renderApprovalHistory(log, 'TPP');
+
+    container.innerHTML =
+      _subPageHeader(
+        'Isi TPP — ' + escHtml(task.agenda ? task.agenda.dept : ''),
+        '#' + (f ? f.nomor_persyaratan + '.' + f.check_item_no : '')
+      ) +
+
+      // Info temuan
+      '<div class="card mb-16"><div class="card-body" style="padding:14px 16px">' +
+        '<div style="display:flex;gap:10px;align-items:flex-start">' +
+          statusBadge(f ? f.status : '') +
+          '<div>' +
+            '<div style="font-size:13px;font-weight:600">' + escHtml(f ? f.deskripsi_temuan : '') + '</div>' +
+            '<div style="font-size:11px;color:var(--text-muted);margin-top:3px">' +
+              escHtml(task.agenda ? task.agenda.dept : '') +
+              ' · #' + (f ? f.nomor_persyaratan + '.' + f.check_item_no : '') +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div></div>' +
+
+      historyHtml +
+
+      // Form TPP
+      '<div class="card mb-16"><div class="card-body">' +
+        '<div style="font-size:13px;font-weight:600;margin-bottom:14px">Tindakan Perbaikan & Pencegahan</div>' +
+
+        // Target date (satu per finding)
+        '<div class="form-group">' +
+          '<label class="form-label">Target Penyelesaian <span class="required">*</span></label>' +
+          '<input class="form-control" type="date" id="tpp-target-date" ' +
+            'value="' + (f && f.target_date ? f.target_date : '') + '" style="max-width:200px">' +
+        '</div>' +
+
+        // Corrections
+        '<div style="font-size:12px;font-weight:700;color:var(--text-muted);letter-spacing:.06em;margin-bottom:8px">CORRECTION (Tindakan Segera)</div>' +
+        '<div id="tpp-corrections">' +
+          _renderTppItemInputs('CORRECTION', isResubmit
+            ? existingItems.filter(function(i) { return i.tipe === 'CORRECTION'; })
+            : [{ deskripsi: '' }]) +
+        '</div>' +
+        '<button class="btn btn-ghost btn-sm" onclick="_addTppItem(\'CORRECTION\')" style="margin-bottom:16px">' +
+          '<i data-lucide="plus" style="width:13px;height:13px"></i> Tambah Correction' +
+        '</button>' +
+
+        // Corrective Actions
+        '<div style="font-size:12px;font-weight:700;color:var(--text-muted);letter-spacing:.06em;margin-bottom:8px">CORRECTIVE ACTION (Jangka Panjang)</div>' +
+        '<div id="tpp-ca">' +
+          _renderTppItemInputs('CORRECTIVE_ACTION', isResubmit
+            ? existingItems.filter(function(i) { return i.tipe === 'CORRECTIVE_ACTION'; })
+            : [{ deskripsi: '' }]) +
+        '</div>' +
+        '<button class="btn btn-ghost btn-sm" onclick="_addTppItem(\'CORRECTIVE_ACTION\')" style="margin-bottom:16px">' +
+          '<i data-lucide="plus" style="width:13px;height:13px"></i> Tambah Corrective Action' +
+        '</button>' +
+
+      '</div></div>' +
+
+      '<div style="display:flex;justify-content:flex-end;gap:8px">' +
+        '<button class="btn btn-outline" onclick="_backToMyTask()">Batal</button>' +
+        '<button class="btn btn-primary" id="tpp-submit-btn" ' +
+          'onclick="singleClick(this,function(){ _submitTpp(\'' +
+            task.result_id + '\',\'' + task.agenda_id + '\',\'' + period.period_id + '\') })">' +
+          '<i data-lucide="send" style="width:14px;height:14px"></i> Submit TPP' +
+        '</button>' +
+      '</div>';
+
+    lucide.createIcons();
+  } catch(err) {
+    container.innerHTML = _subPageHeader('Isi TPP', '') +
+      '<div class="empty-state"><div class="empty-desc">' + escHtml(err.message) + '</div></div>';
+    lucide.createIcons();
+  }
+}
+
+function _renderTppItemInputs(tipe, items) {
+  return items.map(function(item, i) {
+    return '<div class="form-group" style="display:flex;gap:8px;align-items:flex-start" id="tpp-item-' + tipe + '-' + i + '">' +
+      '<textarea class="form-control" id="tpp-input-' + tipe + '-' + i + '" rows="2" ' +
+        'placeholder="' + (tipe === 'CORRECTION' ? 'Tindakan perbaikan segera...' : 'Rencana tindakan korektif jangka panjang...') + '">' +
+        escHtml(item.deskripsi || '') +
+      '</textarea>' +
+      (i > 0
+        ? '<button class="btn btn-ghost btn-icon" style="flex-shrink:0;margin-top:4px" ' +
+            'onclick="document.getElementById(\'tpp-item-' + tipe + '-' + i + '\').remove()">' +
+            '<i data-lucide="x" style="width:13px;height:13px;color:var(--text-muted)"></i>' +
+          '</button>'
+        : '<div style="width:32px"></div>') +
+    '</div>';
+  }).join('');
+}
+
+function _addTppItem(tipe) {
+  var container = document.getElementById('tpp-' + (tipe === 'CORRECTION' ? 'corrections' : 'ca'));
+  if (!container) return;
+  var existing = container.querySelectorAll('[id^="tpp-item-' + tipe + '-"]');
+  var nextIdx  = existing.length;
+  var div = document.createElement('div');
+  div.innerHTML = _renderTppItemInputs(tipe, [{ deskripsi: '' }]);
+  // Re-index
+  div.querySelectorAll('[id]').forEach(function(el) {
+    el.id = el.id.replace(tipe + '-0', tipe + '-' + nextIdx);
+  });
+  container.appendChild(div.firstElementChild);
+  lucide.createIcons();
+}
+
+async function _submitTpp(resultId, agendaId, periodId) {
+  var targetDate = document.getElementById('tpp-target-date') ?
+    document.getElementById('tpp-target-date').value : '';
+  if (!targetDate) return toast('Target penyelesaian wajib diisi.', 'error');
+
+  var items = [];
+  // Kumpulkan corrections
+  document.querySelectorAll('[id^="tpp-input-CORRECTION-"]').forEach(function(el) {
+    var val = el.value.trim();
+    if (val) items.push({ tipe: 'CORRECTION', deskripsi: val });
+  });
+  // Kumpulkan corrective actions
+  document.querySelectorAll('[id^="tpp-input-CORRECTIVE_ACTION-"]').forEach(function(el) {
+    var val = el.value.trim();
+    if (val) items.push({ tipe: 'CORRECTIVE_ACTION', deskripsi: val });
+  });
+
+  if (!items.length) return toast('Isi minimal satu correction atau corrective action.', 'error');
+
+  var btn      = document.getElementById('tpp-submit-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner" style="width:13px;height:13px;border-width:2px"></div> Mengirim...';
+
+  try {
+    await api('SUBMIT_TPP', {
+      period_id:   periodId,
+      result_id:   resultId,
+      agenda_id:   agendaId,
+      items:       items,
+      target_date: targetDate,
+    });
+    clearCache('GET_ALL_FINDINGS_BY_PERIOD');
+    clearCache('GET_APPROVAL_LOG');
+    clearCache('GET_TPP_ITEMS');
+    toast('TPP berhasil disubmit. Menunggu approval Dept Head.', 'success');
+    navigateTo('mytask');
+  } catch(err) {
+    toast(err.message, 'error');
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="send" style="width:14px;height:14px"></i> Submit TPP';
+    lucide.createIcons();
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  SUB-PAGE: UPLOAD IMPLEMENTASI (Auditee)
+// ════════════════════════════════════════════════════════════
+
+async function _renderUploadImplPage(container, task, period) {
+  container.innerHTML =
+    '<div class="page-loader"><div class="spinner dark"></div><span>Memuat...</span></div>';
+
+  try {
+    var tppItems = await api('GET_TPP_ITEMS', {
+      period_id: period.period_id,
+      result_id: task.result_id,
+    });
+    var log = await api('GET_APPROVAL_LOG', {
+      period_id: period.period_id,
+      result_id: task.result_id,
+    });
+    var f = task.finding;
+
+    var historyHtml = _renderApprovalHistory(log, 'IMPL');
+
+    var itemsHtml = tppItems.map(function(item, i) {
+      var isRejected = log.some(function(l) {
+        return l.stage === 'IMPL' && l.action === 'REJECTED';
+      });
+      var alreadySubmitted = !!item.impl_submitted_at && !isRejected;
+
+      return '<div class="card mb-12">' +
+        '<div class="card-body">' +
+          '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">' +
+            '<span class="badge ' + (item.tipe === 'CORRECTION' ? 'badge-blue' : 'badge-purple') + '" style="font-size:10px">' +
+              (item.tipe === 'CORRECTION' ? 'Correction' : 'Corrective Action') +
+            '</span>' +
+            (alreadySubmitted ? '<span class="badge badge-emerald" style="font-size:10px">✓ Sudah disubmit</span>' : '') +
+          '</div>' +
+          '<div style="font-size:13px;margin-bottom:12px">' + escHtml(item.deskripsi) + '</div>' +
+
+          (alreadySubmitted
+            // Sudah submit — tampilkan bukti lama
+            ? (item.impl_foto_urls
+                ? '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+                    item.impl_foto_urls.split(',').filter(Boolean).map(function(url) {
+                      return '<a href="' + url + '" target="_blank" class="btn btn-outline btn-sm">' +
+                        '<i data-lucide="image" style="width:12px;height:12px"></i> Lihat Bukti</a>';
+                    }).join('') +
+                  '</div>'
+                : '') +
+                (item.impl_keterangan
+                  ? '<div style="font-size:12px;color:var(--text-muted);margin-top:6px">' +
+                      escHtml(item.impl_keterangan) +
+                    '</div>'
+                  : '')
+            // Belum submit atau perlu resubmit
+            : '<div class="upload-zone" id="impl-zone-' + item.tpp_item_id + '">' +
+                '<i data-lucide="camera" style="width:24px;height:24px;opacity:.3;margin-bottom:6px"></i>' +
+                '<div class="upload-text">Upload foto/dokumen bukti</div>' +
+              '</div>' +
+              '<div class="upload-previews" id="impl-preview-' + item.tpp_item_id + '"></div>' +
+              '<div class="form-group" style="margin-top:10px">' +
+                '<label class="form-label" style="font-size:12px">Keterangan (opsional)</label>' +
+                '<textarea class="form-control" id="impl-ket-' + item.tpp_item_id + '" rows="2" ' +
+                  'placeholder="Jelaskan apa yang sudah dilakukan..."></textarea>' +
+              '</div>' +
+              '<button class="btn btn-primary btn-sm" id="impl-btn-' + item.tpp_item_id + '" ' +
+                'onclick="singleClick(this,function(){ _submitImplItem(\'' +
+                  item.tpp_item_id + '\',\'' + task.result_id + '\',\'' +
+                  task.agenda_id + '\',\'' + period.period_id + '\') })">' +
+                '<i data-lucide="upload" style="width:13px;height:13px"></i> Submit Bukti' +
+              '</button>'
+          ) +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    container.innerHTML =
+      _subPageHeader(
+        'Upload Implementasi — ' + escHtml(task.agenda ? task.agenda.dept : ''),
+        '#' + (f ? f.nomor_persyaratan + '.' + f.check_item_no : '') +
+        ' · Target: ' + formatDate(f ? f.target_date : '')
+      ) +
+      historyHtml +
+      itemsHtml;
+
+    // Setup upload zones
+    tppItems.forEach(function(item) {
+      if (!item.impl_submitted_at) {
+        setupUploadZone('impl-zone-' + item.tpp_item_id, 'impl-preview-' + item.tpp_item_id);
+      }
+    });
+
+    lucide.createIcons();
+  } catch(err) {
+    container.innerHTML = _subPageHeader('Upload Implementasi', '') +
+      '<div class="empty-state"><div class="empty-desc">' + escHtml(err.message) + '</div></div>';
+    lucide.createIcons();
+  }
+}
+
+async function _submitImplItem(tppItemId, resultId, agendaId, periodId) {
+  var zone  = document.getElementById('impl-zone-' + tppItemId);
+  var files = zone && zone._getFiles ? zone._getFiles() : [];
+  if (!files.length) return toast('Upload minimal 1 file bukti.', 'error');
+
+  var ket    = document.getElementById('impl-ket-' + tppItemId);
+  var btn    = document.getElementById('impl-btn-' + tppItemId);
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner" style="width:12px;height:12px;border-width:2px"></div> Mengirim...';
+
+  try {
+    var b64files = await filesToBase64(files);
+    var period   = window._myTaskPeriod;
+
+    await api('SUBMIT_IMPLEMENTATION', {
+      period_id:   periodId,
+      result_id:   resultId,
+      agenda_id:   agendaId,
+      tpp_item_id: tppItemId,
+      files:       b64files,
+      keterangan:  ket ? ket.value.trim() : '',
+    });
+
+    clearCache('GET_ALL_FINDINGS_BY_PERIOD');
+    toast('Bukti implementasi berhasil dikirim.', 'success');
+
+    // Re-render halaman
+    var task = window._myTaskList[window._myTaskReturnIdx];
+    if (task) _renderUploadImplPage(document.getElementById('page-content'), task, period);
+  } catch(err) {
+    toast(err.message, 'error');
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="upload" style="width:13px;height:13px"></i> Submit Bukti';
+    lucide.createIcons();
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  SUB-PAGE: APPROVAL (Dept Head / Auditor / Koordinator)
+// ════════════════════════════════════════════════════════════
+
+async function _renderApprovalPage(container, task, period) {
+  container.innerHTML =
+    '<div class="page-loader"><div class="spinner dark"></div><span>Memuat...</span></div>';
+
+  try {
+    var tppItems = await api('GET_TPP_ITEMS', {
+      period_id: period.period_id,
+      result_id: task.result_id,
+    });
+    var log = await api('GET_APPROVAL_LOG', {
+      period_id: period.period_id,
+      result_id: task.result_id,
+    });
+    var f = task.finding;
+    var stage   = task.type === 'APPROVAL_TPP' ? 'TPP' : 'IMPL';
+    var isTPP   = stage === 'TPP';
+    var isKoord = App.profile.isKoordinator;
+
+    var historyHtml = _renderApprovalHistory(log, stage);
+
+    // Konten yang di-approve
+    var contentHtml = isTPP
+      ? '<div class="card mb-16"><div class="card-body">' +
+          '<div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:10px">RENCANA TPP</div>' +
+          tppItems.map(function(item) {
+            return '<div style="padding:10px;border:1px solid var(--border);border-radius:6px;margin-bottom:8px">' +
+              '<span class="badge ' + (item.tipe === 'CORRECTION' ? 'badge-blue' : 'badge-purple') + '" style="font-size:10px;margin-bottom:6px">' +
+                (item.tipe === 'CORRECTION' ? 'Correction' : 'Corrective Action') +
+              '</span>' +
+              '<div style="font-size:13px">' + escHtml(item.deskripsi) + '</div>' +
+            '</div>';
+          }).join('') +
+          '<div style="font-size:12px;color:var(--text-muted);margin-top:8px">' +
+            '<i data-lucide="calendar" style="width:12px;height:12px;vertical-align:middle"></i>' +
+            ' Target: <strong>' + formatDate(f ? f.target_date : '') + '</strong>' +
+          '</div>' +
+        '</div></div>'
+      : '<div class="card mb-16"><div class="card-body">' +
+          '<div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:10px">BUKTI IMPLEMENTASI</div>' +
+          tppItems.map(function(item) {
+            return '<div style="padding:10px;border:1px solid var(--border);border-radius:6px;margin-bottom:8px">' +
+              '<span class="badge ' + (item.tipe === 'CORRECTION' ? 'badge-blue' : 'badge-purple') + '" style="font-size:10px;margin-bottom:6px">' +
+                (item.tipe === 'CORRECTION' ? 'Correction' : 'Corrective Action') +
+              '</span>' +
+              '<div style="font-size:13px;margin-bottom:8px">' + escHtml(item.deskripsi) + '</div>' +
+              (item.impl_keterangan
+                ? '<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">' + escHtml(item.impl_keterangan) + '</div>'
+                : '') +
+              (item.impl_foto_urls
+                ? '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+                    item.impl_foto_urls.split(',').filter(Boolean).map(function(url) {
+                      return '<a href="' + url + '" target="_blank" class="btn btn-outline btn-sm">' +
+                        '<i data-lucide="image" style="width:12px;height:12px"></i> Lihat Bukti</a>';
+                    }).join('') +
+                  '</div>'
+                : '<div style="font-size:12px;color:var(--rose)">Belum ada bukti diupload.</div>') +
+            '</div>';
+          }).join('') +
+        '</div></div>';
+
+    // Skip panel (hanya koordinator)
+    var skipHtml = isKoord
+      ? '<div class="card mb-16" style="border:1px dashed var(--border)">' +
+          '<div class="card-body">' +
+            '<div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text-muted)">Skip Level (Force Majeur)</div>' +
+            '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
+              '<select class="form-control" id="skip-level-select" style="max-width:160px;font-size:13px">' +
+                '<option value="">— Pilih level —</option>' +
+                '<option value="DeptHead">Skip Dept Head</option>' +
+                '<option value="Auditor">Skip Auditor</option>' +
+              '</select>' +
+              '<input class="form-control" id="skip-reason-input" placeholder="Alasan skip..." style="flex:1;font-size:13px">' +
+              '<button class="btn btn-outline btn-sm" onclick="_submitSkipApproval(\'' +
+                task.result_id + '\',\'' + task.agenda_id + '\',\'' + period.period_id + '\',\'' + stage + '\')">' +
+                '<i data-lucide="fast-forward" style="width:13px;height:13px"></i> Skip & Approve' +
+              '</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>'
+      : '';
+
+    container.innerHTML =
+      _subPageHeader(
+        (isTPP ? 'Approval TPP' : 'Approval Implementasi') +
+          ' — ' + escHtml(task.agenda ? task.agenda.dept : ''),
+        'Level: ' + (task.level || '') + ' · #' + (f ? f.nomor_persyaratan + '.' + f.check_item_no : '')
+      ) +
+
+      // Info temuan
+      '<div class="card mb-16"><div class="card-body" style="padding:12px 16px">' +
+        statusBadge(f ? f.status : '') + ' ' +
+        '<span style="font-size:13px;font-weight:600">' + escHtml(f ? f.deskripsi_temuan : '') + '</span>' +
+      '</div></div>' +
+
+      contentHtml +
+      historyHtml +
+      skipHtml +
+
+      // Komentar + tombol approve/reject
+      '<div class="card"><div class="card-body">' +
+        '<div class="form-group">' +
+          '<label class="form-label">Komentar <span style="font-size:11px;color:var(--text-muted)">(wajib jika menolak)</span></label>' +
+          '<textarea class="form-control" id="apr-komentar" rows="2" placeholder="Tulis komentar..."></textarea>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;justify-content:flex-end">' +
+          '<button class="btn btn-outline" onclick="_backToMyTask()">Kembali</button>' +
+          '<button class="btn btn-danger btn-sm" id="apr-reject-btn" ' +
+            'onclick="singleClick(this,function(){ _processApproval(\'' +
+              task.result_id + '\',\'' + task.agenda_id + '\',\'' +
+              period.period_id + '\',\'' + stage + '\',\'' + (task.level || '') + '\',\'REJECTED\') })">' +
+            '<i data-lucide="x-circle" style="width:13px;height:13px"></i> Reject' +
+          '</button>' +
+          '<button class="btn btn-success" id="apr-approve-btn" ' +
+            'onclick="singleClick(this,function(){ _processApproval(\'' +
+              task.result_id + '\',\'' + task.agenda_id + '\',\'' +
+              period.period_id + '\',\'' + stage + '\',\'' + (task.level || '') + '\',\'APPROVED\') })">' +
+            '<i data-lucide="check-circle" style="width:13px;height:13px"></i> Approve' +
+          '</button>' +
+        '</div>' +
+      '</div></div>';
+
+    lucide.createIcons();
+  } catch(err) {
+    container.innerHTML = _subPageHeader('Approval', '') +
+      '<div class="empty-state"><div class="empty-desc">' + escHtml(err.message) + '</div></div>';
+    lucide.createIcons();
+  }
+}
+
+async function _processApproval(resultId, agendaId, periodId, stage, level, action) {
+  var komentar = document.getElementById('apr-komentar') ?
+    document.getElementById('apr-komentar').value.trim() : '';
+  if (action === 'REJECTED' && !komentar) {
+    return toast('Isi komentar alasan penolakan terlebih dahulu.', 'error');
+  }
+
+  var btnId   = action === 'APPROVED' ? 'apr-approve-btn' : 'apr-reject-btn';
+  var btn     = document.getElementById(btnId);
+  btn.disabled = true;
+
+  try {
+    await api('PROCESS_APPROVAL', {
+      period_id: periodId,
+      result_id: resultId,
+      agenda_id: agendaId,
+      stage:     stage,
+      level:     level,
+      action:    action,
+      komentar:  komentar,
+    });
+    clearCache('GET_ALL_FINDINGS_BY_PERIOD');
+    clearCache('GET_FINDINGS_BY_AGENDA');
+    clearCache('GET_TPP_ITEMS');
+    clearCache('GET_APPROVAL_LOG');
+    toast(action === 'APPROVED' ? 'Berhasil di-approve.' : 'Ditolak. Auditee akan diberitahu.', 'success');
+    navigateTo('mytask');
+  } catch(err) {
+    toast(err.message, 'error');
+    btn.disabled = false;
+  }
+}
+
+async function _submitSkipApproval(resultId, agendaId, periodId, stage) {
+  var skipLevel  = document.getElementById('skip-level-select') ?
+    document.getElementById('skip-level-select').value : '';
+  var skipReason = document.getElementById('skip-reason-input') ?
+    document.getElementById('skip-reason-input').value.trim() : '';
+
+  if (!skipLevel)  return toast('Pilih level yang akan di-skip.', 'error');
+  if (!skipReason) return toast('Isi alasan skip.', 'error');
+
+  try {
+    await api('PROCESS_APPROVAL', {
+      period_id:   periodId,
+      result_id:   resultId,
+      agenda_id:   agendaId,
+      stage:       stage,
+      level:       'Koordinator',
+      action:      'APPROVED',
+      komentar:    '',
+      skip_level:  skipLevel,
+      skip_reason: skipReason,
+    });
+    clearCache('GET_ALL_FINDINGS_BY_PERIOD');
+    toast('Level ' + skipLevel + ' di-skip. Approval dilanjutkan.', 'success');
+    navigateTo('mytask');
+  } catch(err) { toast(err.message, 'error'); }
+}
+
+// ── Mass Approve ─────────────────────────────────────────────
+
+async function _massApproveAll(stage) {
+  var tasks = (window._myTaskList || []).filter(function(t) {
+    return t.type === 'APPROVAL_' + stage;
+  });
+  if (!tasks.length) return;
+
+  var ok = await showConfirm({
+    title:       'Mass Approve ' + stage,
+    message:     'Approve ' + tasks.length + ' finding sekaligus?',
+    confirmText: 'Approve Semua',
+  });
+  if (!ok) return;
+
+  var period = window._myTaskPeriod;
+  // Mass approve hanya tersedia untuk Koordinator (bar-nya hanya dirender untuk Koordinator)
+  var level  = 'Koordinator';
+
+  try {
+    await api('MASS_APPROVE', {
+      period_id:  period.period_id,
+      result_ids: tasks.map(function(t) { return t.result_id; }),
+      agenda_ids: tasks.map(function(t) { return t.agenda_id; }),
+      stage:      stage,
+      level:      level,
+    });
+    clearCache('GET_ALL_FINDINGS_BY_PERIOD');
+    toast(tasks.length + ' finding berhasil di-approve.', 'success');
+    navigateTo('mytask');
+  } catch(err) { toast(err.message, 'error'); }
+}
+
+// ── Approval History ─────────────────────────────────────────
+
+function _renderApprovalHistory(log, stage) {
+  var relevant = (log || []).filter(function(l) {
+    return l.stage === stage && l.action !== 'SUBMITTED';
+  });
+  if (!relevant.length) return '';
+
+  return '<div class="card mb-16" style="border:1px solid var(--border)">' +
+    '<div class="card-body" style="padding:12px 16px">' +
+      '<div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:10px;letter-spacing:.06em">RIWAYAT APPROVAL</div>' +
+      relevant.map(function(l) {
+        var isApproved = l.action === 'APPROVED';
+        var isSkipped  = l.skipped === true || l.skipped === 'TRUE';
+        return '<div style="display:flex;gap:10px;align-items:flex-start;padding:6px 0;' +
+          'border-bottom:1px solid var(--border)">' +
+          '<div style="width:20px;height:20px;border-radius:50%;flex-shrink:0;' +
+            'background:' + (isApproved ? 'var(--emerald,#10b981)' : 'var(--rose,#f43f5e)') + ';' +
+            'display:flex;align-items:center;justify-content:center;margin-top:1px">' +
+            '<i data-lucide="' + (isApproved ? 'check' : 'x') + '" ' +
+              'style="width:11px;height:11px;color:#fff"></i>' +
+          '</div>' +
+          '<div style="flex:1;min-width:0">' +
+            '<div style="font-size:12px;font-weight:600">' +
+              escHtml(l.level) +
+              (isSkipped ? ' <span class="badge badge-amber" style="font-size:10px">Skip</span>' : '') +
+            '</div>' +
+            '<div style="font-size:11px;color:var(--text-muted)">' +
+              escHtml(l.by_email ? l.by_email.split('@')[0] : '') +
+              ' · ' + formatDate(l.at) +
+            '</div>' +
+            (l.komentar
+              ? '<div style="font-size:12px;margin-top:3px;color:' +
+                  (isApproved ? 'var(--text)' : 'var(--rose)') + '">' +
+                  escHtml(l.komentar) +
+                '</div>'
+              : '') +
+            (isSkipped && l.skip_reason
+              ? '<div style="font-size:11px;color:var(--amber,#f59e0b);margin-top:2px">' +
+                  'Alasan skip: ' + escHtml(l.skip_reason) + '</div>'
+              : '') +
+          '</div>' +
+        '</div>';
+      }).join('') +
+    '</div>' +
+  '</div>';
+}
+</script>
