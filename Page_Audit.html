@@ -1359,7 +1359,7 @@ async function _openEditStatusForm(itemId, gKey, nomor, ciNo, agendaId, periodId
   var locked = await _ensureLockForGroup(agendaId, periodId, gKey, nomor);
   if (!locked) return;
 
-  var isCurrentlyComply = currentStatus === 'COMPLY';
+  var isCurrentlyComply = currentStatus === 'COMPLY' || currentStatus === 'Comply';
   // Prefer draft data; fall back to server finding
   var existing = _draftGetItem(gKey, nomor, ciNo) || {};
   if (!existing.deskripsi_temuan && window._auditRenderCtx && window._auditRenderCtx.findingMap) {
@@ -1584,7 +1584,7 @@ async function _saveRequirement(agendaId, periodId, btn) {
   // FIX 5: validasi Non Comply harus cek deskripsi DAN foto
   // (foto bisa ada di pendingFiles meski foto_urls di draft kosong)
   var missing = items.filter(function(it) {
-    if (it.status !== 'NON_COMPLY') return false;
+    if (it.status !== 'Non Comply') return false;
     if (!it.deskripsi_temuan) return true;  // tidak ada deskripsi
 
     // Cek apakah ada foto (pending atau saved)
