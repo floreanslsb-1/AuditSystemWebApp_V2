@@ -52,13 +52,13 @@ const CONFIG = {
   // ── Status enums ─────────────────────────────────────────────
 
   FINDING_STATUS: {
-    // Hanya berlaku untuk row dengan status Non Comply atau OFI
-    PENDING_VERIFICATION: 'PENDING_VERIFICATION', // auditor submit, nunggu verifikasi koordinator
-    OPEN:                 'OPEN',                 // koordinator verifikasi, nunggu auditee isi TPP
-    PENDING_TPP:          'PENDING_TPP',           // auditee submit TPP, nunggu approval
-    PENDING_IMPL:         'PENDING_IMPL',          // TPP approved, nunggu bukti implementasi
-    CLOSED:               'CLOSED',               // selesai semua
-    OVERDUE:              'OVERDUE',              // melewati target date
+    PENDING_VERIFICATION: 'PENDING_VERIFICATION',
+    OPEN:                 'OPEN',
+    PENDING_TPP:          'PENDING_TPP',
+    OPEN_IMPL:            'OPEN_IMPL',
+    PENDING_IMPL:         'PENDING_IMPL',
+    CLOSED:               'CLOSED',
+    OVERDUE:              'OVERDUE',
   },
 
   AGENDA_STATUS: {
@@ -76,7 +76,6 @@ const CONFIG = {
   RESULT_STATUS: {
     COMPLY:     'Comply',
     NON_COMPLY: 'Non Comply',
-    OFI:        'OFI',
   },
 
   APPROVAL_STATUS: {
