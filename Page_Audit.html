@@ -347,8 +347,8 @@ Pages['audit'] = async function(container, params) {
       '<div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px">' +
         '<div style="width:40px;height:40px;border-radius:10px;background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0">' +
           '<i data-lucide="building-2" style="width:18px;height:18px;color:var(--blue)"></i></div>' +
-        '<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700">' + dept + '</div>' +
-          '<div style="font-size:12px;color:var(--text-muted);margin-top:2px"><span class="badge badge-blue" style="font-size:10px">' + kat + '</span></div></div>' +
+        '<div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:14px;font-weight:700">' + dept + '</span>' +
+          (kat ? '<span class="badge badge-blue" style="font-size:10px">' + kat + '</span>' : '') + '</div></div>' +
         '<div style="flex-shrink:0">' + statusInfo + '</div>' +
       '</div>' +
       '<div style="margin-bottom:10px"><div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:4px">TIM AUDITOR</div>' +
@@ -781,14 +781,14 @@ function _renderCheckItem(gKey, item, ciNo, agenda, periodId, resultMap, finding
             merged.fileCount + ' foto (belum disimpan)</span>'
         : '';
       findingHtml =
-        '<div style="margin-top:6px;padding:8px 10px;background:rgba(245,158,11,.07);' +
-          'border-radius:6px;font-size:12px;border-left:2px solid var(--amber,#f59e0b)">' +
-          '<div style="color:var(--amber,#f59e0b);font-weight:600;margin-bottom:4px;' +
-            'display:flex;align-items:center;gap:4px">' +
-            '<i data-lucide="file-pen-line" style="width:11px;height:11px"></i>' +
-            'Temuan (draf)' + draftFotoInfo +
-          '</div>' +
-          '<div style="color:var(--text-muted);line-height:1.5">' + escHtml(merged.deskripsi) + '</div>' +
+        '<div style="margin-top:4px;font-size:12px">' +
+          '<div style="line-height:1.5;color:var(--text)">' + escHtml(merged.deskripsi) + '</div>' +
+          (merged.fileCount
+            ? '<div style="display:inline-flex;align-items:center;gap:3px;margin-top:3px;' +
+                'font-size:11px;color:var(--amber,#f59e0b)">' +
+                '<i data-lucide="paperclip" style="width:10px;height:10px"></i>' +
+                merged.fileCount + ' foto (belum disimpan)</div>'
+            : '') +
         '</div>';
     } else if (!fromDraft && srvFinding) {
       // Tersimpan — foto punya URL Drive
@@ -833,7 +833,7 @@ function _renderCheckItem(gKey, item, ciNo, agenda, periodId, resultMap, finding
     }
   }
 
-  var rowBg = fromDraft ? 'rgba(245,158,11,.03)' : isNonComply ? 'rgba(244,63,94,.02)' : isComply ? 'rgba(16,185,129,.02)' : 'transparent';
+  var rowBg = (fromDraft && isNonComply) ? 'rgba(245,158,11,.10)' : (!fromDraft && isNonComply) ? 'rgba(244,63,94,.07)' : isComply ? 'rgba(16,185,129,.02)' : 'transparent';
 
   // FIX 2: layout — item text left, buttons right (flex row)
   return '<div id="ci-row-' + _cid + '" ' +
@@ -1016,7 +1016,7 @@ function _repaintCheckItemRow(gKey, nomor, ciNo, status, fromDraft) {
   statusEl.innerHTML = newStatusHtml;
   lucide.createIcons(statusEl);
 
-  if (rowEl) rowEl.style.background = fd ? 'rgba(245,158,11,.03)' : isNonComply ? 'rgba(244,63,94,.02)' : isComply ? 'rgba(16,185,129,.02)' : 'transparent';
+  if (rowEl) rowEl.style.background = (fd && isNonComply) ? 'rgba(245,158,11,.10)' : (!fd && isNonComply) ? 'rgba(244,63,94,.07)' : isComply ? 'rgba(16,185,129,.02)' : 'transparent';
 
   if (findingEl) {
     if (isNonComply) {
@@ -1027,14 +1027,14 @@ function _repaintCheckItemRow(gKey, nomor, ciNo, status, fromDraft) {
               merged.fileCount + ' foto (belum disimpan)</span>'
           : '';
         findingEl.innerHTML =
-          '<div style="margin-top:6px;padding:8px 10px;background:rgba(245,158,11,.07);' +
-            'border-radius:6px;font-size:12px;border-left:2px solid var(--amber,#f59e0b)">' +
-            '<div style="color:var(--amber,#f59e0b);font-weight:600;margin-bottom:4px;' +
-              'display:flex;align-items:center;gap:4px">' +
-              '<i data-lucide="file-pen-line" style="width:11px;height:11px"></i>Temuan (draf)' +
-              draftFotoInfo2 +
-            '</div>' +
-            '<div style="color:var(--text-muted);line-height:1.5">' + escHtml(merged.deskripsi) + '</div>' +
+          '<div style="margin-top:4px;font-size:12px">' +
+            '<div style="line-height:1.5;color:var(--text)">' + escHtml(merged.deskripsi) + '</div>' +
+            (merged.fileCount
+              ? '<div style="display:inline-flex;align-items:center;gap:3px;margin-top:3px;' +
+                  'font-size:11px;color:var(--amber,#f59e0b)">' +
+                  '<i data-lucide="paperclip" style="width:10px;height:10px"></i>' +
+                  merged.fileCount + ' foto (belum disimpan)</div>'
+              : '') +
           '</div>';
         lucide.createIcons(findingEl);
       } else if (!fd && ctx.findingMap) {
