@@ -417,7 +417,7 @@ function _routeAction(action, payload, profile) {
             const folder_srb = getOrCreateFolder(
               'evidence',
               getOrCreateFolder(
-                item.result_id,
+                item.item_id || item.result_id,
                 getOrCreateFolder(
                   payload.agenda_id,
                   getOrCreateFolder(payload.period_id, getOrCreateFolder(CONFIG.DRIVE_ROOT_FOLDER_NAME))
