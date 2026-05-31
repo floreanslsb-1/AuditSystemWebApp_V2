@@ -782,7 +782,7 @@ function _renderCheckItem(gKey, item, ciNo, agenda, periodId, resultMap, finding
         : '';
       findingHtml =
         '<div style="margin-top:4px;font-size:12px">' +
-          '<div style="line-height:1.5;color:var(--text)">' + escHtml(merged.deskripsi) + '</div>' +
+          '<div style="line-height:1.5;color:var(--amber,#f59e0b)"><span style="font-weight:600">Deskripsi:</span> ' + escHtml(merged.deskripsi) + '</div>' +
           (merged.fileCount
             ? '<div style="display:inline-flex;align-items:center;gap:3px;margin-top:3px;' +
                 'font-size:11px;color:var(--amber,#f59e0b)">' +
@@ -815,19 +815,8 @@ function _renderCheckItem(gKey, item, ciNo, agenda, periodId, resultMap, finding
         '</div>';
       }
       findingHtml =
-        '<div style="margin-top:6px;padding:8px 10px;background:rgba(244,63,94,.05);' +
-          'border-radius:6px;font-size:12px;border-left:2px solid var(--rose,#f43f5e)">' +
-          '<div style="color:var(--rose,#f43f5e);font-weight:600;margin-bottom:4px;' +
-            'display:flex;align-items:center;gap:4px">' +
-            '<i data-lucide="triangle-alert" style="width:11px;height:11px"></i>' +
-            'Temuan tersimpan' +
-            (fotoUrls.length
-              ? '<span style="font-size:11px;font-weight:400;margin-left:4px">' +
-                  '· ' + fotoUrls.length + ' foto</span>'
-              : '') +
-          '</div>' +
-          '<div style="color:var(--text-muted);line-height:1.5">' +
-            escHtml(srvFinding.deskripsi_temuan) + '</div>' +
+        '<div style="margin-top:4px;font-size:12px">' +
+          '<div style="line-height:1.5;color:var(--rose,#f43f5e)"><span style="font-weight:600">Deskripsi:</span> ' + escHtml(srvFinding.deskripsi_temuan) + '</div>' +
           fotoHtml +
         '</div>';
     }
@@ -1028,7 +1017,7 @@ function _repaintCheckItemRow(gKey, nomor, ciNo, status, fromDraft) {
           : '';
         findingEl.innerHTML =
           '<div style="margin-top:4px;font-size:12px">' +
-            '<div style="line-height:1.5;color:var(--text)">' + escHtml(merged.deskripsi) + '</div>' +
+            '<div style="line-height:1.5;color:var(--amber,#f59e0b)"><span style="font-weight:600">Deskripsi:</span> ' + escHtml(merged.deskripsi) + '</div>' +
             (merged.fileCount
               ? '<div style="display:inline-flex;align-items:center;gap:3px;margin-top:3px;' +
                   'font-size:11px;color:var(--amber,#f59e0b)">' +
@@ -1590,7 +1579,7 @@ async function _saveRequirement(agendaId, periodId, btn) {
 
   var items = Object.keys(draft.items)
     .filter(function(k) { return k.indexOf(prefix) === 0; })
-    .map(function(k) { var d = draft.items[k]; return { item_id: d.item_id, nomor_persyaratan: d.nomor_persyaratan, check_item_no: d.check_item_no, status: d.status, deskripsi_temuan: d.deskripsi_temuan || '' }; });
+    .map(function(k) { var d = draft.items[k]; return { item_id: d.item_id, nomor_persyaratan: d.nomor_persyaratan, check_item_no: d.check_item_no, status: d.status === 'COMPLY' ? 'Comply' : d.status === 'NON_COMPLY' ? 'Non Comply' : d.status, deskripsi_temuan: d.deskripsi_temuan || '' }; });
 
   if (!items.length) return toast('Tidak ada item untuk disimpan.', 'warning');
 
