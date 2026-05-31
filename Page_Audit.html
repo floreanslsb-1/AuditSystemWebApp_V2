@@ -490,13 +490,10 @@ async function renderAuditChecklist(panel, agenda, areaId, periodId) {
   });
 
   var resultMap = {};
-  savedResults.forEach(function(r) {
-    var key = Number(r.nomor_persyaratan) + '.' + Number(r.check_item_no);
-    resultMap[key] = r.status;
-  });
+  savedResults.forEach(function(r) { resultMap[r.result_id] = r.status; });
 
   var findingMap = {};
-  findings.forEach(function(f) { findingMap[Number(f.nomor_persyaratan) + '.' + Number(f.check_item_no)] = f; });
+  findings.forEach(function(f) { findingMap[f.result_id] = f; });
 
   var isLocked = agenda.status !== 'STARTED';
 
@@ -612,9 +609,10 @@ function _buildGroupsFromResults(results) {
 
 // ── Merged status ──────────────────────────────────────────────────
 
-function _mergedStatus(groupKey, nomor, ciNo, resultMap) {
-  var srvKey = Number(nomor) + '.' + Number(ciNo);
-  var srvStatus = resultMap ? resultMap[srvKey] : (window._auditRenderCtx && window._auditRenderCtx.resultMap[srvKey]);
+function _mergedStatus(groupKey, nomor, ciNo, resultMap, resultId) {
+  var _rmap     = resultMap || (window._auditRenderCtx && window._auditRenderCtx.resultMap);
+  var srvStatus = resultId ? (_rmap ? _rmap[resultId] : undefined)
+                           : (_rmap ? _rmap[Number(nomor) + '.' + Number(ciNo)] : undefined);
   var draftKey  = _draftItemKey(groupKey, nomor, ciNo);
   var drfItem   = window._auditDraft ? window._auditDraft.items[draftKey] : null;
   if (drfItem && drfItem.status) {
@@ -639,7 +637,7 @@ function _renderGroup(g, agenda, periodId, resultMap, findingMap, isLocked, acti
   var groupLock    = window._auditLockState[gKey];
   var groupLocked  = groupLock && groupLock.locked_by !== App.profile.email;
 
-  var doneCount  = g.items.filter(function(item, idx) { return !!_mergedStatus(gKey, item.nomor, idx + 1, resultMap).status; }).length;
+  var doneCount  = g.items.filter(function(item, idx) { return !!_mergedStatus(gKey, item.nomor, idx + 1, resultMap, item.result_id).status; }).length;
   var totalCount = g.items.length;
   var groupDone  = doneCount === totalCount;
 
@@ -709,13 +707,13 @@ function _renderGroup(g, agenda, periodId, resultMap, findingMap, isLocked, acti
 
 function _renderCheckItem(gKey, item, ciNo, agenda, periodId, resultMap, findingMap, isLocked, groupLocked, ownedByMe) {
   var _cid        = item.id;
-  var merged      = _mergedStatus(gKey, item.nomor, ciNo, resultMap);
+  var merged      = _mergedStatus(gKey, item.nomor, ciNo, resultMap, item.result_id);
   var status      = merged.status;
   var isDone      = !!status;
   var isComply    = status === 'COMPLY';
   var isNonComply = status === 'NON_COMPLY';
   var fromDraft   = merged.fromDraft;
-  var srvFinding  = findingMap ? findingMap[Number(item.nomor) + '.' + Number(ciNo)] : null;
+  var srvFinding  = findingMap ? findingMap[item.result_id] : null;
 
   // FIX 2: status area (right side)
   var statusArea;
@@ -967,7 +965,7 @@ function _repaintCheckItemRow(gKey, nomor, ciNo, status, fromDraft) {
   var rowEl     = document.getElementById('ci-row-' + _cid);
   if (!statusEl) return;
 
-  var merged      = _mergedStatus(gKey, nomor, ciNo, ctx.resultMap);
+  var merged      = _mergedStatus(gKey, nomor, ciNo, ctx.resultMap, item && item.result_id);
   var isComply    = merged.status === 'COMPLY';
   var isNonComply = merged.status === 'NON_COMPLY';
   var fd          = merged.fromDraft;
@@ -1027,7 +1025,7 @@ function _repaintCheckItemRow(gKey, nomor, ciNo, status, fromDraft) {
           '</div>';
         lucide.createIcons(findingEl);
       } else if (!fd && ctx.findingMap) {
-        var srvF2 = ctx.findingMap[Number(nomor) + '.' + Number(ciNo)];
+        var srvF2 = item ? ctx.findingMap[item.result_id] : null;
         if (srvF2) {
           var fotoUrls2 = String(srvF2.foto_urls || '').split(',').filter(Boolean);
           var fotoHtml2 = '';
@@ -1075,7 +1073,7 @@ function _repaintCheckItemRow(gKey, nomor, ciNo, status, fromDraft) {
   var safeId  = 'rg-' + (g.items[0] ? Number(g.items[0].nomor) : 0) + '-' + g.items.length;
   var countEl = document.getElementById('rg-count-' + safeId);
   if (countEl) {
-    var done = g.items.filter(function(i, idx) { return !!_mergedStatus(gKey, i.nomor, idx + 1, ctx.resultMap).status; }).length;
+    var done = g.items.filter(function(i, idx) { return !!_mergedStatus(gKey, i.nomor, idx + 1, ctx.resultMap, i.result_id).status; }).length;
     var allDone = done === g.items.length;
     countEl.textContent = done + '/' + g.items.length;
     countEl.style.color = allDone ? 'var(--emerald,#10b981)' : 'var(--text-muted)';
@@ -1660,11 +1658,15 @@ async function _saveRequirement(agendaId, periodId, btn) {
 
     // 1. Update resultMap + findingMap pakai `items` (bukan result.saved — tidak punya nomor_persyaratan)
     if (window._auditRenderCtx) {
+      var _grp = window._auditRenderCtx.groups.find(function(g) { return _groupKey(g) === gKey; });
       items.forEach(function(it) {
-        var key = Number(it.nomor_persyaratan) + '.' + Number(it.check_item_no);
-        window._auditRenderCtx.resultMap[key] = it.status;
-        if (it.status === 'COMPLY' && window._auditRenderCtx.findingMap && window._auditRenderCtx.findingMap[key]) {
-          delete window._auditRenderCtx.findingMap[key];
+        var _itm = _grp && _grp.items.find(function(i) { return i.item_id === it.item_id; });
+        var _rid = _itm ? _itm.result_id : null;
+        if (_rid) {
+          window._auditRenderCtx.resultMap[_rid] = it.status;
+          if (it.status === 'Comply' && window._auditRenderCtx.findingMap) {
+            delete window._auditRenderCtx.findingMap[_rid];
+          }
         }
       });
     }
