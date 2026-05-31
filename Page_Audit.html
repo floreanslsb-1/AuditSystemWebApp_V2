@@ -1119,9 +1119,13 @@ async function submitCheckItem(itemId, gKey, nomor, ciNo, status, agendaId, peri
   if (!locked) return;
 
   // nomor_persyaratan disimpan langsung sebagai Number, bukan dari parse string
+  var _srCtx = window._auditRenderCtx;
+  var _srGrp = _srCtx && _srCtx.groups.find(function(g) { return _groupKey(g) === gKey; });
+  var _srItm = _srGrp && _srGrp.items.find(function(i) { return Number(i.nomor) === Number(nomor); });
   _draftSetItem(gKey, nomor, ciNo, {
     item_id:           itemId,
-    nomor_persyaratan: Number(nomor),  // <-- ini yang penting, harus Number(nomor) langsung
+    result_id:         (_srItm && _srItm.result_id) || '',
+    nomor_persyaratan: Number(nomor),
     check_item_no:     Number(ciNo),
     status:            status
   });
@@ -1345,8 +1349,15 @@ async function _saveDraftFinding(gKey, nomor, ciNo) {
     if (itmFf) resolvedItemId = itmFf.item_id;
   }
 
+  var resolvedResultId = (existingDraftItem || {}).result_id;
+  if (!resolvedResultId && window._auditRenderCtx) {
+    var _rGrp = window._auditRenderCtx.groups.find(function(g) { return _groupKey(g) === gKey; });
+    var _rItm = _rGrp && _rGrp.items.find(function(i) { return Number(i.nomor) === Number(nomor); });
+    if (_rItm) resolvedResultId = _rItm.result_id;
+  }
   _draftSetItem(gKey, nomor, ciNo, {
-    item_id:          resolvedItemId || '',    // FIX: selalu sertakan item_id
+    item_id:          resolvedItemId || '',
+    result_id:        resolvedResultId || '',
     deskripsi_temuan: deskripsi,
   });
   toast('Temuan ditambahkan ke draf. Klik "Simpan" untuk menyimpan ke sistem.', 'success');
@@ -1376,7 +1387,10 @@ async function _openEditStatusForm(itemId, gKey, nomor, ciNo, agendaId, periodId
       confirmText: 'Lanjutkan',
     });
     if (!ok) return;
-    _draftSetItem(gKey, nomor, ciNo, { item_id: itemId, nomor_persyaratan: Number(nomor), check_item_no: Number(ciNo), status: 'NON_COMPLY' });
+    var _esCtx = window._auditRenderCtx;
+    var _esGrp = _esCtx && _esCtx.groups.find(function(g) { return _groupKey(g) === gKey; });
+    var _esItm = _esGrp && _esGrp.items.find(function(i) { return Number(i.nomor) === Number(nomor); });
+    _draftSetItem(gKey, nomor, ciNo, { item_id: itemId, result_id: (_esItm && _esItm.result_id) || '', nomor_persyaratan: Number(nomor), check_item_no: Number(ciNo), status: 'NON_COMPLY' });
     _repaintCheckItemRow(gKey, nomor, ciNo, 'NON_COMPLY', true);
     _renderFloatingSaveBar(agendaId, periodId);
     _openDraftFindingForm(itemId, gKey, nomor, ciNo, agendaId, periodId);
@@ -1541,8 +1555,15 @@ async function _saveEditedFinding(gKey, nomor, ciNo) {
     console.error('[saveEditedFinding] item_id tidak ditemukan untuk nomor=' + nomor + ' ciNo=' + ciNo);
   }
 
+  var resolvedResultId = (prevDraft || {}).result_id;
+  if (!resolvedResultId && window._auditRenderCtx) {
+    var _reGrp = window._auditRenderCtx.groups.find(function(g) { return _groupKey(g) === gKey; });
+    var _reItm = _reGrp && _reGrp.items.find(function(i) { return Number(i.nomor) === Number(nomor); });
+    if (_reItm) resolvedResultId = _reItm.result_id;
+  }
   _draftSetItem(gKey, nomor, ciNo, {
     item_id:           resolvedItemId || '',
+    result_id:         resolvedResultId || '',
     nomor_persyaratan: Number(nomor),
     check_item_no:     Number(ciNo),
     status:            'NON_COMPLY',
@@ -1577,7 +1598,7 @@ async function _saveRequirement(agendaId, periodId, btn) {
 
   var items = Object.keys(draft.items)
     .filter(function(k) { return k.indexOf(prefix) === 0; })
-    .map(function(k) { var d = draft.items[k]; return { item_id: d.item_id, nomor_persyaratan: d.nomor_persyaratan, check_item_no: d.check_item_no, status: d.status === 'COMPLY' ? 'Comply' : d.status === 'NON_COMPLY' ? 'Non Comply' : d.status, deskripsi_temuan: d.deskripsi_temuan || '' }; });
+    .map(function(k) { var d = draft.items[k]; return { item_id: d.item_id, result_id: d.result_id || '', nomor_persyaratan: d.nomor_persyaratan, check_item_no: d.check_item_no, status: d.status === 'COMPLY' ? 'Comply' : d.status === 'NON_COMPLY' ? 'Non Comply' : d.status, deskripsi_temuan: d.deskripsi_temuan || '' }; });
 
   if (!items.length) return toast('Tidak ada item untuk disimpan.', 'warning');
 
