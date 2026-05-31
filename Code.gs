@@ -200,13 +200,13 @@ function _routeAction(action, payload, profile) {
         return activatePeriod(payload.period_id);
       }
       if (payload.status === CONFIG.PERIOD_STATUS.COMPLETED) {
-        return completePeriod(payload.period_id, profile.email);
+        return completePeriod(payload.period_id, profile.email, payload.force === true);
       }
       return updatePeriodStatus(payload.period_id, payload.status);
 
     case 'COMPLETE_PERIOD':
       requireAccess(['isKoordinator'], profile);
-      return completePeriod(payload.period_id, profile.email);
+      return completePeriod(payload.period_id, profile.email, payload.force === true);
 
     case 'DELETE_PERIOD':
       requireAccess(['isKoordinator'], profile);
