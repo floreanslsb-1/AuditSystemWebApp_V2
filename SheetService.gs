@@ -504,7 +504,7 @@ function updatePeriod(periodId, updates) {
   return { success: true };
 }
 
-function activatePeriod(periodId) {
+function archivePeriod(periodId) {
   const sheet  = _getMasterSheet(CONFIG.SHEETS.AUDIT_REGISTRY);
   const period = getAllPeriods(true).find(p => p.period_id === periodId);
   if (!period) throw new Error('Periode tidak ditemukan: ' + periodId);
@@ -552,11 +552,38 @@ function deletePeriod(periodId) {
   return { success: true };
 }
 
-function completePeriod(periodId, completedBy) {
+function completePeriod(periodId, completedBy, force) {
   const period = getPeriodById(periodId);
   if (!period) throw new Error('Periode tidak ditemukan: ' + periodId);
   if (period.status === CONFIG.PERIOD_STATUS.COMPLETED)
     throw new Error('Periode sudah selesai.');
+
+  // Tandai temuan yang sudah lewat target sebagai OVERDUE dulu
+  try { markOverdueFindings(period.spreadsheet_id, periodId); }
+  catch(e) { console.warn('markOverdue gagal:', e.message); }
+
+  // Hitung temuan yang belum closed (masih dalam alur aktif)
+  const FS = CONFIG.FINDING_STATUS;
+  const openStatuses = [
+    FS.PENDING_VERIFICATION, FS.OPEN, FS.PENDING_TPP, FS.OPEN_IMPL, FS.PENDING_IMPL,
+  ];
+  const openFindings = getAuditResultsByPeriod(period.spreadsheet_id, periodId)
+    .filter(function(r) { return openStatuses.indexOf(r.finding_status) !== -1; });
+
+  // Masih ada yang open & belum di-force → minta konfirmasi ke frontend
+  if (openFindings.length && !force) {
+    return { requireConfirm: true, openCount: openFindings.length };
+  }
+
+  // Force: tandai sisa temuan open jadi OVERDUE sebelum tutup
+  if (openFindings.length) {
+    const sheetR = _getAuditSheet(period.spreadsheet_id, CONFIG.AUDIT_SHEETS.AUDIT_RESULTS);
+    const C2     = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
+    openFindings.forEach(function(r) {
+      _updateCell(sheetR, r._rowIndex, C2.FINDING_STATUS + 1, FS.OVERDUE);
+    });
+  }
+
   archiveAgendaToFile(periodId, period.spreadsheet_id);
   const sheet = _getMasterSheet(CONFIG.SHEETS.AUDIT_REGISTRY);
   const C     = CONFIG.COLS.AUDIT_REGISTRY;
