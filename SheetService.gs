@@ -483,24 +483,13 @@ function updatePeriodStatus(periodId, status) {
     _updateCell(sheet, period._rowIndex, C.COMPLETED_AT + 1, now());
   return { success: true };
 }
+
 function activatePeriod(periodId) {
   const existing = getAllPeriods(false).find(p => p.status === CONFIG.PERIOD_STATUS.ACTIVE);
   if (existing && existing.period_id !== periodId) {
     throw new Error('Sudah ada periode ACTIVE: ' + existing.nama_periode + '. Selesaikan dulu sebelum mengaktifkan yang baru.');
   }
   updatePeriodStatus(periodId, CONFIG.PERIOD_STATUS.ACTIVE);
-  return { success: true };
-}
-
-function archivePeriod(periodId) {
-  const sheet  = _getMasterSheet(CONFIG.SHEETS.AUDIT_REGISTRY);
-  const period = getAllPeriods(true).find(p => p.period_id === periodId);
-  if (!period) throw new Error('Periode tidak ditemukan: ' + periodId);
-  if (period.status !== CONFIG.PERIOD_STATUS.COMPLETED)
-    throw new Error('Hanya periode COMPLETED yang bisa diarsip.');
-  const C = CONFIG.COLS.AUDIT_REGISTRY;
-  _updateCell(sheet, period._rowIndex, C.ARCHIVED    + 1, true);
-  _updateCell(sheet, period._rowIndex, C.ARCHIVED_AT + 1, now());
   return { success: true };
 }
 
@@ -512,6 +501,18 @@ function updatePeriod(periodId, updates) {
   if (updates.nama_periode    !== undefined) _updateCell(sheet, period._rowIndex, C.NAMA_PERIODE    + 1, updates.nama_periode);
   if (updates.tanggal_mulai   !== undefined) _updateCell(sheet, period._rowIndex, C.TANGGAL_MULAI   + 1, updates.tanggal_mulai);
   if (updates.tanggal_selesai !== undefined) _updateCell(sheet, period._rowIndex, C.TANGGAL_SELESAI + 1, updates.tanggal_selesai);
+  return { success: true };
+}
+
+function activatePeriod(periodId) {
+  const sheet  = _getMasterSheet(CONFIG.SHEETS.AUDIT_REGISTRY);
+  const period = getAllPeriods(true).find(p => p.period_id === periodId);
+  if (!period) throw new Error('Periode tidak ditemukan: ' + periodId);
+  if (period.status !== CONFIG.PERIOD_STATUS.COMPLETED)
+    throw new Error('Hanya periode COMPLETED yang bisa diarsip.');
+  const C = CONFIG.COLS.AUDIT_REGISTRY;
+  _updateCell(sheet, period._rowIndex, C.ARCHIVED    + 1, true);
+  _updateCell(sheet, period._rowIndex, C.ARCHIVED_AT + 1, now());
   return { success: true };
 }
 
@@ -857,10 +858,35 @@ function getFindingsByAgenda(spreadsheetId, agendaId) {
   );
 }
 
-// Ambil semua Non Comply / OFI lintas agenda untuk satu periode (dashboard)
+// Tandai temuan yang sudah melewati target_date sebagai OVERDUE
+function markOverdueFindings(spreadsheetId, periodId) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const overdueStatuses = [
+    CONFIG.FINDING_STATUS.OPEN,
+    CONFIG.FINDING_STATUS.PENDING_TPP,
+    CONFIG.FINDING_STATUS.OPEN_IMPL,
+    CONFIG.FINDING_STATUS.PENDING_IMPL,
+  ];
+  const sheet   = _getAuditSheet(spreadsheetId, CONFIG.AUDIT_SHEETS.AUDIT_RESULTS);
+  const results = getAuditResultsByPeriod(spreadsheetId, periodId);
+  const C       = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
+  results.forEach(function(r) {
+    if (!overdueStatuses.includes(r.finding_status)) return;
+    if (!r.target_date) return;
+    var td = new Date(r.target_date);
+    td.setHours(0, 0, 0, 0);
+    if (td < today) {
+      _updateCell(sheet, r._rowIndex, C.FINDING_STATUS + 1, CONFIG.FINDING_STATUS.OVERDUE);
+    }
+  });
+}
+
+// Ambil semua Non Comply lintas agenda untuk satu periode (dashboard)
 function getAllFindingsByPeriod(spreadsheetId, periodId) {
+  try { markOverdueFindings(spreadsheetId, periodId); } catch(e) { console.warn('markOverdue gagal:', e.message); }
   return getAuditResultsByPeriod(spreadsheetId, periodId).filter(r =>
-    r.status === CONFIG.RESULT_STATUS.NON_COMPLY || r.status === CONFIG.RESULT_STATUS.OFI
+    r.status === CONFIG.RESULT_STATUS.NON_COMPLY
   );
 }
 
@@ -973,6 +999,7 @@ function startAudit({ agendaId, periodId, areaId, startedBy }) {
     started_at:    now(),
     area_sampling: area ? (area.area_sampling || '') : '',
   });
+  try { notifyAuditStarted(getAgendaById(agendaId)); } catch(e) { console.warn('Notif audit started gagal:', e.message); }
   return { agenda_id: agendaId };
 }
 
@@ -992,24 +1019,6 @@ function finishAudit(periodId, agendaId, auditorEmail) {
   const filled  = results.filter(r => r.status !== '').length;
   if (filled < total)
     throw new Error((total - filled) + ' check item belum diisi. Selesaikan semua sebelum mengakhiri audit.');
-
-  try {
-    const findings      = results.filter(r =>
-      r.status === CONFIG.RESULT_STATUS.NON_COMPLY || r.status === CONFIG.RESULT_STATUS.OFI);
-    const auditeeEmails = parseCSV(agenda.auditee_emails || '');
-    const subject       = '[Audit] Persetujuan Hasil Audit — ' + agenda.dept;
-    const body          =
-      'Yth. Tim ' + agenda.dept + ',\n\n' +
-      'Audit oleh ' + auditorEmail + ' telah selesai.\n' +
-      'Total temuan: ' + findings.length + '\n\n' +
-      'Silakan buka sistem audit untuk persetujuan (agreement).\n\nSalam,\nSistem Audit Internal';
-    auditeeEmails.forEach(function(email) {
-      if (email && isAllowedDomain(normalizeEmail(email))) {
-        try { GmailApp.sendEmail(normalizeEmail(email), subject, body); } catch(e) {}
-      }
-    });
-  } catch(e) { console.warn('Notifikasi gagal (non-fatal):', e.message); }
-
   return { success: true };
 }
 
@@ -1030,10 +1039,27 @@ function submitAgreement(spreadsheetId, agendaId, agreementFotoUrl, agreementBy,
   const results = getAuditResultsByAgenda(spreadsheetId, agendaId);
   const C       = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
   results.forEach(function(r) {
-    if (r.status === CONFIG.RESULT_STATUS.NON_COMPLY || r.status === CONFIG.RESULT_STATUS.OFI) {
+    if (r.status === CONFIG.RESULT_STATUS.NON_COMPLY) {
       _updateCell(sheet, r._rowIndex, C.FINDING_STATUS + 1, CONFIG.FINDING_STATUS.PENDING_VERIFICATION);
     }
   });
+  // Kirim notifikasi SETELAH agreement berhasil diupload (bukan di finishAudit)
+  try {
+    const findings     = results.filter(r => r.status === CONFIG.RESULT_STATUS.NON_COMPLY);
+    const updatedAgenda = getAgendaById(agendaId);
+    const auditeeEmails = parseCSV(updatedAgenda.auditee_emails || '');
+    const subject       = '[Audit] Persetujuan Hasil Audit — ' + updatedAgenda.dept;
+    const body          =
+      'Yth. Tim ' + updatedAgenda.dept + ',\n\n' +
+      'Audit telah selesai dan foto agreement telah diupload.\n' +
+      'Total temuan: ' + findings.length + '\n\n' +
+      'Silakan buka sistem audit untuk melihat detail dan menindaklanjuti.\n\nSalam,\nSistem Audit Internal';
+    auditeeEmails.forEach(function(email) {
+      if (email && isAllowedDomain(normalizeEmail(email))) {
+        try { GmailApp.sendEmail(normalizeEmail(email), subject, body); } catch(e) {}
+      }
+    });
+  } catch(e) { console.warn('Notifikasi agreement gagal (non-fatal):', e.message); }
   return { success: true };
 }
 
@@ -1076,6 +1102,16 @@ function verifyFindings(spreadsheetId, agendaId, updates, verifiedBy) {
         _updateCell(sheet, result._rowIndex, C.STATUS + 1, upd.final_status);
     }
   });
+  // Kirim notifikasi ke auditee untuk mengisi TPP
+  try {
+    const openFindings = getAuditResultsByAgenda(spreadsheetId, agendaId)
+      .filter(function(r) { return r.finding_status === CONFIG.FINDING_STATUS.OPEN; });
+    if (openFindings.length > 0) {
+      const ag = getAgendaById(agendaId);
+      if (ag) notifyRequestCA(ag, openFindings);
+    }
+  } catch(e) { console.warn('Notif requestCA gagal:', e.message); }
+
   return { success: true, verified: updates.length };
 }
 
@@ -1090,13 +1126,21 @@ function getLocks(spreadsheetId, agendaId) {
   const sheet = _getAuditSheet(spreadsheetId, CONFIG.AUDIT_SHEETS.REQUIREMENT_LOCKS);
   if (sheet.getLastRow() < 3) return [];
   const data = sheet.getRange(3, 1, sheet.getLastRow() - 2, LOCK_HEADERS.length).getValues();
-  return data
+  const rows = data
     .filter(r => r[0] !== '' && String(r[1]) === String(agendaId))
     .map(row => {
       const obj = { _rowIndex: data.indexOf(row) + 3 };
       LOCK_HEADERS.forEach((h, j) => { obj[h] = row[j]; });
       return obj;
     });
+  // Cleanup lock expired yang masih LOCKED
+  rows.forEach(function(l) {
+    if (l.status === 'LOCKED' && isLockExpired(l.locked_at)) {
+      _updateCell(sheet, l._rowIndex, 6, 'RELEASED');
+      l.status = 'RELEASED';
+    }
+  });
+  return rows;
 }
 
 function lockRequirement(spreadsheetId, agendaId, nomorPersyaratan, auditorEmail) {
@@ -1183,6 +1227,9 @@ function submitTpp(spreadsheetId, resultId, agendaId, items, targetDate, submitt
     stage: 'TPP', level: 'AUDITEE', action: 'SUBMITTED',
     by_email: submittedBy, skipped: false, skip_reason: '',
   });
+  // Kirim notifikasi ke DeptHead
+  try { notifyCASubmitted(getAgendaById(agendaId), { result_id: resultId, nomor_persyaratan: '', check_item_no: '', target_date: targetDate }); } catch(e) {}
+
   return { success: true, tpp_item_count: rows.length };
 }
 
