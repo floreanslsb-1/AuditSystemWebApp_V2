@@ -985,7 +985,7 @@ function saveCheckItemResult({ period_id, agenda_id, result_id, item_id, status,
     _updateCell(sheet, result._rowIndex, C.TPP_STATUS     + 1, '');
     _updateCell(sheet, result._rowIndex, C.CLOSED_AT      + 1, '');
   }
-  return { result_id, status };
+  return { result_id: result.result_id, status };
 }
 
 /**
