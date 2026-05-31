@@ -435,6 +435,7 @@ function _routeAction(action, payload, profile) {
             period_id:        payload.period_id,
             agenda_id:        payload.agenda_id,
             result_id:        item.result_id,
+            item_id:          item.item_id,
             status:           item.status,
             deskripsi_temuan: item.deskripsi_temuan || '',
             foto_urls:        fotoUrls,
