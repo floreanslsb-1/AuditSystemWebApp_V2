@@ -24,9 +24,9 @@ function processApproval({
   stage, level, action, byEmail,
   komentar = '', skipLevel = null, skipReason = '',
 }) {
-  // Cari result di AUDIT_RESULTS
-  const results = getAuditResultsByPeriod(spreadsheetId, null);
-  const result  = results.find(r => r.result_id === resultId);
+  // Cari result di AUDIT_RESULTS — filter per agenda untuk efisiensi
+  const result = getAuditResultsByAgenda(spreadsheetId, agendaId)
+    .find(r => r.result_id === resultId);
   if (!result) throw new Error('Result ' + resultId + ' tidak ditemukan.');
 
   // Cari agenda untuk validasi approver
@@ -90,24 +90,34 @@ function _handleApprove({ spreadsheetId, result, agenda, stage, level, byEmail, 
   const nextLevel = _nextLevel(level);
 
   if (nextLevel) {
-    // Masih ada level berikutnya — belum ubah finding_status
+    // Masih ada level berikutnya — kirim notif ke level berikutnya
+    try {
+      if (isTPP) {
+        if (nextLevel === 'Auditor')     notifyCAToAuditors(agenda, result);
+        if (nextLevel === 'Koordinator') notifyCAApprovedByAuditor(agenda, result, byEmail);
+      } else {
+        if (nextLevel === 'Auditor')     notifyImplToAuditors(agenda, result);
+        if (nextLevel === 'Koordinator') notifyImplApprovedByAuditor(agenda, result, byEmail);
+      }
+    } catch(e) { console.warn('Notif approval gagal:', e.message); }
     return { success: true, nextLevel };
   }
 
   // Level terakhir (Koordinator) approved
   if (isTPP) {
-    // TPP approved → langsung PENDING_IMPL
+    // TPP approved → OPEN_IMPL (tunggu auditee upload bukti)
     updateResultField(spreadsheetId, result.result_id,
-      C.FINDING_STATUS, CONFIG.FINDING_STATUS.PENDING_IMPL);
+      C.FINDING_STATUS, CONFIG.FINDING_STATUS.OPEN_IMPL);
     updateResultField(spreadsheetId, result.result_id,
       C.TPP_STATUS, CONFIG.APPROVAL_STATUS.APPROVED);
+    try { notifyCAFullyApproved(agenda, result); } catch(e) {}
   } else {
     // Stage IMPL approved → CLOSED
     updateResultField(spreadsheetId, result.result_id,
       C.FINDING_STATUS, CONFIG.FINDING_STATUS.CLOSED);
     updateResultField(spreadsheetId, result.result_id,
       C.CLOSED_AT, now());
-    // Cek apakah semua finding di agenda ini sudah closed
+    try { notifyFindingClosed(agenda, result); } catch(e) {}
     _checkAgendaAllClosed(spreadsheetId, agenda.agenda_id);
   }
 
@@ -127,13 +137,15 @@ function _handleReject({ spreadsheetId, result, agenda, stage, level, byEmail, k
   // Balik ke status sebelumnya
   updateResultField(spreadsheetId, result.result_id,
     C.FINDING_STATUS,
-    isTPP ? CONFIG.FINDING_STATUS.OPEN : CONFIG.FINDING_STATUS.PENDING_TPP
+    isTPP ? CONFIG.FINDING_STATUS.OPEN : CONFIG.FINDING_STATUS.OPEN_IMPL
   );
 
   if (isTPP) {
     updateResultField(spreadsheetId, result.result_id,
       C.TPP_STATUS, CONFIG.APPROVAL_STATUS.REJECTED);
   }
+
+  try { notifyRejected(agenda, result, stage, byEmail, komentar); } catch(e) {}
 
   return { success: true, rejected: true };
 }
@@ -197,8 +209,18 @@ function _checkAgendaAllClosed(spreadsheetId, agendaId) {
            f.finding_status === CONFIG.FINDING_STATUS.OVERDUE;
   });
   if (allClosed) {
-    // Semua temuan sudah closed — bisa tambah notifikasi atau aksi di sini
     console.log('[ApprovalService] Semua finding agenda ' + agendaId + ' sudah CLOSED.');
+    try {
+      const ag = getAgendaById(agendaId);
+      const koordinators = getAllKoordinators();
+      if (ag && koordinators.length) {
+        const subject = '[Audit System] Semua Temuan Closed — ' + ag.dept;
+        const body = 'Semua temuan untuk area ' + ag.dept + ' sudah ditutup (CLOSED).\n\nSalam,\nSistem Audit Internal';
+        koordinators.forEach(function(u) {
+          try { GmailApp.sendEmail(u.email, subject, body); } catch(e) {}
+        });
+      }
+    } catch(e) { console.warn('Notif all closed gagal:', e.message); }
   }
   return allClosed;
 }
