@@ -1310,12 +1310,28 @@ async function _deleteSavedFoto(url, idx, gKey, nomor, ciNo, agendaId, periodId,
   toast('Foto dihapus.', 'success');
 }
 
+function _validateImageFiles(files) {
+  var allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+  for (var i = 0; i < files.length; i++) {
+    if (!allowed.includes(files[i].type)) {
+      toast('Hanya file gambar yang diizinkan (JPG, PNG, GIF, WebP). File "' + files[i].name + '" tidak valid.', 'error');
+      return false;
+    }
+    if (files[i].size > 10 * 1024 * 1024) { // 10MB limit
+      toast('Ukuran file maksimal 10MB. File "' + files[i].name + '" terlalu besar.', 'error');
+      return false;
+    }
+  }
+  return true;
+}
+
 async function _saveDraftFinding(gKey, nomor, ciNo) {
   var deskripsi = (document.getElementById('ff-deskripsi') || {}).value?.trim();
   if (!deskripsi) return toast('Deskripsi temuan wajib diisi.', 'error');
 
   var zone     = document.getElementById('ff-upload-zone');
   var newFiles = zone && zone._getFiles ? zone._getFiles() : [];
+  if (newFiles.length && !_validateImageFiles(newFiles)) return;
   var savedCount = (window._ffExistingSavedUrls || []).length;
 
   // FIX 3: hitung juga pendingFiles yang sudah ada dari sesi sebelumnya
@@ -1769,12 +1785,23 @@ function _openAgreementModal(agendaId, periodId) {
       var el = document.getElementById('agr-findings-preview');
       if (!el) return;
       if (!findings.length) { el.innerHTML = '<div style="font-size:12px;color:var(--text-muted);padding:8px 0">Tidak ada temuan di agenda ini.</div>'; return; }
-      el.innerHTML = '<div style="font-size:12px;font-weight:600;margin-bottom:6px">Ringkasan Temuan (' + findings.length + '):</div>' +
-        '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
+      el.innerHTML = '<div style="font-size:12px;font-weight:600;margin-bottom:8px">Ringkasan Temuan (' + findings.length + '):</div>' +
         findings.map(function(f) {
-          return '<span class="badge ' + (f.status === 'Non Comply' ? 'badge-rose' : 'badge-amber') + '">' +
-            escHtml(f.status) + ' #' + f.nomor_persyaratan + '.' + f.check_item_no + '</span>';
-        }).join('') + '</div>';
+          return '<div style="margin-bottom:8px;padding:8px 10px;background:var(--bg);border-radius:6px;' +
+            'border-left:3px solid var(--rose,#f43f5e)">' +
+            '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">' +
+              '<span class="badge badge-rose" style="font-size:10px">Non Comply</span>' +
+              '<span style="font-size:11px;font-weight:600;color:var(--text-muted)">' +
+                '#' + f.nomor_persyaratan + '.' + f.check_item_no +
+              '</span>' +
+            '</div>' +
+            (f.deskripsi_temuan
+              ? '<div style="font-size:12px;color:var(--text-muted);line-height:1.4">' +
+                  escHtml(f.deskripsi_temuan) +
+                '</div>'
+              : '') +
+          '</div>';
+        }).join('');
       lucide.createIcons();
     }).catch(function() {});
   }
