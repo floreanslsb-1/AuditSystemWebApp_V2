@@ -415,10 +415,13 @@ function _routeAction(action, payload, profile) {
           var fotoUrls = '';
           if (item.status !== 'Comply' && item.files && item.files.length) {
             const folder_srb = getOrCreateFolder(
-              item.result_id,  // folder per result_id — unik dan traceable
+              'evidence',
               getOrCreateFolder(
-                payload.agenda_id,
-                getOrCreateFolder(payload.period_id, getOrCreateFolder(CONFIG.DRIVE_ROOT_FOLDER_NAME))
+                item.result_id,
+                getOrCreateFolder(
+                  payload.agenda_id,
+                  getOrCreateFolder(payload.period_id, getOrCreateFolder(CONFIG.DRIVE_ROOT_FOLDER_NAME))
+                )
               )
             );
             const urlList = item.files.map(function(f) {
@@ -545,10 +548,13 @@ function _routeAction(action, payload, profile) {
 
       // Folder: ROOT / period_id / agenda_id / result_id
       const folder_si = getOrCreateFolder(
-        payload.result_id,
+        'implementation',
         getOrCreateFolder(
-          payload.agenda_id,
-          getOrCreateFolder(payload.period_id, getOrCreateFolder(CONFIG.DRIVE_ROOT_FOLDER_NAME))
+          payload.result_id,
+          getOrCreateFolder(
+            payload.agenda_id,
+            getOrCreateFolder(payload.period_id, getOrCreateFolder(CONFIG.DRIVE_ROOT_FOLDER_NAME))
+          )
         )
       );
       const urls_si = (payload.files || []).map(function(f) {
