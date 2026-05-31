@@ -106,7 +106,7 @@ async function _buildTaskList(findings, agendas, period) {
   if (p.isAuditee) {
     findings
       .filter(function(f) {
-        return f.finding_status === 'TPP_APPROVED' &&
+        return f.finding_status === 'OPEN_IMPL' &&
           f._agenda && _isAuditeeOf(f._agenda, p.email);
       })
       .forEach(function(f) {
@@ -542,12 +542,24 @@ async function _renderIsiTppPage(container, task, period) {
       '<div class="card mb-16"><div class="card-body" style="padding:14px 16px">' +
         '<div style="display:flex;gap:10px;align-items:flex-start">' +
           statusBadge(f ? f.status : '') +
-          '<div>' +
+          '<div style="flex:1;min-width:0">' +
             '<div style="font-size:13px;font-weight:600">' + escHtml(f ? f.deskripsi_temuan : '') + '</div>' +
             '<div style="font-size:11px;color:var(--text-muted);margin-top:3px">' +
               escHtml(task.agenda ? task.agenda.dept : '') +
               ' · #' + (f ? f.nomor_persyaratan + '.' + f.check_item_no : '') +
             '</div>' +
+            (f && f.foto_urls
+              ? '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">' +
+                  '<div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:6px;letter-spacing:.04em">FOTO BUKTI TEMUAN</div>' +
+                  '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
+                    f.foto_urls.split(',').filter(Boolean).map(function(url) {
+                      return '<a href="' + escHtml(url) + '" target="_blank" ' +
+                        'class="btn btn-outline btn-sm" style="font-size:11px">' +
+                        '<i data-lucide="image" style="width:11px;height:11px"></i> Lihat Foto</a>';
+                    }).join('') +
+                  '</div>' +
+                '</div>'
+              : '') +
           '</div>' +
         '</div>' +
       '</div></div>' +
@@ -857,8 +869,30 @@ async function _renderApprovalPage(container, task, period) {
             '<i data-lucide="calendar" style="width:12px;height:12px;vertical-align:middle"></i>' +
             ' Target: <strong>' + formatDate(f ? f.target_date : '') + '</strong>' +
           '</div>' +
+          (f && f.foto_urls
+            ? '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">' +
+                '<div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:6px;letter-spacing:.04em">FOTO BUKTI TEMUAN ASLI</div>' +
+                '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
+                  f.foto_urls.split(',').filter(Boolean).map(function(url) {
+                    return '<a href="' + escHtml(url) + '" target="_blank" class="btn btn-outline btn-sm" style="font-size:11px">' +
+                      '<i data-lucide="image" style="width:11px;height:11px"></i> Lihat Foto Temuan</a>';
+                  }).join('') +
+                '</div>' +
+              '</div>'
+            : '') +
         '</div></div>'
       : '<div class="card mb-16"><div class="card-body">' +
+          (f && f.foto_urls
+            ? '<div style="margin-bottom:12px;padding:10px;background:var(--bg);border-radius:6px;border:1px solid var(--border)">' +
+                '<div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:6px;letter-spacing:.04em">FOTO TEMUAN ASLI</div>' +
+                '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
+                  f.foto_urls.split(',').filter(Boolean).map(function(url) {
+                    return '<a href="' + escHtml(url) + '" target="_blank" class="btn btn-outline btn-sm" style="font-size:11px">' +
+                      '<i data-lucide="image" style="width:11px;height:11px"></i> Lihat Foto Temuan</a>';
+                  }).join('') +
+                '</div>' +
+              '</div>'
+            : '') +
           '<div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:10px">BUKTI IMPLEMENTASI</div>' +
           tppItems.map(function(item) {
             return '<div style="padding:10px;border:1px solid var(--border);border-radius:6px;margin-bottom:8px">' +
