@@ -388,7 +388,7 @@ async function _renderVerifikasiPage(container, task, period) {
             '<select class="form-control" id="verif-status-' + i + '" style="max-width:200px">' +
               _buildStatusOptions(f.status) +
             '</select>' +
-            '<div class="form-hint">Non Comply ↔ OFI diperbolehkan. Comply = temuan langsung ditutup.</div>' +
+            '<div class="form-hint">Ubah ke Comply = temuan langsung ditutup tanpa TPP.</div>' +
           '</div>' +
           // Foto
           (f.foto_urls
@@ -439,7 +439,7 @@ async function _renderVerifikasiPage(container, task, period) {
 }
 
 function _buildStatusOptions(current) {
-  var options = ['Non Comply', 'OFI', 'Comply'];
+  var options = ['Non Comply', 'Comply'];
   return options.map(function(s) {
     return '<option value="' + s + '" ' + (s === current ? 'selected' : '') + '>' + s + '</option>';
   }).join('');
