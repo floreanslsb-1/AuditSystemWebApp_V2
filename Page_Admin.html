@@ -648,12 +648,12 @@ async function saveChecklistItem(itemId) {
 async function refreshChecklistCache(btn) {
   var restore = btn ? btnLoading(btn, '', 'admin-tab-content') : function(){};
   try {
-    await api('REFRESH_CACHE', {});
     clearCache('GET_CHECKLIST_MASTER');
     clearCache('GET_CHECKLIST_GENERAL');
     clearCache('GET_CHECKLIST_KHUSUS');
     toast('Cache berhasil di-refresh.', 'success');
     loadAdminChecklist(document.getElementById('admin-tab-content'));
+    restore();
   } catch(err) { toast(err.message, 'error'); restore(); }
 }
 
@@ -1434,7 +1434,7 @@ async function _togglePeriodExpand(periodId, namaPeriode) {
             lead_auditor:   ag.lead_auditor,
             status:         ag.status || 'PLANNED',
             period_id:      periodId,
-            period_status:  results[0] ? ''
+            period_status:  results[0] ? '' : '', // diisi di bawah
           }).replace(/'/g, "&#39;");
 
           return '<tr>' +
@@ -1453,7 +1453,7 @@ async function _togglePeriodExpand(periodId, namaPeriode) {
                   kategori:       kategoriLabel,
                   auditor_emails: ag.auditor_emails || '',
                   lead_auditor:   ag.lead_auditor || '',
-                  session_id:     ag.session_id || '',
+                  status:         ag.status || 'PLANNED',
                   period_id:      periodId,
                 }).replace(/'/g,"&#39;") + '\' ' +
                 'onclick="var b=this;singleClick(b,function(){ openEditAgendaModal(JSON.parse(b.dataset.ag)) })">' +
@@ -1990,11 +1990,11 @@ async function openEditAgendaModal(ag) {
   // Load data yang diperlukan
   var results  = await Promise.all([
     cachedApi('GET_USERS', {}, 300),
-    api('GET_CHECKLIST_BY_AGENDA', { agenda_id: ag.agenda_id, period_id: ag.period_id }),
+    api('GET_AUDIT_RESULTS', { agenda_id: ag.agenda_id, period_id: ag.period_id }),
     api('GET_CHECKLIST_FOR_AGENDA', { kategori: ag.kategori }),
   ]);
   var users         = results[0];
-  var savedItems    = results[1]; // item yang sudah dipilih
+  var savedItems    = results[1]; // AUDIT_RESULTS yang sudah berisi snapshot checklist
   var allItems      = results[2]; // semua item tersedia
 
   var auditors = users.filter(function(u) {
@@ -2038,11 +2038,11 @@ function _renderEditAgendaModal() {
     title: 'Edit Audit Plan — ' + escHtml(ag.dept),
     size: 'modal-lg',
     body:
-      // Warning kalau sudah ada session
-      (ag.session_id
+      // Warning kalau audit sudah dimulai
+      (ag.status === 'STARTED' || ag.status === 'DONE'
         ? '<div style="background:rgba(245,158,11,.08);border:1px solid var(--amber,#f59e0b);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;font-size:12px;display:flex;gap:8px">' +
             '<i data-lucide="alert-triangle" style="width:14px;height:14px;color:var(--amber,#f59e0b);flex-shrink:0;margin-top:1px"></i>' +
-            '<span>Audit untuk area ini sudah dimulai. Menyimpan perubahan akan <strong>menghapus semua hasil audit</strong> yang sudah diisi dan auditor harus mengisi ulang dari awal.</span>' +
+            '<span>Audit untuk area ini sudah dimulai. Menyimpan perubahan checklist akan <strong>menghapus semua hasil audit</strong> yang sudah diisi dan auditor harus mengisi ulang dari awal.</span>' +
           '</div>'
         : '') +
       // Tabs
@@ -2365,8 +2365,6 @@ async function _saveEditAgenda(btn) {
 
   var selectedIds = Object.keys(s.selected).filter(function(id) { return s.selected[id]; });
   if (selectedIds.length === 0) return toast('Pilih minimal 1 checklist item.', 'error');
-
-  var needReset = (s.ag.status === 'STARTED') && checklistChanged;
 
   // Cek apa yang berubah
   var originalEmails  = (s.ag.auditor_emails || '').split(',').map(function(e){ return e.trim(); }).filter(Boolean).sort();
@@ -3046,12 +3044,7 @@ async function _saveAgenda() {
         auditor_emails: area.auditorEmails.join(','),
         lead_auditor:   area.leadAuditor,
         jadwal_tanggal: '',
-        assigned_by:    App.profile.email,
-      });
-      await api('SAVE_AGENDA_CHECKLIST', {
-        agenda_id: result.agenda_id,
-        period_id: state.periodId,
-        item_ids:  selectedIds,
+        item_ids:       selectedIds,
       });
       savedCount++;
     } catch(err) {
