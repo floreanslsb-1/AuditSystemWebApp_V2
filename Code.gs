@@ -411,23 +411,31 @@ function _routeAction(action, payload, profile) {
 
       (payload.items || []).forEach(function(item) {
         try {
-          // Upload foto dulu kalau ada
+          // Upload foto baru kalau ada, merge dengan foto lama yang masih ada
           var fotoUrls = '';
-          if (item.status !== 'Comply' && item.files && item.files.length) {
-            const folder_srb = getOrCreateFolder(
-              'evidence',
-              getOrCreateFolder(
-                item.result_id,
+          if (item.status !== 'Comply') {
+            // Foto lama yang masih dipertahankan (tidak dihapus user)
+            var existingUrls = (item.existing_foto_urls || '').split(',').filter(Boolean);
+
+            var newUrls = [];
+            if (item.files && item.files.length) {
+              const folder_srb = getOrCreateFolder(
+                'evidence',
                 getOrCreateFolder(
-                  payload.agenda_id,
-                  getOrCreateFolder(payload.period_id, getOrCreateFolder(CONFIG.DRIVE_ROOT_FOLDER_NAME))
+                  item.result_id,
+                  getOrCreateFolder(
+                    payload.agenda_id,
+                    getOrCreateFolder(payload.period_id, getOrCreateFolder(CONFIG.DRIVE_ROOT_FOLDER_NAME))
+                  )
                 )
-              )
-            );
-            const urlList = item.files.map(function(f) {
-              return uploadFileToDrive(f.base64, f.name, f.mime_type, folder_srb);
-            });
-            fotoUrls = urlList.join(',');
+              );
+              newUrls = item.files.map(function(f) {
+                return uploadFileToDrive(f.base64, f.name, f.mime_type, folder_srb);
+              });
+            }
+
+            // Gabung: foto lama yang masih ada + foto baru
+            fotoUrls = existingUrls.concat(newUrls).join(',');
           }
 
           // Simpan ke AUDIT_RESULTS — update row yang sudah ada (pre-populated)
