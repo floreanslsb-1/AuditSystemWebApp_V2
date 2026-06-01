@@ -968,14 +968,13 @@ function populateAuditResults(agendaId, itemIds, spreadsheetId, periodId) {
  * Update satu check item hasil audit (update Grup 3).
  * Row sudah ada sejak agenda dibuat — tinggal update.
  */
-function saveCheckItemResult({ period_id, agenda_id, result_id, item_id, status, deskripsi_temuan, foto_urls, auditor_email }) {
+function saveCheckItemResult({ period_id, agenda_id, result_id, status, deskripsi_temuan, foto_urls, auditor_email }) {
   const reg = getPeriodById(period_id);
   if (!reg) throw new Error('Periode tidak ditemukan: ' + period_id);
   const sheet   = _getAuditSheet(reg.spreadsheet_id, CONFIG.AUDIT_SHEETS.AUDIT_RESULTS);
   const results = getAuditResultsByAgenda(reg.spreadsheet_id, agenda_id);
-  let result = results.find(r => r.result_id === result_id);
-  if (!result && item_id) result = results.find(r => r.item_id === item_id);
-  if (!result) throw new Error('Result tidak ditemukan: result_id=' + result_id + ' item_id=' + item_id + ' agenda_id=' + agenda_id + ' total_results=' + results.length);
+  const result  = results.find(r => String(r.result_id) === String(result_id));
+  if (!result) throw new Error('Result tidak ditemukan: result_id=' + result_id + ' agenda_id=' + agenda_id + ' total=' + results.length);
 
   const row = result._rowIndex;
   const maxRow = sheet.getLastRow();
