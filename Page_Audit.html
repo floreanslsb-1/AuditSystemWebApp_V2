@@ -709,8 +709,8 @@ function _renderCheckItem(gKey, item, ciNo, agenda, periodId, resultMap, finding
   var merged      = _mergedStatus(gKey, item.nomor, ciNo, resultMap, item.result_id);
   var status      = merged.status;
   var isDone      = !!status;
-  var isComply    = status === 'COMPLY';
-  var isNonComply = status === 'NON_COMPLY';
+  var isComply    = status === 'COMPLY' || status === 'Comply';
+  var isNonComply = status === 'NON_COMPLY' || status === 'Non Comply';
   var fromDraft   = merged.fromDraft;
   var srvFinding  = findingMap ? findingMap[item.result_id] : null;
 
@@ -953,9 +953,11 @@ function _repaintCheckItemRow(gKey, nomor, ciNo, status, fromDraft) {
   // null ciNo → repaint whole group
   if (ciNo === null) { _repaintGroupItems(gKey); return; }
 
-  var item = g.items.find(function(i) {
-    return Number(i.nomor) === Number(nomor) && Number(i.check_item_no) === Number(ciNo);
-  });
+  // Cari by result_id dulu (paling reliable), fallback ke nomor+check_item_no
+  var item = g.items.find(function(i) { return i.result_id === nomor; }) ||
+             g.items.find(function(i) {
+               return Number(i.nomor) === Number(nomor) && Number(i.check_item_no) === Number(ciNo);
+             });
   if (!item) return;
 
   var _cid = item.id;
@@ -965,8 +967,8 @@ function _repaintCheckItemRow(gKey, nomor, ciNo, status, fromDraft) {
   if (!statusEl) return;
 
   var merged      = _mergedStatus(gKey, nomor, ciNo, ctx.resultMap, item && item.result_id);
-  var isComply    = merged.status === 'COMPLY';
-  var isNonComply = merged.status === 'NON_COMPLY';
+  var isComply    = merged.status === 'COMPLY' || merged.status === 'Comply';
+  var isNonComply = merged.status === 'NON_COMPLY' || merged.status === 'Non Comply';
   var fd          = merged.fromDraft;
   var lock        = window._auditLockState[gKey];
   var gLocked     = lock && lock.locked_by !== App.profile.email;
@@ -1128,7 +1130,9 @@ async function submitCheckItem(itemId, gKey, nomor, ciNo, status, agendaId, peri
     check_item_no:     Number(ciNo),
     status:            status
   });
-  _repaintCheckItemRow(gKey, nomor, ciNo, status, true);
+  // Cari result_id dari renderCtx untuk repaint yang akurat
+  var _srRid = (_srItm && _srItm.result_id) || nomor;
+  _repaintCheckItemRow(gKey, _srRid, ciNo, status, true);
   _renderFloatingSaveBar(agendaId, periodId);
 
   if (status === 'NON_COMPLY') {
@@ -1726,22 +1730,18 @@ async function _saveRequirement(agendaId, periodId, btn) {
       });
     }
 
-    // 2. Clean up draft
+    // 2. Clean up draft — hapus dari memory DAN localStorage
     Object.keys(pending).forEach(function(k) { if (k.indexOf(prefix) === 0) delete pending[k]; });
     Object.keys(draft.items).forEach(function(k) { if (k.indexOf(prefix) === 0) delete draft.items[k]; });
     draft.activeGroupKey = null;
-    _persistAuditDraft();
-
-    try {
-      var check = JSON.parse(localStorage.getItem(_draftKey(agendaId)) || '{}');
-      if (check.activeGroupKey !== null) localStorage.removeItem(_draftKey(agendaId));
-    } catch(e) {}
+    // Hapus dari localStorage secara eksplisit — jangan cuma persist state kosong
+    try { localStorage.removeItem(_draftKey(agendaId)); } catch(e) {}
     delete window._auditLockState[gKey];
 
     clearCache('GET_AUDIT_RESULTS'); clearCache('GET_FINDINGS_BY_AGENDA'); clearCache('GET_LOCKS');
 
     // 3. Repaint setelah resultMap sudah benar
-    items.forEach(function(it) { _repaintCheckItemRow(gKey, it.nomor_persyaratan, it.check_item_no, it.status, false); });
+    items.forEach(function(it) { _repaintCheckItemRow(gKey, it.result_id, it.check_item_no, it.status, false); });
     _renderFloatingSaveBar(agendaId, periodId);
 
     var groupEl = document.querySelector('[data-req-group="' + escAttr(gKey) + '"]');
