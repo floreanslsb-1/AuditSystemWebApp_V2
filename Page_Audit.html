@@ -1387,8 +1387,26 @@ async function _saveDraftFinding(gKey, nomor, ciNo) {
 }
 
 async function _openEditStatusForm(itemId, gKey, nomor, ciNo, agendaId, periodId, currentStatus, fromDraftStr) {
-  var locked = await _ensureLockForGroup(agendaId, periodId, gKey, nomor);
-  if (!locked) return;
+  // Untuk item yang sudah tersimpan (bukan draft), jangan lock dulu saat pencil diklik.
+  // Lock hanya dibutuhkan kalau user betul-betul menyimpan perubahan dari modal.
+  // Kalau item masih draft (fromDraftStr === '1'), tetap perlu ensureLock karena sudah ada draft aktif.
+  var fromDraft = fromDraftStr === '1' || fromDraftStr === true;
+  if (fromDraft) {
+    var locked = await _ensureLockForGroup(agendaId, periodId, gKey, nomor);
+    if (!locked) return;
+  } else {
+    // Cek saja apakah group lain sedang aktif — blok kalau iya, tapi jangan acquire lock dulu
+    var draft = window._auditDraft;
+    if (draft && draft.activeGroupKey !== null && draft.activeGroupKey !== gKey) {
+      var activeGroup = window._auditRenderCtx && window._auditRenderCtx.groups.find(function(g) {
+        return _groupKey(g) === draft.activeGroupKey;
+      });
+      var activeLabel = activeGroup && activeGroup.persyaratan
+        ? escHtml(activeGroup.persyaratan.substring(0, 40)) : draft.activeGroupKey;
+      toast('Selesaikan "' + activeLabel + '..." dulu sebelum mengedit persyaratan lain.', 'warning', 6000);
+      return;
+    }
+  }
 
   var isCurrentlyComply = currentStatus === 'COMPLY' || currentStatus === 'Comply';
   // Prefer draft data; fall back to server finding
@@ -1434,7 +1452,14 @@ async function _openEditStatusForm(itemId, gKey, nomor, ciNo, agendaId, periodId
     // Tentukan foto_urls: prioritas draft → server finding
     var savedFotoUrls = draftEf.foto_urls || '';
     if (!savedFotoUrls && window._auditRenderCtx && window._auditRenderCtx.findingMap) {
-      var srvFindingEf = window._auditRenderCtx.findingMap[Number(nomor) + '.' + Number(ciNo)];
+      // Lookup pakai result_id, bukan nomor.ciNo
+      var _efCtx3 = window._auditRenderCtx;
+      var _efGrp3 = _efCtx3.groups.find(function(g) { return _groupKey(g) === gKey; });
+      var _efItm3 = _efGrp3 && _efGrp3.items.find(function(i) {
+        return Number(i.nomor) === Number(nomor) && Number(i.check_item_no) === Number(ciNo);
+      });
+      var _efRid3 = _efItm3 && _efItm3.result_id;
+      var srvFindingEf = _efRid3 ? _efCtx3.findingMap[_efRid3] : null;
       if (srvFindingEf && srvFindingEf.foto_urls) {
         savedFotoUrls = srvFindingEf.foto_urls;
       }
@@ -1545,6 +1570,15 @@ async function _switchToComply(itemId, gKey, nomor, ciNo, agendaId, periodId) {
 async function _saveEditedFinding(gKey, nomor, ciNo) {
   var deskripsi = (document.getElementById('ef-deskripsi') || {}).value?.trim();
   if (!deskripsi) return toast('Deskripsi temuan wajib diisi.', 'error');
+
+  // Acquire lock sekarang (saat user benar-benar menyimpan, bukan saat pencil diklik)
+  var ctx = window._auditRenderCtx;
+  var agendaId = ctx && ctx.agenda && ctx.agenda.agenda_id;
+  var periodId = ctx && ctx.periodId;
+  if (agendaId && periodId) {
+    var locked = await _ensureLockForGroup(agendaId, periodId, gKey, nomor);
+    if (!locked) return;
+  }
 
   var zone     = document.getElementById('ef-upload-zone');
   var newFiles = zone && zone._getFiles ? zone._getFiles() : [];
