@@ -545,6 +545,7 @@ async function renderAuditChecklist(panel, agenda, areaId, periodId) {
 
   _renderFloatingSaveBar(agenda.agenda_id, periodId);
   lucide.createIcons();
+  _loadAllDriveImgs();
 }
 
 // ── Group builder ──────────────────────────────────────────────────
@@ -944,6 +945,7 @@ function _repaintGroupItems(gKey) {
     return _renderCheckItem(gKey, item, idx + 1, ctx.agenda, ctx.periodId, ctx.resultMap, ctx.findingMap, ctx.isLocked, gLocked, false);
   }).join('');
   lucide.createIcons(itemsEl);
+  _loadAllDriveImgs(itemsEl);
 }
 
 function _repaintCheckItemRow(gKey, nomor, ciNo, status, fromDraft) {
@@ -1005,6 +1007,7 @@ function _repaintCheckItemRow(gKey, nomor, ciNo, status, fromDraft) {
 
   statusEl.innerHTML = newStatusHtml;
   lucide.createIcons(statusEl);
+  _loadAllDriveImgs(statusEl.closest('.card') || document);
 
   if (rowEl) rowEl.style.background = (fd && isNonComply) ? 'rgba(245,158,11,.10)' : (!fd && isNonComply) ? 'rgba(244,63,94,.07)' : isComply ? 'rgba(16,185,129,.02)' : 'transparent';
 
@@ -1132,8 +1135,7 @@ async function submitCheckItem(itemId, gKey, nomor, ciNo, status, agendaId, peri
     status:            status
   });
   // Cari result_id dari renderCtx untuk repaint yang akurat
-  var _srRid = (_srItm && _srItm.result_id) || nomor;
-  _repaintCheckItemRow(gKey, _srRid, ciNo, status, true);
+  _repaintCheckItemRow(gKey, nomor, ciNo, status, true);
   _renderFloatingSaveBar(agendaId, periodId);
 
   if (status === 'NON_COMPLY') {
@@ -1508,6 +1510,7 @@ async function _openEditStatusForm(itemId, gKey, nomor, ciNo, agendaId, periodId
           '<i data-lucide="save" style="width:13px;height:13px"></i> Simpan Temuan' +
         '</button>',
     });
+    setTimeout(function() { _loadAllDriveImgs(document.getElementById('edit-finding-modal')); }, 50);
     lucide.createIcons();
 
     // FIX: restore pending files ke upload zone — sama seperti modal ff
