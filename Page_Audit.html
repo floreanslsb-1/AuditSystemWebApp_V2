@@ -514,7 +514,7 @@ async function renderAuditChecklist(panel, agenda, areaId, periodId) {
     g.items.forEach(function(item, idx) {
       var m = _mergedStatus(_groupKey(g), item.nomor, idx + 1, resultMap, item.result_id);
       if (m.status) doneItems++;
-      if (m.status === 'NON_COMPLY') nonComply++;
+      if (m.status === 'NON_COMPLY' || m.status === 'Non Comply') nonComply++;
     });
   });
   var progressPct = totalItems > 0 ? Math.round(doneItems / totalItems * 100) : 0;
@@ -624,11 +624,16 @@ function _mergedStatus(groupKey, nomor, ciNo, resultMap, resultId) {
   var draftKey  = _draftItemKey(groupKey, resultId);
   var drfItem   = window._auditDraft ? window._auditDraft.items[draftKey] : null;
   if (drfItem && drfItem.status) {
+    var _srvF = (window._auditRenderCtx && window._auditRenderCtx.findingMap && resultId)
+      ? window._auditRenderCtx.findingMap[resultId] : null;
+    var _savedCount = (_srvF && _srvF.foto_urls)
+      ? _srvF.foto_urls.split(',').filter(Boolean).length : 0;
     return {
       status: drfItem.status, fromDraft: true,
       deskripsi: drfItem.deskripsi_temuan || '',
       fileCount: (window._auditPendingFiles && window._auditPendingFiles[draftKey])
         ? window._auditPendingFiles[draftKey].length : 0,
+      savedFotoCount: _savedCount,
     };
   }
   return { status: srvStatus, fromDraft: false, deskripsi: '', fileCount: 0 };
@@ -789,11 +794,14 @@ function _renderCheckItem(gKey, item, ciNo, agenda, periodId, resultMap, finding
       findingHtml =
         '<div style="margin-top:4px;font-size:12px">' +
           '<div style="line-height:1.5;color:var(--amber,#f59e0b)"><span style="font-weight:600">Deskripsi:</span> ' + escHtml(merged.deskripsi) + '</div>' +
-          (merged.fileCount
+          (merged.fileCount > 0 || merged.savedFotoCount > 0
             ? '<div style="display:inline-flex;align-items:center;gap:3px;margin-top:3px;' +
                 'font-size:11px;color:var(--amber,#f59e0b)">' +
                 '<i data-lucide="paperclip" style="width:10px;height:10px"></i>' +
-                merged.fileCount + ' foto (belum disimpan)</div>'
+                (merged.savedFotoCount > 0 ? merged.savedFotoCount + ' tersimpan' : '') +
+                (merged.savedFotoCount > 0 && merged.fileCount > 0 ? ' + ' : '') +
+                (merged.fileCount > 0 ? merged.fileCount + ' baru (belum disimpan)' : '') +
+              '</div>'
             : '') +
         '</div>';
     } else if (!fromDraft && srvFinding) {
@@ -1042,11 +1050,14 @@ function _repaintCheckItemRow(gKey, resultId, status, fromDraft) {
         findingEl.innerHTML =
           '<div style="margin-top:4px;font-size:12px">' +
             '<div style="line-height:1.5;color:var(--amber,#f59e0b)"><span style="font-weight:600">Deskripsi:</span> ' + escHtml(merged.deskripsi) + '</div>' +
-            (merged.fileCount
+            (merged.fileCount > 0 || merged.savedFotoCount > 0
               ? '<div style="display:inline-flex;align-items:center;gap:3px;margin-top:3px;' +
                   'font-size:11px;color:var(--amber,#f59e0b)">' +
                   '<i data-lucide="paperclip" style="width:10px;height:10px"></i>' +
-                  merged.fileCount + ' foto (belum disimpan)</div>'
+                  (merged.savedFotoCount > 0 ? merged.savedFotoCount + ' tersimpan' : '') +
+                  (merged.savedFotoCount > 0 && merged.fileCount > 0 ? ' + ' : '') +
+                  (merged.fileCount > 0 ? merged.fileCount + ' baru (belum disimpan)' : '') +
+                '</div>'
               : '') +
           '</div>';
         lucide.createIcons(findingEl);
@@ -1072,14 +1083,8 @@ function _repaintCheckItemRow(gKey, resultId, status, fromDraft) {
             '</div>';
           }
           findingEl.innerHTML =
-            '<div style="margin-top:6px;padding:8px 10px;background:rgba(244,63,94,.05);' +
-              'border-radius:6px;font-size:12px;border-left:2px solid var(--rose,#f43f5e)">' +
-              '<div style="color:var(--rose,#f43f5e);font-weight:600;margin-bottom:4px;' +
-                'display:flex;align-items:center;gap:4px">' +
-                '<i data-lucide="triangle-alert" style="width:11px;height:11px"></i>Temuan tersimpan' +
-                (fotoUrls2.length ? '<span style="font-size:11px;font-weight:400;margin-left:4px">· ' + fotoUrls2.length + ' foto</span>' : '') +
-              '</div>' +
-              '<div style="color:var(--text-muted);line-height:1.5">' + escHtml(srvF2.deskripsi_temuan) + '</div>' +
+            '<div style="margin-top:4px;font-size:12px">' +
+              '<div style="line-height:1.5;color:var(--rose,#f43f5e)"><span style="font-weight:600">Deskripsi:</span> ' + escHtml(srvF2.deskripsi_temuan) + '</div>' +
               fotoHtml2 +
             '</div>';
           lucide.createIcons(findingEl);
@@ -1124,7 +1129,7 @@ function _updateProgressBar() {
       totalItems++;
       var m = _mergedStatus(gKey, item.nomor, idx + 1, ctx.resultMap, item.result_id);
       if (m.status) doneItems++;
-      if (m.status === 'NON_COMPLY') nonComply++;
+      if (m.status === 'NON_COMPLY' || m.status === 'Non Comply') nonComply++;
     });
   });
   var pct   = totalItems > 0 ? Math.round(doneItems / totalItems * 100) : 0;
@@ -1444,24 +1449,15 @@ async function _openEditStatusForm(resultId, gKey, agendaId, periodId, currentSt
     // Lock baru di-acquire setelah user konfirmasi "Lanjutkan"
     var lockedNow = await _ensureLockForGroup(agendaId, periodId, gKey, nomor);
     if (!lockedNow) return;
-    var _esCtx = window._auditRenderCtx;
-    var _esGrp = _esCtx && _esCtx.groups.find(function(g) { return _groupKey(g) === gKey; });
-    var _esItm = _esGrp && _esGrp.items.find(function(i) {
-      return Number(i.nomor) === Number(nomor) && Number(i.check_item_no) === Number(ciNo);
-    });
-    var _esRid = (_esItm && _esItm.result_id) || '';
-    _draftSetItem(gKey, _esRid, { item_id: itemId, result_id: _esRid, nomor_persyaratan: Number(nomor), check_item_no: Number(ciNo), status: 'NON_COMPLY' });
-    _repaintCheckItemRow(gKey, _esRid, 'NON_COMPLY', true);
+    _draftSetItem(gKey, resultId, { item_id: itemId, result_id: resultId, nomor_persyaratan: Number(nomor), check_item_no: Number(ciNo), status: 'NON_COMPLY' });
+    _repaintCheckItemRow(gKey, resultId, 'NON_COMPLY', true);
     _renderFloatingSaveBar(agendaId, periodId);
-    _openDraftFindingForm(itemId, gKey, nomor, ciNo, _esRid, agendaId, periodId);
+    _openDraftFindingForm(itemId, gKey, nomor, ciNo, resultId, agendaId, periodId);
   } else {
     // Non Comply → open modal to edit finding
-    var _oeGrp3 = window._auditRenderCtx && window._auditRenderCtx.groups.find(function(g) { return _groupKey(g) === gKey; });
-    var _oeItm3 = _oeGrp3 && _oeGrp3.items.find(function(i) { return Number(i.nomor) === Number(nomor) && Number(i.check_item_no) === Number(ciNo); });
-    var _oeRid3 = (_oeItm3 && _oeItm3.result_id) || '';
-    var dKeyEf       = _draftItemKey(gKey, _oeRid3);
-    var pendingEf    = (window._auditPendingFiles && window._auditPendingFiles[dKeyEf]) || [];
-    var draftEf      = _draftGetItem(gKey, _oeRid3) || {};
+    var dKeyEf    = _draftItemKey(gKey, resultId);
+    var pendingEf = (window._auditPendingFiles && window._auditPendingFiles[dKeyEf]) || [];
+    var draftEf   = _draftGetItem(gKey, resultId) || {};
     // Merge: draft lebih prioritas, fallback ke `existing` yang sudah diisi dari server di atas
     var initialDeskripsi = draftEf.deskripsi_temuan || existing.deskripsi_temuan || '';
 
@@ -1470,13 +1466,8 @@ async function _openEditStatusForm(resultId, gKey, agendaId, periodId, currentSt
     var savedFotoUrls = draftEf.foto_urls || '';
     if (!savedFotoUrls && window._auditRenderCtx && window._auditRenderCtx.findingMap) {
       // Lookup pakai result_id, bukan nomor.ciNo
-      var _efCtx3 = window._auditRenderCtx;
-      var _efGrp3 = _efCtx3.groups.find(function(g) { return _groupKey(g) === gKey; });
-      var _efItm3 = _efGrp3 && _efGrp3.items.find(function(i) {
-        return Number(i.nomor) === Number(nomor) && Number(i.check_item_no) === Number(ciNo);
-      });
-      var _efRid3 = _efItm3 && _efItm3.result_id;
-      var srvFindingEf = _efRid3 ? _efCtx3.findingMap[_efRid3] : null;
+      var srvFindingEf = (window._auditRenderCtx && window._auditRenderCtx.findingMap)
+        ? window._auditRenderCtx.findingMap[resultId] : null;
       if (srvFindingEf && srvFindingEf.foto_urls) {
         savedFotoUrls = srvFindingEf.foto_urls;
       }
@@ -1502,7 +1493,7 @@ async function _openEditStatusForm(resultId, gKey, agendaId, periodId, currentSt
             '</span>' +
           '</label>' +
           // FIX: gunakan savedFotoUrls yang sudah digabung dari draft + server
-          _buildFotoGrid('ef', savedFotoUrls, gKey, _oeRid3, agendaId, periodId) +
+          _buildFotoGrid('ef', savedFotoUrls, gKey, resultId, agendaId, periodId) +
           // FIX: tampilkan label jika ada pending files yang belum tersimpan
           (pendingEf.length > 0
             ? '<div style="font-size:11px;color:var(--amber,#f59e0b);font-weight:600;margin-bottom:6px">' +
@@ -1746,8 +1737,11 @@ async function _saveRequirement(agendaId, periodId, btn) {
       restore(); return;
     }
 
-    // 1. Update resultMap + findingMap pakai `items` (bukan result.saved — tidak punya nomor_persyaratan)
+    // 1. Update resultMap + findingMap — foto_urls dari result.saved sudah include foto baru
     if (window._auditRenderCtx) {
+      var _savedMap = {};
+      (result.saved || []).forEach(function(s) { if (s.result_id) _savedMap[s.result_id] = s; });
+
       items.forEach(function(it) {
         if (!it.result_id) return;
         window._auditRenderCtx.resultMap[it.result_id] = it.status;
@@ -1755,10 +1749,11 @@ async function _saveRequirement(agendaId, periodId, btn) {
           if (window._auditRenderCtx.findingMap) delete window._auditRenderCtx.findingMap[it.result_id];
         } else if (it.status === 'Non Comply') {
           if (!window._auditRenderCtx.findingMap) window._auditRenderCtx.findingMap = {};
+          var _fotoUrls = (_savedMap[it.result_id] && _savedMap[it.result_id].foto_urls) || it.existing_foto_urls || '';
           window._auditRenderCtx.findingMap[it.result_id] = {
             result_id:        it.result_id,
             deskripsi_temuan: it.deskripsi_temuan || '',
-            foto_urls:        it.existing_foto_urls || '',
+            foto_urls:        _fotoUrls,
           };
         }
       });
