@@ -612,6 +612,12 @@ function _routeAction(action, payload, profile) {
     }
 
     // ── File Management ───────────────────────────────────────
+    case 'GET_DRIVE_IMAGE_BASE64': {
+      // Ambil gambar Drive sebagai base64 data URI — server-side untuk bypass firewall
+      var imgResult = getDriveFileBase64(payload.url);
+      return imgResult || '';
+    }
+
     case 'DELETE_DRIVE_FILE': {
       requireAccess(['isAuditor'], profile);
       const fileUrl = payload.file_url;
