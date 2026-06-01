@@ -800,8 +800,7 @@ function _renderCheckItem(gKey, item, ciNo, agenda, periodId, resultMap, finding
             return '<div style="position:relative;width:56px;height:56px;border-radius:6px;' +
               'overflow:hidden;border:1px solid var(--border);cursor:pointer;background:var(--bg)" ' +
               'onclick="_openFotoLightbox(\'' + escAttr(url) + '\')" title="Klik untuk perbesar">' +
-              '<img src="' + escAttr(url) + '" style="width:100%;height:100%;object-fit:cover" ' +
-                'onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">' +
+              _renderDriveImg(url) +
               '<div style="display:none;width:100%;height:100%;align-items:center;' +
                 'justify-content:center">' +
                 '<i data-lucide="file" style="width:16px;height:16px;opacity:.4"></i></div>' +
@@ -1039,8 +1038,7 @@ function _repaintCheckItemRow(gKey, nomor, ciNo, status, fromDraft) {
                 return '<div style="position:relative;width:56px;height:56px;border-radius:6px;' +
                   'overflow:hidden;border:1px solid var(--border);cursor:pointer;background:var(--bg)" ' +
                   'onclick="_openFotoLightbox(\'' + escAttr(url) + '\')">' +
-                  '<img src="' + escAttr(url) + '" style="width:100%;height:100%;object-fit:cover" ' +
-                    'onerror="this.style.display=\'none\'">' +
+                  _renderDriveImg(url) +
                   '<a href="' + escAttr(url) + '" target="_blank" onclick="event.stopPropagation()" ' +
                     'style="position:absolute;bottom:1px;right:1px;background:rgba(0,0,0,.5);' +
                       'border-radius:3px;padding:2px;display:flex">' +
@@ -1423,7 +1421,6 @@ async function _openEditStatusForm(itemId, gKey, nomor, ciNo, agendaId, periodId
   }
 
   if (isCurrentlyComply) {
-    // Comply → confirm before switching to Non Comply
     var ok = await showConfirm({
       title: 'Ubah ke Non Comply?',
       message: 'Item ini akan diubah menjadi Non Comply.',
@@ -1431,6 +1428,9 @@ async function _openEditStatusForm(itemId, gKey, nomor, ciNo, agendaId, periodId
       confirmText: 'Lanjutkan',
     });
     if (!ok) return;
+    // Lock baru di-acquire setelah user konfirmasi "Lanjutkan"
+    var lockedNow = await _ensureLockForGroup(agendaId, periodId, gKey, nomor);
+    if (!lockedNow) return;
     var _esCtx = window._auditRenderCtx;
     var _esGrp = _esCtx && _esCtx.groups.find(function(g) { return _groupKey(g) === gKey; });
     var _esItm = _esGrp && _esGrp.items.find(function(i) { return Number(i.nomor) === Number(nomor); });
@@ -1439,15 +1439,13 @@ async function _openEditStatusForm(itemId, gKey, nomor, ciNo, agendaId, periodId
     _renderFloatingSaveBar(agendaId, periodId);
     _openDraftFindingForm(itemId, gKey, nomor, ciNo, agendaId, periodId);
   } else {
-    // Non Comply → open modal to edit finding, with option to switch to Comply
-
-    // FIX: kumpulkan semua sumber foto yang ada:
-    // 1. foto_urls dari draft (jika ada — biasanya kosong karena bug sebelumnya)
-    // 2. foto_urls dari server finding (sudah tersimpan di Drive)
-    // 3. file pending di memory (sudah dipilih user tapi belum upload ke Drive)
+    // Non Comply → open modal to edit finding
     var dKeyEf       = _draftItemKey(gKey, nomor, ciNo);
     var pendingEf    = (window._auditPendingFiles && window._auditPendingFiles[dKeyEf]) || [];
     var draftEf      = _draftGetItem(gKey, nomor, ciNo) || {};
+    // Merge: draft lebih prioritas, fallback ke `existing` yang sudah diisi dari server di atas
+    var initialDeskripsi = draftEf.deskripsi_temuan || existing.deskripsi_temuan || '';
+
 
     // Tentukan foto_urls: prioritas draft → server finding
     var savedFotoUrls = draftEf.foto_urls || '';
@@ -1476,7 +1474,7 @@ async function _openEditStatusForm(itemId, gKey, nomor, ciNo, agendaId, periodId
         '<div class="form-group">' +
           '<label class="form-label">Deskripsi Temuan <span class="required">*</span></label>' +
           '<textarea class="form-control" id="ef-deskripsi" rows="4" placeholder="Jelaskan kondisi yang ditemukan...">' +
-            escHtml(draftEf.deskripsi_temuan || '') + '</textarea>' +
+            escHtml(initialDeskripsi) + '</textarea>' +
         '</div>' +
         '<div class="form-group">' +
           '<label class="form-label">Foto Bukti <span class="required">*</span>' +
@@ -1543,7 +1541,7 @@ function _buildSavedFotosHtml(prefix, fotoUrlsStr, gKey, nomor, ciNo, agendaId, 
     '<div id="' + prefix + '-saved-files" style="display:flex;flex-wrap:wrap;gap:8px">' +
       urls.map(function(url, idx) {
         return '<div style="position:relative;width:72px;height:72px;border-radius:6px;overflow:hidden;border:1px solid var(--border)">' +
-          '<img src="' + escHtml(url) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\'">' +
+          _renderDriveImg(url) +
           '<button title="Hapus foto" onclick="singleClick(this,function(){ _deleteSavedFoto(\'' + escAttr(url) + '\',' + idx + ',\'' + escAttr(gKey) + '\',' + nomor + ',' + ciNo + ',\'' + agendaId + '\',\'' + periodId + '\',\'' + prefix + '\') })" ' +
             'style="position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.55);border:none;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;padding:0">✕</button>' +
         '</div>';
