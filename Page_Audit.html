@@ -154,7 +154,7 @@ function _auditUnloadHandler(e) {
 //  This fixes the cross-group collision bug.
 // ============================================================
 
-var LOCK_POLL_MS = 15000;
+var LOCK_POLL_MS = 60000;
 var _lockPollTimer = null;
 
 // In-memory lock state: { "<groupKey>": { locked_by, status, nomor_persyaratan } }
@@ -162,7 +162,10 @@ window._auditLockState = window._auditLockState || {};
 
 function _startLockPolling(agendaId, periodId) {
   _stopLockPolling();
-  _lockPollTimer = setInterval(function() { _refreshLocks(agendaId, periodId); }, LOCK_POLL_MS);
+  _lockPollTimer = setInterval(function() {
+    if (document.visibilityState === 'hidden') return;
+    _refreshLocks(agendaId, periodId);
+  }, LOCK_POLL_MS);
 }
 function _stopLockPolling() {
   if (_lockPollTimer) { clearInterval(_lockPollTimer); _lockPollTimer = null; }
