@@ -448,20 +448,28 @@ function _routeAction(action, payload, profile) {
             console.log('[FOTO_MERGE] ci=' + item.check_item_no + ' existing=' + existingUrls.length + ' new=' + newUrls.length + ' total_len=' + fotoUrls.length);
           }
 
+          // Gabungkan foto existing + baru, hapus duplikat
+          var _existingUrls = (item.existing_foto_urls || '').split(',').filter(Boolean);
+          var _newUrls = fotoUrls ? fotoUrls.split(',').filter(Boolean) : [];
+          var _newOnly = _newUrls.filter(function(u) { return _existingUrls.indexOf(u) === -1; });
+          var allFotoUrls = _existingUrls.concat(_newOnly).join(',');
+
           // Simpan ke AUDIT_RESULTS — update row yang sudah ada (pre-populated)
           const res = saveCheckItemResult({
             period_id:        payload.period_id,
             agenda_id:        payload.agenda_id,
             result_id:        item.result_id,
+            item_id:          item.item_id,
             status:           item.status,
             deskripsi_temuan: item.deskripsi_temuan || '',
-            foto_urls:        fotoUrls,
+            foto_urls:        allFotoUrls,
             auditor_email:    profile.email,
           });
 
           saved_srb.push({
             check_item_no: item.check_item_no,
             result_id:     res.result_id,
+            foto_urls:     allFotoUrls,
           });
         } catch(err) {
           console.error('[SAVE_REQUIREMENT_BATCH] ci=' + item.check_item_no +
