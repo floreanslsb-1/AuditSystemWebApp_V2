@@ -524,14 +524,14 @@ async function renderAuditChecklist(panel, agenda, areaId, periodId) {
         '<i data-lucide="check-circle" style="width:13px;height:13px"></i> Selesai & Minta Persetujuan</button>'
     : '';
 
+  // Ambil left position dari panel agar footer mulai setelah sidebar
+  var _footerLeft = Math.round(panel.getBoundingClientRect().left);
+
   var stickyFooter =
-    '<div id="audit-sticky-footer" style="position:fixed;bottom:0;left:0;right:0;z-index:500;' +
+    '<div id="audit-sticky-footer" style="position:fixed;bottom:0;left:' + _footerLeft + 'px;right:0;z-index:500;' +
       'background:var(--surface,#fff);border-top:1px solid var(--border);' +
       'padding:10px 24px;display:flex;align-items:center;gap:12px;box-shadow:0 -2px 12px rgba(0,0,0,.06)">' +
-      '<button class="btn btn-ghost btn-sm" onclick="_backToAuditAreas()">' +
-        '<i data-lucide="arrow-left" style="width:14px;height:14px"></i> Daftar Area' +
-      '</button>' +
-      '<div style="flex:1;text-align:center;font-size:11px;color:var(--text-muted);line-height:1.5;padding:0 12px">' +
+      '<div style="flex:1;font-size:11px;color:var(--text-muted);line-height:1.5">' +
         (agenda.status === 'STARTED'
           ? '<i data-lucide="info" style="width:11px;height:11px;vertical-align:middle;margin-right:3px"></i>' +
             'Setelah selesai, Anda akan melihat preview temuan dan dapat upload foto agreement bersama auditee. Masih bisa kembali untuk koreksi.'
@@ -1287,9 +1287,10 @@ function _openDraftFindingForm(itemId, gKey, nomor, ciNo, resultId, agendaId, pe
 
   var existingPending = (window._auditPendingFiles && window._auditPendingFiles[dKey]) || [];
 
-  // FIX 2: pendingFiles yang ada di memory harus ikut dihitung sebagai "foto ada"
-  // supaya validasi "minimal 1 foto" tidak salah
   window._ffExistingSavedUrls = savedUrls.slice();
+
+  // Load Drive image thumbnails yang ada di modal
+  setTimeout(function() { _loadAllDriveImgs(document.getElementById('finding-form-modal') || document); }, 300);
 
   // Set files ke upload zone setelah modal render
   setTimeout(function() {
@@ -1537,7 +1538,7 @@ async function _openEditStatusForm(resultId, gKey, agendaId, periodId, currentSt
           '<i data-lucide="save" style="width:13px;height:13px"></i> Simpan Temuan' +
         '</button>',
     });
-    setTimeout(function() { _loadAllDriveImgs(document.getElementById('edit-finding-modal')); }, 50);
+    setTimeout(function() { _loadAllDriveImgs(document.getElementById('edit-finding-modal') || document); }, 300);
     lucide.createIcons();
 
     // FIX: restore pending files ke upload zone — sama seperti modal ff
