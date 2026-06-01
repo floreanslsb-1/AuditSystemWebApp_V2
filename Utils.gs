@@ -165,6 +165,10 @@ function jsonOutput(obj) {
  * @param {string}          htmlBody HTML body
  */
 function sendEmail(to, subject, htmlBody) {
+  if (!CONFIG.NOTIFICATIONS_ENABLED) {
+    console.log('[Notif DISABLED] To:', Array.isArray(to) ? to.join(',') : to, '| Subject:', subject);
+    return;
+  }
   try {
     const recipients = Array.isArray(to) ? to.join(',') : to;
     GmailApp.sendEmail(recipients, subject, '', { htmlBody });
@@ -245,13 +249,33 @@ function createFindingFolder(periodId, areaId, findingId) {
  * @returns {string}  URL file di Drive
  */
 function uploadFileToDrive(base64Data, fileName, mimeType, folder) {
-  const blob = Utilities.newBlob(
-    Utilities.base64Decode(base64Data), mimeType, fileName
-  );
+  if (!base64Data || typeof base64Data !== 'string' || base64Data.length === 0)
+    throw new Error('base64Data kosong untuk file "' + fileName + '"');
+
+  // Strip data URL prefix kalau masih ada (misal: "data:image/png;base64,...")
+  var cleanBase64 = base64Data;
+  var commaIdx = base64Data.indexOf(',');
+  if (commaIdx >= 0) cleanBase64 = base64Data.substring(commaIdx + 1);
+
+  // Hapus whitespace/newline yang kadang disisipkan browser saat encode
+  cleanBase64 = cleanBase64.replace(/\s/g, '');
+
+  var decoded;
+  try {
+    decoded = Utilities.base64Decode(cleanBase64, Utilities.Charset.UTF_8);
+  } catch(e1) {
+    // Fallback: coba tanpa charset (raw bytes)
+    try {
+      decoded = Utilities.base64Decode(cleanBase64);
+    } catch(e2) {
+      throw new Error('base64Decode gagal untuk "' + fileName + '": ' + e2.message + ' (len=' + cleanBase64.length + ')');
+    }
+  }
+
+  const blob = Utilities.newBlob(decoded, mimeType || 'application/octet-stream', fileName);
   const file = folder.createFile(blob);
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-  const fileId = file.getId();
-  return 'https://drive.google.com/uc?export=view&id=' + fileId;
+  return 'https://drive.google.com/uc?export=view&id=' + file.getId();
 }
 
 
