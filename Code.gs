@@ -419,23 +419,33 @@ function _routeAction(action, payload, profile) {
 
             var newUrls = [];
             if (item.files && item.files.length) {
-              const folder_srb = getOrCreateFolder(
-                'evidence',
-                getOrCreateFolder(
-                  item.result_id,
+              console.log('[UPLOAD_START] ci=' + item.check_item_no + ' files=' + item.files.length + ' result_id=' + item.result_id);
+              try {
+                const folder_srb = getOrCreateFolder(
+                  'evidence',
                   getOrCreateFolder(
-                    payload.agenda_id,
-                    getOrCreateFolder(payload.period_id, getOrCreateFolder(CONFIG.DRIVE_ROOT_FOLDER_NAME))
+                    item.result_id,
+                    getOrCreateFolder(
+                      payload.agenda_id,
+                      getOrCreateFolder(payload.period_id, getOrCreateFolder(CONFIG.DRIVE_ROOT_FOLDER_NAME))
+                    )
                   )
-                )
-              );
-              newUrls = item.files.map(function(f) {
-                return uploadFileToDrive(f.base64, f.name, f.mime_type, folder_srb);
-              });
+                );
+                newUrls = item.files.map(function(f) {
+                  console.log('[UPLOAD_FILE] name=' + f.name + ' mime=' + f.mime_type + ' base64len=' + (f.base64 || '').length);
+                  var url = uploadFileToDrive(f.base64, f.name, f.mime_type, folder_srb);
+                  console.log('[UPLOAD_OK] url=' + url);
+                  return url;
+                });
+              } catch(uploadErr) {
+                console.error('[UPLOAD_FAIL] ci=' + item.check_item_no + ' :: ' + uploadErr.message + ' :: stack: ' + (uploadErr.stack || 'no stack'));
+                throw uploadErr;
+              }
             }
 
             // Gabung: foto lama yang masih ada + foto baru
             fotoUrls = existingUrls.concat(newUrls).join(',');
+            console.log('[FOTO_MERGE] ci=' + item.check_item_no + ' existing=' + existingUrls.length + ' new=' + newUrls.length + ' total_len=' + fotoUrls.length);
           }
 
           // Simpan ke AUDIT_RESULTS — update row yang sudah ada (pre-populated)
@@ -454,7 +464,13 @@ function _routeAction(action, payload, profile) {
             result_id:     res.result_id,
           });
         } catch(err) {
-          console.error('[SAVE_REQUIREMENT_BATCH] ci=' + item.check_item_no + ' error: ' + err.message);
+          console.error('[SAVE_REQUIREMENT_BATCH] ci=' + item.check_item_no +
+            ' | error: ' + err.message +
+            ' | result_id: ' + item.result_id +
+            ' | status: ' + item.status +
+            ' | files_count: ' + (item.files ? item.files.length : 0) +
+            ' | existing_foto_urls: ' + (item.existing_foto_urls || '') +
+            ' | stack: ' + (err.stack || 'no stack'));
           skipped_srb.push({
             check_item_no: item.check_item_no,
             reason:        err.message,
