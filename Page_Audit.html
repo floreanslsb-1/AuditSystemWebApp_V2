@@ -95,8 +95,7 @@ function _clearAuditDraft(agendaId) {
 }
 
 // ── Draft item helpers ─────────────────────────────────────────────
-// Key format: "<groupKey>:<nomor>.<ciNo>"  so items from different
-// persyaratan groups never collide even when they share the same nomor value.
+// Key format: "<groupKey>:<result_id>" — result_id adalah primary key unik per check item
 
 function _draftItemKey(groupKey, resultId) {
   return groupKey + ':' + resultId;
@@ -128,9 +127,7 @@ function _draftSetActiveGroup(groupKey) {
 
 // ── Build a stable, unique key for each persyaratan group ────────────
 // Uses the group's aspek+persyaratan text so it's independent of nomor values.
-function _groupKey(g) {
-  return g.aspek + '||' + g.persyaratan;
-}
+// (Definisi lengkap ada di blok Lock Manager di bawah)
 
 // ── beforeunload guard ──────────────────────────────────────────────
 
@@ -212,6 +209,14 @@ function _nomorFromGroupKey(gKey) {
   if (!window._auditRenderCtx) return null;
   var g = window._auditRenderCtx.groups.find(function(g) { return _groupKey(g) === gKey; });
   return g && g.items[0] ? Number(g.items[0].nomor) : null;
+}
+
+function _groupKeyFromNomor(nomor) {
+  if (!window._auditRenderCtx) return null;
+  var g = window._auditRenderCtx.groups.find(function(g) {
+    return g.items.some(function(i) { return Number(i.nomor) === Number(nomor); });
+  });
+  return g ? _groupKey(g) : null;
 }
 
 function _patchLockBadgesInDOM() {
@@ -856,7 +861,7 @@ function escAttr(s) {
 }
 
 // Bangun grid foto tersimpan (Drive URL) — bisa dibuka dan dihapus
-function _buildFotoGrid(prefix, fotoUrlsStr, gKey, nomor, ciNo, agendaId, periodId) {
+function _buildFotoGrid(prefix, fotoUrlsStr, gKey, resultId, agendaId, periodId) {
   var urls = String(fotoUrlsStr || '').split(',').filter(Boolean);
   if (prefix === 'ff') window._ffExistingSavedUrls = urls.slice();
   if (prefix === 'ef') window._efExistingSavedUrls = urls.slice();
@@ -886,8 +891,8 @@ function _buildFotoGrid(prefix, fotoUrlsStr, gKey, nomor, ciNo, agendaId, period
           // Tombol hapus
           '<button title="Hapus foto" ' +
             'onclick="event.stopPropagation();singleClick(this,function(){ ' +
-              '_deleteSavedFoto(\'' + escAttr(url) + '\',' + idx + ',\'' + escAttr(gKey) + '\',' +
-              nomor + ',' + ciNo + ',\'' + agendaId + '\',\'' + periodId + '\',\'' + prefix + '\') })" ' +
+              '_deleteSavedFoto(\'' + escAttr(url) + '\',' + idx + ',\'' + escAttr(gKey) + '\',\'' +
+              escAttr(resultId) + '\',\'' + agendaId + '\',\'' + periodId + '\',\'' + prefix + '\') })" ' +
             'style="position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;' +
               'background:rgba(0,0,0,.55);border:none;color:#fff;cursor:pointer;' +
               'display:flex;align-items:center;justify-content:center;padding:0">' +
@@ -1009,7 +1014,7 @@ function _repaintCheckItemRow(gKey, resultId, status, fromDraft) {
     var canEditR   = !ctx.isLocked && !gLocked;
     var editBtnR   = canEditR
       ? '<button title="Ubah status" style="display:inline-flex;align-items:center;padding:4px 6px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text-muted);cursor:pointer;line-height:1" ' +
-          'onclick="_openEditStatusForm(\'' + item.item_id + '\',\'' + escAttr(gKey) + '\',' + nomor + ',' + ciNo + ',\'' + ctx.agenda.agenda_id + '\',\'' + ctx.periodId + '\',\'' + merged.status + '\',\'' + (fd ? '1' : '0') + '\')">' +
+          'onclick="_openEditStatusForm(\'' + item.item_id + '\',\'' + escAttr(gKey) + '\',' + item.nomor + ',' + item.check_item_no + ',\'' + ctx.agenda.agenda_id + '\',\'' + ctx.periodId + '\',\'' + merged.status + '\',\'' + (fd ? '1' : '0') + '\')">' +
           '<i data-lucide="pencil" style="width:12px;height:12px"></i></button>'
       : '';
     newStatusHtml =
@@ -1218,7 +1223,7 @@ function _openDraftFindingForm(itemId, gKey, nomor, ciNo, resultId, agendaId, pe
     savedUrls = String(existing.foto_urls).split(',').filter(Boolean);
   }
 
-  var savedHtml = _buildFotoGrid('ff', savedUrls.join(','), gKey, nomor, ciNo, agendaId, periodId);
+  var savedHtml = _buildFotoGrid('ff', savedUrls.join(','), gKey, resultId, agendaId, periodId);
 
   createModal({
     id: 'finding-form-modal',
@@ -1286,7 +1291,7 @@ function _openDraftFindingForm(itemId, gKey, nomor, ciNo, resultId, agendaId, pe
     }
   }, 50);
 }
-async function _deleteSavedFoto(url, idx, gKey, nomor, ciNo, agendaId, periodId, prefix) {
+async function _deleteSavedFoto(url, idx, gKey, resultId, agendaId, periodId, prefix) {
   prefix = prefix || 'ff';
   var ok = await showConfirm({
     title: 'Hapus Foto', message: 'Hapus foto bukti ini?',
@@ -1297,11 +1302,11 @@ async function _deleteSavedFoto(url, idx, gKey, nomor, ciNo, agendaId, periodId,
   try { await api('DELETE_DRIVE_FILE', { file_url: url }); }
   catch(e) { toast('Gagal hapus file: ' + e.message, 'error'); return; }
 
-  // Update draft foto_urls
-  var existing = _draftGetItem(gKey, nomor, ciNo) || {};
+  // Update draft foto_urls — pakai resultId langsung
+  var existing = _draftGetItem(gKey, resultId) || {};
   var urls = String(existing.foto_urls || '').split(',').filter(Boolean);
   urls = urls.filter(function(u) { return u !== url; });
-  _draftSetItem(gKey, nomor, ciNo, { foto_urls: urls.join(',') });
+  _draftSetItem(gKey, resultId, { foto_urls: urls.join(',') });
 
   // Update snapshot
   var snapKey = prefix === 'ff' ? '_ffExistingSavedUrls' : '_efExistingSavedUrls';
@@ -1321,16 +1326,10 @@ async function _deleteSavedFoto(url, idx, gKey, nomor, ciNo, agendaId, periodId,
       hint.textContent = (remaining + pendingCount) > 0 ? '' : '(wajib upload minimal 1 foto)';
     }
   }
-  // Update findingMap di renderCtx supaya existing_foto_urls di _saveRequirement sudah benar
+  // Update findingMap di renderCtx
   if (window._auditRenderCtx && window._auditRenderCtx.findingMap) {
-    // Cari result_id dari gKey + nomor + ciNo
-    var _dfGrp = window._auditRenderCtx.groups.find(function(g) { return _groupKey(g) === gKey; });
-    var _dfItm = _dfGrp && _dfGrp.items.find(function(i) {
-      return Number(i.nomor) === Number(nomor) && Number(i.check_item_no) === Number(ciNo);
-    });
-    var _dfRid = _dfItm && _dfItm.result_id;
-    if (_dfRid && window._auditRenderCtx.findingMap[_dfRid]) {
-      var _fm = window._auditRenderCtx.findingMap[_dfRid];
+    if (resultId && window._auditRenderCtx.findingMap[resultId]) {
+      var _fm = window._auditRenderCtx.findingMap[resultId];
       _fm.foto_urls = (_fm.foto_urls || '').split(',').filter(Boolean)
         .filter(function(u) { return u !== url; }).join(',');
     }
@@ -1421,15 +1420,15 @@ async function _openEditStatusForm(itemId, gKey, nomor, ciNo, agendaId, periodId
   }
 
   var isCurrentlyComply = currentStatus === 'COMPLY' || currentStatus === 'Comply';
-  // Prefer draft data; fall back to server finding
-  var existing = _draftGetItem(gKey, nomor, ciNo) || {};
-  if (!existing.deskripsi_temuan && window._auditRenderCtx && window._auditRenderCtx.findingMap) {
-    var _esCtx2 = window._auditRenderCtx;
-    var _esGrp2 = _esCtx2.groups.find(function(g) { return _groupKey(g) === gKey; });
-    var _esItm2 = _esGrp2 && _esGrp2.items.find(function(i) {
-      return Number(i.nomor) === Number(nomor) && Number(i.check_item_no) === Number(ciNo);
-    });
-    var _esRid  = _esItm2 && _esItm2.result_id;
+  // Resolve result_id dulu, lalu cari existing draft/server
+  var _esCtx2 = window._auditRenderCtx;
+  var _esGrp2 = _esCtx2 && _esCtx2.groups.find(function(g) { return _groupKey(g) === gKey; });
+  var _esItm2 = _esGrp2 && _esGrp2.items.find(function(i) {
+    return Number(i.nomor) === Number(nomor) && Number(i.check_item_no) === Number(ciNo);
+  });
+  var _esRid  = (_esItm2 && _esItm2.result_id) || '';
+  var existing = _draftGetItem(gKey, _esRid) || {};
+  if (!existing.deskripsi_temuan && _esCtx2 && _esCtx2.findingMap) {
     var srvFinding = _esRid ? _esCtx2.findingMap[_esRid] : null;
     if (srvFinding) existing = { deskripsi_temuan: srvFinding.deskripsi_temuan };
   }
@@ -1447,7 +1446,9 @@ async function _openEditStatusForm(itemId, gKey, nomor, ciNo, agendaId, periodId
     if (!lockedNow) return;
     var _esCtx = window._auditRenderCtx;
     var _esGrp = _esCtx && _esCtx.groups.find(function(g) { return _groupKey(g) === gKey; });
-    var _esItm = _esGrp && _esGrp.items.find(function(i) { return Number(i.nomor) === Number(nomor); });
+    var _esItm = _esGrp && _esGrp.items.find(function(i) {
+      return Number(i.nomor) === Number(nomor) && Number(i.check_item_no) === Number(ciNo);
+    });
     var _esRid = (_esItm && _esItm.result_id) || '';
     _draftSetItem(gKey, _esRid, { item_id: itemId, result_id: _esRid, nomor_persyaratan: Number(nomor), check_item_no: Number(ciNo), status: 'NON_COMPLY' });
     _repaintCheckItemRow(gKey, _esRid, 'NON_COMPLY', true);
@@ -1501,7 +1502,7 @@ async function _openEditStatusForm(itemId, gKey, nomor, ciNo, agendaId, periodId
             '</span>' +
           '</label>' +
           // FIX: gunakan savedFotoUrls yang sudah digabung dari draft + server
-          _buildFotoGrid('ef', savedFotoUrls, gKey, nomor, ciNo, agendaId, periodId) +
+          _buildFotoGrid('ef', savedFotoUrls, gKey, _oeRid3, agendaId, periodId) +
           // FIX: tampilkan label jika ada pending files yang belum tersimpan
           (pendingEf.length > 0
             ? '<div style="font-size:11px;color:var(--amber,#f59e0b);font-weight:600;margin-bottom:6px">' +
@@ -1549,7 +1550,7 @@ async function _openEditStatusForm(itemId, gKey, nomor, ciNo, agendaId, periodId
   }
 }
 
-function _buildSavedFotosHtml(prefix, fotoUrlsStr, gKey, nomor, ciNo, agendaId, periodId) {
+function _buildSavedFotosHtml(prefix, fotoUrlsStr, gKey, resultId, agendaId, periodId) {
   var urls = String(fotoUrlsStr || '').split(',').filter(Boolean);
   // Simpan snapshot untuk validasi
   if (prefix === 'ff') window._ffExistingSavedUrls = urls.slice();
@@ -1561,7 +1562,7 @@ function _buildSavedFotosHtml(prefix, fotoUrlsStr, gKey, nomor, ciNo, agendaId, 
       urls.map(function(url, idx) {
         return '<div style="position:relative;width:72px;height:72px;border-radius:6px;overflow:hidden;border:1px solid var(--border)">' +
           _renderDriveImg(url) +
-          '<button title="Hapus foto" onclick="singleClick(this,function(){ _deleteSavedFoto(\'' + escAttr(url) + '\',' + idx + ',\'' + escAttr(gKey) + '\',' + nomor + ',' + ciNo + ',\'' + agendaId + '\',\'' + periodId + '\',\'' + prefix + '\') })" ' +
+          '<button title="Hapus foto" onclick="singleClick(this,function(){ _deleteSavedFoto(\'' + escAttr(url) + '\',' + idx + ',\'' + escAttr(gKey) + '\',\'' + escAttr(resultId) + '\',\'' + agendaId + '\',\'' + periodId + '\',\'' + prefix + '\') })" ' +
             'style="position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.55);border:none;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;padding:0">✕</button>' +
         '</div>';
       }).join('') +
@@ -1570,20 +1571,14 @@ function _buildSavedFotosHtml(prefix, fotoUrlsStr, gKey, nomor, ciNo, agendaId, 
 
 async function _switchToComply(itemId, gKey, nomor, ciNo, agendaId, periodId) {
   closeModal('edit-finding-modal');
-  var dKey = _draftItemKey(gKey, nomor, ciNo);
-  if (window._auditPendingFiles && window._auditPendingFiles[dKey]) delete window._auditPendingFiles[dKey];
-  // itemId passed from button may be stale if row was re-rendered; also look up from renderCtx
-  var resolvedItemId = itemId;
-  if (!resolvedItemId && window._auditRenderCtx) {
-    var grp  = window._auditRenderCtx.groups.find(function(g) { return _groupKey(g) === gKey; });
-    var itm  = grp && grp.items.find(function(i) { return Number(i.nomor) === Number(nomor); });
-    if (itm) resolvedItemId = itm.item_id;
-  }
   var _scGrp = window._auditRenderCtx && window._auditRenderCtx.groups.find(function(g){ return _groupKey(g) === gKey; });
   var _scItem = _scGrp && _scGrp.items.find(function(i){
     return Number(i.nomor) === Number(nomor) && Number(i.check_item_no) === Number(ciNo);
   });
   var _scRid = (_scItem && _scItem.result_id) || '';
+  var dKey = _draftItemKey(gKey, _scRid);
+  if (window._auditPendingFiles && window._auditPendingFiles[dKey]) delete window._auditPendingFiles[dKey];
+  var resolvedItemId = ((_scItem && _scItem.item_id) || itemId) || '';
   _draftSetItem(gKey, _scRid, { item_id: resolvedItemId, result_id: _scRid, nomor_persyaratan: Number(nomor), check_item_no: Number(ciNo), status: 'COMPLY', deskripsi_temuan: '' });
   _repaintCheckItemRow(gKey, _scRid, 'COMPLY', true);
   _renderFloatingSaveBar(agendaId, periodId);
@@ -1650,27 +1645,6 @@ async function _saveEditedFinding(gKey, nomor, ciNo) {
   window._efExistingSavedUrls = null;
   _repaintCheckItemRow(gKey, resolvedResultId, 'NON_COMPLY', true);
   _renderFloatingSaveBar(agendaId, periodId);
-}mId,
-    result_id:         resolvedResultId,
-    nomor_persyaratan: Number(nomor),
-    check_item_no:     Number(ciNo),
-    status:            'NON_COMPLY',
-    deskripsi_temuan:  deskripsi,
-  });
-
-  // FIX: aktifkan group ini di draft supaya floating save bar muncul
-  _draftSetActiveGroup(gKey);
-
-  toast('Temuan diperbarui dalam draf.', 'success');
-  closeModal('edit-finding-modal');
-  window._efExistingSavedUrls = null;
-  _repaintCheckItemRow(gKey, resolvedResultId, 'NON_COMPLY', true);
-
-  // FIX: render floating save bar — ambil sessionId/periodId dari renderCtx
-  var ctx = window._auditRenderCtx;
-  if (ctx) {
-    _renderFloatingSaveBar(ctx.agenda.agenda_id, ctx.periodId);
-  }
 }
 
 // ============================================================
@@ -1712,7 +1686,7 @@ async function _saveRequirement(agendaId, periodId, btn) {
     if (!it.deskripsi_temuan) return true;  // tidak ada deskripsi
 
     // Cek apakah ada foto (pending atau saved)
-    var dKey2 = _draftItemKey(gKey, it.nomor_persyaratan, it.check_item_no);
+    var dKey2 = _draftItemKey(gKey, it.result_id);
     var hasPending = !!(window._auditPendingFiles && window._auditPendingFiles[dKey2] &&
       window._auditPendingFiles[dKey2].length > 0);
     var hasSaved   = !!(it.foto_urls && it.foto_urls.length > 0);
@@ -1789,8 +1763,15 @@ async function _saveRequirement(agendaId, periodId, btn) {
       items.forEach(function(it) {
         if (!it.result_id) return;
         window._auditRenderCtx.resultMap[it.result_id] = it.status;
-        if (it.status === 'Comply' && window._auditRenderCtx.findingMap) {
-          delete window._auditRenderCtx.findingMap[it.result_id];
+        if (it.status === 'Comply') {
+          if (window._auditRenderCtx.findingMap) delete window._auditRenderCtx.findingMap[it.result_id];
+        } else if (it.status === 'Non Comply') {
+          if (!window._auditRenderCtx.findingMap) window._auditRenderCtx.findingMap = {};
+          window._auditRenderCtx.findingMap[it.result_id] = {
+            result_id:        it.result_id,
+            deskripsi_temuan: it.deskripsi_temuan || '',
+            foto_urls:        it.existing_foto_urls || '',
+          };
         }
       });
     }
