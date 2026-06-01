@@ -855,13 +855,14 @@ function getAuditResultsByAgenda(spreadsheetId, agendaId) {
   if (sheet.getLastRow() < 3) return [];
   const data = sheet.getRange(3, 1, sheet.getLastRow() - 2, AUDIT_RESULT_HEADERS.length).getValues();
   const C    = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
-  return data
-    .filter(row => row[0] !== '' && String(row[C.AGENDA_ID]) === String(agendaId))
-    .map(row => {
-      const obj = { _rowIndex: data.indexOf(row) + 3 };
-      AUDIT_RESULT_HEADERS.forEach((h, j) => { obj[h] = row[j]; });
-      return obj;
-    });
+  const results = [];
+  data.forEach(function(row, i) {
+    if (row[0] === '' || String(row[C.AGENDA_ID]) !== String(agendaId)) return;
+    const obj = { _rowIndex: i + 3 };
+    AUDIT_RESULT_HEADERS.forEach(function(h, j) { obj[h] = row[j]; });
+    results.push(obj);
+  });
+  return results;
 }
 
 function getAuditResultsByPeriod(spreadsheetId, periodId) {
@@ -869,13 +870,15 @@ function getAuditResultsByPeriod(spreadsheetId, periodId) {
   if (sheet.getLastRow() < 3) return [];
   const data = sheet.getRange(3, 1, sheet.getLastRow() - 2, AUDIT_RESULT_HEADERS.length).getValues();
   const C    = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
-  return data
-    .filter(row => row[0] !== '' && (!periodId || String(row[C.PERIOD_ID]) === String(periodId)))
-    .map(row => {
-      const obj = { _rowIndex: data.indexOf(row) + 3 };
-      AUDIT_RESULT_HEADERS.forEach((h, j) => { obj[h] = row[j]; });
-      return obj;
-    });
+  const results = [];
+  data.forEach(function(row, i) {
+    if (row[0] === '') return;
+    if (periodId && String(row[C.PERIOD_ID]) !== String(periodId)) return;
+    const obj = { _rowIndex: i + 3 };
+    AUDIT_RESULT_HEADERS.forEach(function(h, j) { obj[h] = row[j]; });
+    results.push(obj);
+  });
+  return results;
 }
 
 // Ambil hanya Non Comply / OFI untuk satu agenda (tampilan verifikasi)
@@ -972,10 +975,14 @@ function saveCheckItemResult({ period_id, agenda_id, result_id, item_id, status,
   const results = getAuditResultsByAgenda(reg.spreadsheet_id, agenda_id);
   let result = results.find(r => r.result_id === result_id);
   if (!result && item_id) result = results.find(r => r.item_id === item_id);
-  if (!result) throw new Error('Result tidak ditemukan: result_id=' + result_id + ' item_id=' + item_id);
+  if (!result) throw new Error('Result tidak ditemukan: result_id=' + result_id + ' item_id=' + item_id + ' agenda_id=' + agenda_id + ' total_results=' + results.length);
 
   const row = result._rowIndex;
+  const maxRow = sheet.getLastRow();
+  const maxCol = sheet.getLastColumn();
+  console.log('[saveCheckItemResult] row=' + row + ' maxRow=' + maxRow + ' maxCol=' + maxCol + ' C.STATUS=' + CONFIG.AUDIT_COLS.AUDIT_RESULTS.STATUS);
   if (!row || row < 3) throw new Error('_rowIndex invalid: ' + row);
+  if (row > maxRow) throw new Error('_rowIndex ' + row + ' melebihi lastRow ' + maxRow);
 
   const C = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
 
