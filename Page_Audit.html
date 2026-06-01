@@ -1671,9 +1671,13 @@ async function _saveRequirement(agendaId, periodId, btn) {
     if (result.success) {
       toast('Persyaratan tersimpan (' + result.saved.length + ' item).', 'success');
     } else if (result.saved.length > 0) {
-      toast(result.saved.length + ' item tersimpan, ' + result.skipped.length + ' di-skip.', 'warning', 8000);
+      var reasons = (result.skipped || []).map(function(s) { return '#' + s.check_item_no + ': ' + (s.reason || 'unknown'); }).join(' | ');
+      console.error('[SAVE_REQUIREMENT_BATCH] skipped:', result.skipped);
+      toast(result.saved.length + ' item tersimpan, ' + result.skipped.length + ' gagal — ' + reasons, 'warning', 12000);
     } else {
-      toast('Semua item gagal disimpan.', 'error', 8000);
+      var reasonsAll = (result.skipped || []).map(function(s) { return '#' + s.check_item_no + ': ' + (s.reason || 'unknown'); }).join(' | ');
+      console.error('[SAVE_REQUIREMENT_BATCH] all skipped:', result.skipped, 'items sent:', items);
+      toast('Gagal: ' + (reasonsAll || 'unknown error'), 'error', 12000);
       restore(); return;
     }
 
