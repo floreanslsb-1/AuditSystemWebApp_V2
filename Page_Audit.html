@@ -504,7 +504,7 @@ async function renderAuditChecklist(panel, agenda, areaId, periodId) {
   var totalItems = savedResults.length, doneItems = 0, nonComply = 0;
   groups.forEach(function(g) {
     g.items.forEach(function(item, idx) {
-      var m = _mergedStatus(_groupKey(g), item.nomor, idx + 1, resultMap);
+      var m = _mergedStatus(_groupKey(g), item.nomor, idx + 1, resultMap, item.result_id);
       if (m.status) doneItems++;
       if (m.status === 'NON_COMPLY') nonComply++;
     });
@@ -611,8 +611,7 @@ function _buildGroupsFromResults(results) {
 
 function _mergedStatus(groupKey, nomor, ciNo, resultMap, resultId) {
   var _rmap     = resultMap || (window._auditRenderCtx && window._auditRenderCtx.resultMap);
-  var srvStatus = resultId ? (_rmap ? _rmap[resultId] : undefined)
-                           : (_rmap ? _rmap[Number(nomor) + '.' + Number(ciNo)] : undefined);
+  var srvStatus = (_rmap && resultId) ? _rmap[resultId] : undefined;
   var draftKey  = _draftItemKey(groupKey, nomor, ciNo);
   var drfItem   = window._auditDraft ? window._auditDraft.items[draftKey] : null;
   if (drfItem && drfItem.status) {
@@ -955,7 +954,7 @@ function _repaintCheckItemRow(gKey, nomor, ciNo, status, fromDraft) {
   if (ciNo === null) { _repaintGroupItems(gKey); return; }
 
   var item = g.items.find(function(i) {
-    return Number(i.nomor) === Number(nomor);
+    return Number(i.nomor) === Number(nomor) && Number(i.check_item_no) === Number(ciNo);
   });
   if (!item) return;
 
@@ -1097,7 +1096,7 @@ function _updateProgressBar() {
     var gKey = _groupKey(g);
     g.items.forEach(function(item, idx) {
       totalItems++;
-      var m = _mergedStatus(gKey, item.nomor, idx + 1, ctx.resultMap);
+      var m = _mergedStatus(gKey, item.nomor, idx + 1, ctx.resultMap, item.result_id);
       if (m.status) doneItems++;
       if (m.status === 'NON_COMPLY') nonComply++;
     });
@@ -1300,16 +1299,16 @@ async function _deleteSavedFoto(url, idx, gKey, nomor, ciNo, agendaId, periodId,
   }
   // Update findingMap di renderCtx supaya existing_foto_urls di _saveRequirement sudah benar
   if (window._auditRenderCtx && window._auditRenderCtx.findingMap) {
-    var ctxKeys = Object.keys(window._auditRenderCtx.findingMap);
-    for (var ki = 0; ki < ctxKeys.length; ki++) {
-      var fm = window._auditRenderCtx.findingMap[ctxKeys[ki]];
-      if (fm && fm.foto_urls) {
-        var fmUrls = fm.foto_urls.split(',').filter(Boolean);
-        if (fmUrls.indexOf(url) !== -1) {
-          fm.foto_urls = fmUrls.filter(function(u) { return u !== url; }).join(',');
-          break;
-        }
-      }
+    // Cari result_id dari gKey + nomor + ciNo
+    var _dfGrp = window._auditRenderCtx.groups.find(function(g) { return _groupKey(g) === gKey; });
+    var _dfItm = _dfGrp && _dfGrp.items.find(function(i) {
+      return Number(i.nomor) === Number(nomor) && Number(i.check_item_no) === Number(ciNo);
+    });
+    var _dfRid = _dfItm && _dfItm.result_id;
+    if (_dfRid && window._auditRenderCtx.findingMap[_dfRid]) {
+      var _fm = window._auditRenderCtx.findingMap[_dfRid];
+      _fm.foto_urls = (_fm.foto_urls || '').split(',').filter(Boolean)
+        .filter(function(u) { return u !== url; }).join(',');
     }
   }
   toast('Foto dihapus.', 'success');
@@ -1388,7 +1387,13 @@ async function _openEditStatusForm(itemId, gKey, nomor, ciNo, agendaId, periodId
   // Prefer draft data; fall back to server finding
   var existing = _draftGetItem(gKey, nomor, ciNo) || {};
   if (!existing.deskripsi_temuan && window._auditRenderCtx && window._auditRenderCtx.findingMap) {
-    var srvFinding = window._auditRenderCtx.findingMap[Number(nomor) + '.' + Number(ciNo)];
+    var _esCtx2 = window._auditRenderCtx;
+    var _esGrp2 = _esCtx2.groups.find(function(g) { return _groupKey(g) === gKey; });
+    var _esItm2 = _esGrp2 && _esGrp2.items.find(function(i) {
+      return Number(i.nomor) === Number(nomor) && Number(i.check_item_no) === Number(ciNo);
+    });
+    var _esRid  = _esItm2 && _esItm2.result_id;
+    var srvFinding = _esRid ? _esCtx2.findingMap[_esRid] : null;
     if (srvFinding) existing = { deskripsi_temuan: srvFinding.deskripsi_temuan };
   }
 
@@ -1615,8 +1620,9 @@ async function _saveRequirement(agendaId, periodId, btn) {
     .map(function(k) {
       var d = draft.items[k];
       // Ambil foto yang sudah tersimpan di server untuk result ini (agar tidak tertimpa)
-      var srvKey = Number(d.nomor_persyaratan) + '.' + Number(d.check_item_no);
-      var srvFinding = window._auditRenderCtx && window._auditRenderCtx.findingMap && window._auditRenderCtx.findingMap[srvKey];
+      var srvFinding = (window._auditRenderCtx && window._auditRenderCtx.findingMap && d.result_id)
+        ? window._auditRenderCtx.findingMap[d.result_id]
+        : null;
       var existingFotoUrls = (d.foto_urls) || (srvFinding && srvFinding.foto_urls) || '';
       return {
         result_id:          d.result_id || '',
@@ -1642,9 +1648,9 @@ async function _saveRequirement(agendaId, periodId, btn) {
       window._auditPendingFiles[dKey2].length > 0);
     var hasSaved   = !!(it.foto_urls && it.foto_urls.length > 0);
     // Juga cek findingMap (foto yang sudah tersimpan di server dari sesi sebelumnya)
-    var srvKey2    = Number(it.nomor_persyaratan) + '.' + Number(it.check_item_no);
-    var srvFoto    = window._auditRenderCtx && window._auditRenderCtx.findingMap &&
-      window._auditRenderCtx.findingMap[srvKey2];
+    var srvFoto = (window._auditRenderCtx && window._auditRenderCtx.findingMap && it.result_id)
+      ? window._auditRenderCtx.findingMap[it.result_id]
+      : null;
     var hasSrvFoto = !!(srvFoto && srvFoto.foto_urls);
 
     if (!hasPending && !hasSaved && !hasSrvFoto) return true;  // tidak ada foto sama sekali
@@ -1711,15 +1717,11 @@ async function _saveRequirement(agendaId, periodId, btn) {
 
     // 1. Update resultMap + findingMap pakai `items` (bukan result.saved — tidak punya nomor_persyaratan)
     if (window._auditRenderCtx) {
-      var _grp = window._auditRenderCtx.groups.find(function(g) { return _groupKey(g) === gKey; });
       items.forEach(function(it) {
-        var _itm = _grp && _grp.items.find(function(i) { return i.item_id === it.item_id; });
-        var _rid = _itm ? _itm.result_id : null;
-        if (_rid) {
-          window._auditRenderCtx.resultMap[_rid] = it.status;
-          if (it.status === 'Comply' && window._auditRenderCtx.findingMap) {
-            delete window._auditRenderCtx.findingMap[_rid];
-          }
+        if (!it.result_id) return;
+        window._auditRenderCtx.resultMap[it.result_id] = it.status;
+        if (it.status === 'Comply' && window._auditRenderCtx.findingMap) {
+          delete window._auditRenderCtx.findingMap[it.result_id];
         }
       });
     }
