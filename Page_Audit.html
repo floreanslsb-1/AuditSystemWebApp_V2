@@ -1298,6 +1298,20 @@ async function _deleteSavedFoto(url, idx, gKey, nomor, ciNo, agendaId, periodId,
       hint.textContent = (remaining + pendingCount) > 0 ? '' : '(wajib upload minimal 1 foto)';
     }
   }
+  // Update findingMap di renderCtx supaya existing_foto_urls di _saveRequirement sudah benar
+  if (window._auditRenderCtx && window._auditRenderCtx.findingMap) {
+    var ctxKeys = Object.keys(window._auditRenderCtx.findingMap);
+    for (var ki = 0; ki < ctxKeys.length; ki++) {
+      var fm = window._auditRenderCtx.findingMap[ctxKeys[ki]];
+      if (fm && fm.foto_urls) {
+        var fmUrls = fm.foto_urls.split(',').filter(Boolean);
+        if (fmUrls.indexOf(url) !== -1) {
+          fm.foto_urls = fmUrls.filter(function(u) { return u !== url; }).join(',');
+          break;
+        }
+      }
+    }
+  }
   toast('Foto dihapus.', 'success');
 }
 
@@ -1598,7 +1612,21 @@ async function _saveRequirement(agendaId, periodId, btn) {
 
   var items = Object.keys(draft.items)
     .filter(function(k) { return k.indexOf(prefix) === 0; })
-    .map(function(k) { var d = draft.items[k]; return { item_id: d.item_id, result_id: d.result_id || '', nomor_persyaratan: d.nomor_persyaratan, check_item_no: d.check_item_no, status: d.status === 'COMPLY' ? 'Comply' : d.status === 'NON_COMPLY' ? 'Non Comply' : d.status, deskripsi_temuan: d.deskripsi_temuan || '' }; });
+    .map(function(k) {
+      var d = draft.items[k];
+      // Ambil foto yang sudah tersimpan di server untuk result ini (agar tidak tertimpa)
+      var srvKey = Number(d.nomor_persyaratan) + '.' + Number(d.check_item_no);
+      var srvFinding = window._auditRenderCtx && window._auditRenderCtx.findingMap && window._auditRenderCtx.findingMap[srvKey];
+      var existingFotoUrls = (d.foto_urls) || (srvFinding && srvFinding.foto_urls) || '';
+      return {
+        result_id:          d.result_id || '',
+        nomor_persyaratan:  d.nomor_persyaratan,
+        check_item_no:      d.check_item_no,
+        status:             d.status === 'COMPLY' ? 'Comply' : d.status === 'NON_COMPLY' ? 'Non Comply' : d.status,
+        deskripsi_temuan:   d.deskripsi_temuan || '',
+        existing_foto_urls: existingFotoUrls,
+      };
+    });
 
   if (!items.length) return toast('Tidak ada item untuk disimpan.', 'warning');
 
