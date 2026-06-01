@@ -739,6 +739,16 @@
     .stat-grid { grid-template-columns: repeat(2, 1fr); }
     .page-hero { padding: 20px; }
     .modal { margin: 10px; }
+
+    /* Form Audit mobile */
+    .ci-action-btns { flex-wrap: wrap; justify-content: flex-end; }
+    .ci-action-btns button { font-size: 11px; padding: 4px 10px; }
+    #audit-sticky-footer { padding: 10px 16px; }
+    #audit-sticky-footer div[style*="font-size:11px"] { display: none; }
+
+    /* Modal footer — cegah tombol overflow di layar sempit */
+    .modal-footer { flex-wrap: wrap; gap: 8px; }
+    .modal-footer .btn { flex: 1 1 auto; min-width: 100px; justify-content: center; } /* sembunyikan note di mobile — terlalu padat */
   }
 
   /* ── Scrollbar ─────────────────────────────────────────── */
