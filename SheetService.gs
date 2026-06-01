@@ -973,19 +973,42 @@ function saveCheckItemResult({ period_id, agenda_id, result_id, item_id, status,
   let result = results.find(r => r.result_id === result_id);
   if (!result && item_id) result = results.find(r => r.item_id === item_id);
   if (!result) throw new Error('Result tidak ditemukan: result_id=' + result_id + ' item_id=' + item_id);
+
+  const row = result._rowIndex;
+  if (!row || row < 3) throw new Error('_rowIndex invalid: ' + row);
+
   const C = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
-  _updateCell(sheet, result._rowIndex, C.STATUS           + 1, status);
-  _updateCell(sheet, result._rowIndex, C.DESKRIPSI_TEMUAN + 1, deskripsi_temuan || '');
-  _updateCell(sheet, result._rowIndex, C.FOTO_URLS        + 1, foto_urls || '');
-  _updateCell(sheet, result._rowIndex, C.AUDITOR_EMAIL    + 1, auditor_email);
-  _updateCell(sheet, result._rowIndex, C.SAVED_AT         + 1, now());
-  if (status === CONFIG.RESULT_STATUS.COMPLY) {
-    _updateCell(sheet, result._rowIndex, C.FINDING_STATUS + 1, '');
-    _updateCell(sheet, result._rowIndex, C.TARGET_DATE    + 1, '');
-    _updateCell(sheet, result._rowIndex, C.TPP_STATUS     + 1, '');
-    _updateCell(sheet, result._rowIndex, C.CLOSED_AT      + 1, '');
+
+  // Sanitasi semua nilai jadi string (cegah setValue(undefined) → "Invalid argument")
+  const _status = String(status == null ? '' : status);
+  const _desc   = String(deskripsi_temuan == null ? '' : deskripsi_temuan);
+  const _foto   = String(foto_urls == null ? '' : foto_urls);
+  const _email  = String(auditor_email == null ? '' : auditor_email);
+  const _saved  = String(now() == null ? '' : now());
+
+  // Tulis 5 kolom sekaligus (STATUS..SAVED_AT) — atomic & cepat
+  try {
+    sheet.getRange(row, C.STATUS + 1, 1, 5)
+         .setValues([[_status, _desc, _foto, _email, _saved]]);
+  } catch (e) {
+    throw new Error('setValues row=' + row +
+                    ' status=' + JSON.stringify(_status) +
+                    ' descLen=' + _desc.length +
+                    ' fotoLen=' + _foto.length +
+                    ' email=' + JSON.stringify(_email) +
+                    ' :: ' + e.message);
   }
-  return { result_id: result.result_id, status };
+
+  if (_status === CONFIG.RESULT_STATUS.COMPLY) {
+    try {
+      sheet.getRange(row, C.FINDING_STATUS + 1, 1, 4)
+           .setValues([['', '', '', '']]);
+    } catch (e) {
+      throw new Error('clear finding fields row=' + row + ' :: ' + e.message);
+    }
+  }
+
+  return { result_id: result.result_id, status: _status };
 }
 
 /**
