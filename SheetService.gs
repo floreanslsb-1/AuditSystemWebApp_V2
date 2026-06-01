@@ -969,6 +969,7 @@ function populateAuditResults(agendaId, itemIds, spreadsheetId, periodId) {
  * Row sudah ada sejak agenda dibuat — tinggal update.
  */
 function saveCheckItemResult({ period_id, agenda_id, result_id, status, deskripsi_temuan, foto_urls, auditor_email }) {
+  console.log('[SCI] result_id=' + result_id + ' agenda_id=' + agenda_id + ' status=' + status + ' foto_len=' + (foto_urls||'').length);
   const reg = getPeriodById(period_id);
   if (!reg) throw new Error('Periode tidak ditemukan: ' + period_id);
   const sheet   = _getAuditSheet(reg.spreadsheet_id, CONFIG.AUDIT_SHEETS.AUDIT_RESULTS);
@@ -993,10 +994,20 @@ function saveCheckItemResult({ period_id, agenda_id, result_id, status, deskrips
   const _saved  = String(now() == null ? '' : now());
 
   // Tulis 5 kolom sekaligus (STATUS..SAVED_AT) — atomic & cepat
+  console.log('[PRE_SETVALUES] row=' + row + ' status=' + _status + ' descLen=' + _desc.length + ' fotoLen=' + _foto.length + ' email=' + _email + ' startCol=' + (C.STATUS + 1) + ' maxCol=' + maxCol);
   try {
     sheet.getRange(row, C.STATUS + 1, 1, 5)
          .setValues([[_status, _desc, _foto, _email, _saved]]);
+    console.log('[SETVALUES_OK] row=' + row);
   } catch (e) {
+    console.error('[SETVALUES_FAIL] row=' + row +
+                    ' status=' + JSON.stringify(_status) +
+                    ' descLen=' + _desc.length +
+                    ' fotoLen=' + _foto.length +
+                    ' email=' + JSON.stringify(_email) +
+                    ' startCol=' + (C.STATUS + 1) +
+                    ' maxCol=' + maxCol +
+                    ' :: ' + e.message);
     throw new Error('setValues row=' + row +
                     ' status=' + JSON.stringify(_status) +
                     ' descLen=' + _desc.length +
