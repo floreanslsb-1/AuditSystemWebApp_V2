@@ -249,35 +249,36 @@ function createFindingFolder(periodId, areaId, findingId) {
  * @returns {string}  URL file di Drive
  */
 function uploadFileToDrive(base64Data, fileName, mimeType, folder) {
-  if (!base64Data || typeof base64Data !== 'string' || base64Data.length === 0)
-    throw new Error('base64Data kosong untuk file "' + fileName + '"');
+  Logger.log('[1-INPUT] fileName=' + fileName + ' mimeType=' + mimeType + ' base64Len=' + (base64Data ? base64Data.length : 'null'));
 
-  // Strip data URL prefix kalau masih ada
   var cleanBase64 = base64Data;
   var commaIdx = base64Data.indexOf(',');
   if (commaIdx >= 0) cleanBase64 = base64Data.substring(commaIdx + 1);
   cleanBase64 = cleanBase64.replace(/\s/g, '');
+  Logger.log('[2-CLEAN] cleanBase64Len=' + cleanBase64.length + ' first16=' + cleanBase64.substring(0, 16) + ' last4=' + cleanBase64.substring(cleanBase64.length - 4));
 
-  // Decode base64 dalam chunk 500KB untuk menghindari batas GAS
-  var CHUNK_SIZE = 500000; // karakter base64 per chunk (~375KB binary)
-  var byteArrays = [];
-  for (var i = 0; i < cleanBase64.length; i += CHUNK_SIZE) {
-    var chunk = cleanBase64.substring(i, i + CHUNK_SIZE);
-    // Pad ke kelipatan 4 agar valid base64
-    var pad = (4 - (chunk.length % 4)) % 4;
-    for (var p = 0; p < pad; p++) chunk += '=';
-    try {
-      var decoded = Utilities.base64Decode(chunk);
-      byteArrays = byteArrays.concat(decoded);
-    } catch(e) {
-      throw new Error('base64Decode chunk gagal offset=' + i + ' len=' + chunk.length + ' :: ' + e.message);
-    }
-  }
+  Logger.log('[3-PRE-DECODE] about to call Utilities.base64Decode');
+  var decoded = Utilities.base64Decode(cleanBase64);
+  Logger.log('[4-POST-DECODE] decodedLen=' + decoded.length);
 
-  var blob = Utilities.newBlob(byteArrays, mimeType || 'application/octet-stream', fileName);
+  Logger.log('[5-PRE-BLOB] about to call Utilities.newBlob');
+  var blob = Utilities.newBlob(decoded, mimeType || 'application/octet-stream', fileName);
+  Logger.log('[6-POST-BLOB] blobName=' + blob.getName() + ' blobSize=' + blob.getBytes().length);
+
+  Logger.log('[7-PRE-CREATE] about to call folder.createFile');
   var file = folder.createFile(blob);
-  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-  return 'https://drive.google.com/uc?export=view&id=' + file.getId();
+  Logger.log('[8-POST-CREATE] fileId=' + file.getId());
+
+  // setSharing ANYONE_WITH_LINK diblokir domain policy — pakai DOMAIN saja
+  try {
+    file.setSharing(DriveApp.Access.DOMAIN_WITH_LINK, DriveApp.Permission.VIEW);
+  } catch(e) {
+    Logger.log('[SHARING-WARN] setSharing gagal (non-fatal): ' + e.message);
+    // Lanjut tanpa sharing — file tetap bisa diakses via service account
+  }
+  var url = 'https://drive.google.com/uc?export=view&id=' + file.getId();
+  Logger.log('[9-DONE] url=' + url);
+  return url;
 }
 
 
@@ -311,4 +312,38 @@ function validateRequired(data, requiredFields) {
  */
 function isValidEnum(value, allowed) {
   return allowed.includes(value);
+}
+
+/**
+ * Ambil konten file Drive sebagai base64 data URI — server-side, bypass firewall IT.
+ * Supports: https://drive.google.com/uc?export=view&id=FILE_ID
+ *           https://drive.google.com/file/d/FILE_ID/view
+ */
+function getDriveFileBase64(fileUrl) {
+  try {
+    var fileId = null;
+    var m1 = fileUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    var m2 = fileUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (m1) fileId = m1[1];
+    else if (m2) fileId = m2[1];
+    if (!fileId) throw new Error('File ID tidak ditemukan dari URL: ' + fileUrl);
+
+    var cache = CacheService.getScriptCache();
+    var cacheKey = 'driveimg_' + fileId;
+    var cached = cache.get(cacheKey);
+    if (cached) return cached;
+
+    var file = DriveApp.getFileById(fileId);
+    var blob = file.getBlob();
+    var mime = blob.getContentType() || 'image/jpeg';
+    var b64  = Utilities.base64Encode(blob.getBytes());
+    var dataUri = 'data:' + mime + ';base64,' + b64;
+
+    // Cache 6 jam
+    try { cache.put(cacheKey, dataUri, 21600); } catch(e) { /* terlalu besar untuk cache, skip */ }
+    return dataUri;
+  } catch(e) {
+    Logger.log('[getDriveFileBase64] gagal: ' + e.message + ' url=' + fileUrl);
+    return null;
+  }
 }
