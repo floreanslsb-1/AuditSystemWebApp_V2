@@ -252,28 +252,30 @@ function uploadFileToDrive(base64Data, fileName, mimeType, folder) {
   if (!base64Data || typeof base64Data !== 'string' || base64Data.length === 0)
     throw new Error('base64Data kosong untuk file "' + fileName + '"');
 
-  // Strip data URL prefix kalau masih ada (misal: "data:image/png;base64,...")
+  // Strip data URL prefix kalau masih ada
   var cleanBase64 = base64Data;
   var commaIdx = base64Data.indexOf(',');
   if (commaIdx >= 0) cleanBase64 = base64Data.substring(commaIdx + 1);
-
-  // Hapus whitespace/newline yang kadang disisipkan browser saat encode
   cleanBase64 = cleanBase64.replace(/\s/g, '');
 
-  var decoded;
-  try {
-    decoded = Utilities.base64Decode(cleanBase64, Utilities.Charset.UTF_8);
-  } catch(e1) {
-    // Fallback: coba tanpa charset (raw bytes)
+  // Decode base64 dalam chunk 500KB untuk menghindari batas GAS
+  var CHUNK_SIZE = 500000; // karakter base64 per chunk (~375KB binary)
+  var byteArrays = [];
+  for (var i = 0; i < cleanBase64.length; i += CHUNK_SIZE) {
+    var chunk = cleanBase64.substring(i, i + CHUNK_SIZE);
+    // Pad ke kelipatan 4 agar valid base64
+    var pad = (4 - (chunk.length % 4)) % 4;
+    for (var p = 0; p < pad; p++) chunk += '=';
     try {
-      decoded = Utilities.base64Decode(cleanBase64);
-    } catch(e2) {
-      throw new Error('base64Decode gagal untuk "' + fileName + '": ' + e2.message + ' (len=' + cleanBase64.length + ')');
+      var decoded = Utilities.base64Decode(chunk);
+      byteArrays = byteArrays.concat(decoded);
+    } catch(e) {
+      throw new Error('base64Decode chunk gagal offset=' + i + ' len=' + chunk.length + ' :: ' + e.message);
     }
   }
 
-  const blob = Utilities.newBlob(decoded, mimeType || 'application/octet-stream', fileName);
-  const file = folder.createFile(blob);
+  var blob = Utilities.newBlob(byteArrays, mimeType || 'application/octet-stream', fileName);
+  var file = folder.createFile(blob);
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
   return 'https://drive.google.com/uc?export=view&id=' + file.getId();
 }
