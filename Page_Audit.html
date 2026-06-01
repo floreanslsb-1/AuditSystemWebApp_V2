@@ -524,6 +524,22 @@ async function renderAuditChecklist(panel, agenda, areaId, periodId) {
         '<i data-lucide="check-circle" style="width:13px;height:13px"></i> Selesai & Minta Persetujuan</button>'
     : '';
 
+  var stickyFooter =
+    '<div id="audit-sticky-footer" style="position:fixed;bottom:0;left:0;right:0;z-index:500;' +
+      'background:var(--surface,#fff);border-top:1px solid var(--border);' +
+      'padding:10px 24px;display:flex;align-items:center;gap:12px;box-shadow:0 -2px 12px rgba(0,0,0,.06)">' +
+      '<button class="btn btn-ghost btn-sm" onclick="_backToAuditAreas()">' +
+        '<i data-lucide="arrow-left" style="width:14px;height:14px"></i> Daftar Area' +
+      '</button>' +
+      '<div style="flex:1;text-align:center;font-size:11px;color:var(--text-muted);line-height:1.5;padding:0 12px">' +
+        (agenda.status === 'STARTED'
+          ? '<i data-lucide="info" style="width:11px;height:11px;vertical-align:middle;margin-right:3px"></i>' +
+            'Setelah selesai, Anda akan melihat preview temuan dan dapat upload foto agreement bersama auditee. Masih bisa kembali untuk koreksi.'
+          : '') +
+      '</div>' +
+      finishBtn +
+    '</div>';
+
   var groupsHtml = groups.map(function(g) {
     return _renderGroup(g, agenda, periodId, resultMap, findingMap, isLocked, draft.activeGroupKey);
   }).join('');
@@ -535,7 +551,7 @@ async function renderAuditChecklist(panel, agenda, areaId, periodId) {
       '<div class="flex items-center justify-between" style="flex-wrap:wrap;gap:8px">' +
         '<div><div class="fw-700">' + escHtml(agenda.dept) + '</div>' +
           '<div class="text-sm text-muted">Dimulai ' + timeAgo(agenda.started_at) + ' · ' + escHtml(agenda.started_by ? agenda.started_by.split('@')[0] : '') + '</div></div>' +
-        '<div class="flex gap-8 items-center">' + statusBadge(agenda.status) + finishBtn + '</div>' +
+        '<div class="flex gap-8 items-center">' + statusBadge(agenda.status) + '</div>' +
       '</div>' +
       '<div style="margin-top:12px">' +
         '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:4px" id="audit-progress-label">' +
@@ -546,7 +562,8 @@ async function renderAuditChecklist(panel, agenda, areaId, periodId) {
             ';border-radius:3px;transition:width .4s ease"></div></div>' +
       '</div>' +
     '</div></div>' +
-    '<div id="checklist-groups" style="display:flex;flex-direction:column;gap:10px">' + groupsHtml + '</div>';
+    '<div id="checklist-groups" style="display:flex;flex-direction:column;gap:10px;padding-bottom:80px">' + groupsHtml + '</div>' +
+    stickyFooter;
 
   _renderFloatingSaveBar(agenda.agenda_id, periodId);
   lucide.createIcons();
@@ -1088,6 +1105,7 @@ function _repaintCheckItemRow(gKey, resultId, status, fromDraft) {
               fotoHtml2 +
             '</div>';
           lucide.createIcons(findingEl);
+          _loadAllDriveImgs(findingEl);
         } else {
           findingEl.innerHTML = '';
         }
@@ -1187,7 +1205,8 @@ function _renderFloatingSaveBar(agendaId, periodId) {
 
   var bar = document.createElement('div');
   bar.id  = 'audit-save-bar';
-  bar.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:1000;display:flex;gap:8px;align-items:center;' +
+  var _footerH = document.getElementById('audit-sticky-footer') ? 72 : 20;
+  bar.style.cssText = 'position:fixed;bottom:' + _footerH + 'px;right:20px;z-index:1000;display:flex;gap:8px;align-items:center;' +
     'background:var(--surface,#fff);padding:10px 14px;border-radius:12px;' +
     'box-shadow:0 8px 28px rgba(0,0,0,.14);border:1px solid var(--border);max-width:420px';
   bar.innerHTML =
