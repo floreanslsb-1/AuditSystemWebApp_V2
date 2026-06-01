@@ -524,8 +524,10 @@ async function renderAuditChecklist(panel, agenda, areaId, periodId) {
         '<i data-lucide="check-circle" style="width:13px;height:13px"></i> Selesai & Minta Persetujuan</button>'
     : '';
 
-  // Ambil left position dari panel agar footer mulai setelah sidebar
-  var _footerLeft = Math.round(panel.getBoundingClientRect().left);
+  // Ambil right edge dari sidebar agar footer tepat mulai setelah sidebar
+  var _isMobile = window.innerWidth < 768;
+  var _sidebarEl = !_isMobile && (document.querySelector('aside') || document.querySelector('nav'));
+  var _footerLeft = _sidebarEl ? Math.round(_sidebarEl.getBoundingClientRect().right) : 0;
 
   var stickyFooter =
     '<div id="audit-sticky-footer" style="position:fixed;bottom:0;left:' + _footerLeft + 'px;right:0;z-index:500;' +
@@ -779,7 +781,7 @@ function _renderCheckItem(gKey, item, ciNo, agenda, periodId, resultMap, finding
   } else {
     // FIX 2: compact action buttons on the right, professional style
     statusArea =
-      '<div class="ci-action-btns" style="display:flex;gap:6px;flex-shrink:0">' +
+      '<div class="ci-action-btns" style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">' +
         '<button style="display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:6px;' +
           'border:1.5px solid var(--emerald,#10b981);background:transparent;color:var(--emerald,#10b981);' +
           'font-size:12px;font-weight:600;cursor:pointer;transition:background .15s" ' +
@@ -826,7 +828,7 @@ function _renderCheckItem(gKey, item, ciNo, agenda, periodId, resultMap, finding
       var fotoUrls = String(srvFinding.foto_urls || '').split(',').filter(Boolean);
       var fotoHtml = '';
       if (fotoUrls.length) {
-        fotoHtml = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">' +
+        fotoHtml = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;max-width:100%;overflow:hidden">' +
           fotoUrls.map(function(url, idx) {
             return '<div style="position:relative;width:56px;height:56px;border-radius:6px;' +
               'overflow:hidden;border:1px solid var(--border);cursor:pointer;background:var(--bg)" ' +
@@ -870,7 +872,7 @@ function _renderCheckItem(gKey, item, ciNo, agenda, periodId, resultMap, finding
               '<span>' + escHtml(item.standar_check_item) + '</span>' +
             '</div>'
           : '') +
-        '<div id="ci-finding-' + _cid + '">' + findingHtml + '</div>' +
+        '<div id="ci-finding-' + _cid + '" style="min-width:0;overflow:hidden">' + findingHtml + '</div>' +
       '</div>' +
       // Status / action buttons (right, vertically centered)
       '<div id="ci-status-' + _cid + '" style="flex-shrink:0;display:flex;align-items:center;padding-top:1px">' +
@@ -1024,7 +1026,7 @@ function _repaintCheckItemRow(gKey, resultId, status, fromDraft) {
 
   var newStatusHtml;
   if (!merged.status) {
-    newStatusHtml = '<div class="ci-action-btns" style="display:flex;gap:6px;flex-shrink:0">' +
+    newStatusHtml = '<div class="ci-action-btns" style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">' +
       '<button style="display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:6px;border:1.5px solid var(--emerald,#10b981);background:transparent;color:var(--emerald,#10b981);font-size:12px;font-weight:600;cursor:pointer" ' +
         'onclick="var btn=this;singleClick(btn,function(){ submitCheckItem(\'' + escAttr(item.result_id) + '\',\'' + escAttr(gKey) + '\',\'COMPLY\',\'' + ctx.agenda.agenda_id + '\',\'' + ctx.periodId + '\', btn) })">' +
         '<i data-lucide="check" style="width:13px;height:13px"></i>Comply</button>' +
@@ -1084,7 +1086,7 @@ function _repaintCheckItemRow(gKey, resultId, status, fromDraft) {
           var fotoUrls2 = String(srvF2.foto_urls || '').split(',').filter(Boolean);
           var fotoHtml2 = '';
           if (fotoUrls2.length) {
-            fotoHtml2 = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">' +
+            fotoHtml2 = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;max-width:100%;overflow:hidden">' +
               fotoUrls2.map(function(url) {
                 return '<div style="position:relative;width:56px;height:56px;border-radius:6px;' +
                   'overflow:hidden;border:1px solid var(--border);cursor:pointer;background:var(--bg)" ' +
@@ -1205,10 +1207,19 @@ function _renderFloatingSaveBar(agendaId, periodId) {
 
   var bar = document.createElement('div');
   bar.id  = 'audit-save-bar';
-  var _footerH = document.getElementById('audit-sticky-footer') ? 72 : 20;
-  bar.style.cssText = 'position:fixed;bottom:' + _footerH + 'px;right:20px;z-index:1000;display:flex;gap:8px;align-items:center;' +
-    'background:var(--surface,#fff);padding:10px 14px;border-radius:12px;' +
-    'box-shadow:0 8px 28px rgba(0,0,0,.14);border:1px solid var(--border);max-width:420px';
+  var _footerH  = document.getElementById('audit-sticky-footer') ? 72 : 20;
+  var _isMob    = window.innerWidth < 768;
+  var _footerLeft2 = _isMob ? '0' : 'auto';
+  var _footerRight = '0';
+  var _bRadius  = _isMob ? '0' : '12px';
+  var _bBottom  = _isMob ? _footerH + 'px' : (_footerH + 8) + 'px';
+  var _bRight   = _isMob ? '0' : '20px';
+  bar.style.cssText = 'position:fixed;bottom:' + _bBottom + ';right:' + _bRight + ';' +
+    (_isMob ? 'left:0;' : '') +
+    'z-index:1000;display:flex;gap:8px;align-items:center;' +
+    'background:var(--surface,#fff);padding:10px 14px;border-radius:' + _bRadius + ';' +
+    'box-shadow:0 -2px 12px rgba(0,0,0,.1);border-top:1px solid var(--border);' +
+    (_isMob ? '' : 'border:1px solid var(--border);max-width:420px');
   bar.innerHTML =
     '<div style="flex:1;min-width:0;margin-right:4px">' +
       '<div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:1px">Draf aktif</div>' +
@@ -1854,19 +1865,33 @@ function finishAudit(agendaId, periodId) { _openAgreementModal(agendaId, periodI
 
 function _openAgreementModal(agendaId, periodId) {
   createModal({
-    id: 'agreement-modal', title: 'Upload Bukti Agreement', size: 'modal-lg',
+    id: 'agreement-modal', title: 'Persetujuan Hasil Audit', size: 'modal-lg',
     body:
-      '<p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Upload foto bersama auditor dan auditee sebagai bukti bahwa hasil audit telah dikomunikasikan dan disepakati.</p>' +
-      '<div id="agr-findings-preview" style="margin-bottom:16px"></div>' +
-      '<div class="form-group"><label class="form-label">Nama Auditee yang Hadir <span class="required">*</span></label>' +
-        '<div class="form-hint" style="margin-bottom:8px">Tulis nama auditee yang hadir. Pisahkan dengan koma.</div>' +
-        '<textarea class="form-control" id="agr-auditee-names" rows="2" placeholder="Budi Santoso, Siti Aminah"></textarea></div>' +
-      '<div class="form-group"><label class="form-label">Foto Agreement <span class="required">*</span></label>' +
+      // 1. Hasil Audit — skeleton dulu, diisi async
+      '<div id="agr-hasil-section">' +
+        '<div class="skeleton" style="height:120px;border-radius:8px;margin-bottom:16px"></div>' +
+      '</div>' +
+      '<hr style="border:none;border-top:1px solid var(--border);margin:0 0 16px">' +
+      // 2. Nama auditee
+      '<div class="form-group">' +
+        '<label class="form-label">Nama Auditee yang Hadir <span class="required">*</span></label>' +
+        '<div class="form-hint" style="margin-bottom:8px">Tulis nama lengkap auditee yang hadir. Pisahkan dengan koma.</div>' +
+        '<textarea class="form-control" id="agr-auditee-names" rows="2" placeholder="Budi Santoso, Siti Aminah"></textarea>' +
+      '</div>' +
+      '<hr style="border:none;border-top:1px solid var(--border);margin:0 0 16px">' +
+      // 3. Info + upload foto
+      '<p style="font-size:13px;color:var(--text-muted);margin-bottom:12px">' +
+        'Upload foto bersama auditor dan auditee sebagai bukti bahwa hasil audit telah dikomunikasikan dan disepakati.' +
+      '</p>' +
+      '<div class="form-group">' +
+        '<label class="form-label">Foto Persetujuan Audit <span class="required">*</span></label>' +
         '<div class="upload-zone" id="agr-upload-zone" style="min-height:100px">' +
           '<i data-lucide="camera" style="width:28px;height:28px;opacity:.3;margin-bottom:8px"></i>' +
           '<div class="upload-text">Klik atau ambil foto bersama auditee</div>' +
-          '<div class="text-xs text-muted" style="margin-top:4px">JPG, PNG</div></div>' +
-        '<div class="upload-previews" id="agr-upload-preview"></div></div>',
+          '<div class="text-xs text-muted" style="margin-top:4px">JPG, PNG</div>' +
+        '</div>' +
+        '<div class="upload-previews" id="agr-upload-preview"></div>' +
+      '</div>',
     footer:
       '<button class="btn btn-outline" onclick="closeModal(\'agreement-modal\')">Batal</button>' +
       '<button class="btn btn-primary" id="agr-submit-btn" onclick="singleClick(this,function(){ _submitAgreementAndFinish(\'' + agendaId + '\',\'' + periodId + '\') })">' +
@@ -1874,32 +1899,95 @@ function _openAgreementModal(agendaId, periodId) {
   });
   lucide.createIcons();
   setupUploadZone('agr-upload-zone', 'agr-upload-preview');
+
+  // Fetch findings + all results secara paralel
   var period = App.activePeriod;
-  if (period) {
-    cachedApi('GET_FINDINGS_BY_AGENDA', { period_id: period.period_id, agenda_id: agendaId }, 10).then(function(findings) {
-      var el = document.getElementById('agr-findings-preview');
-      if (!el) return;
-      if (!findings.length) { el.innerHTML = '<div style="font-size:12px;color:var(--text-muted);padding:8px 0">Tidak ada temuan di agenda ini.</div>'; return; }
-      el.innerHTML = '<div style="font-size:12px;font-weight:600;margin-bottom:8px">Ringkasan Temuan (' + findings.length + '):</div>' +
-        findings.map(function(f) {
-          return '<div style="margin-bottom:8px;padding:8px 10px;background:var(--bg);border-radius:6px;' +
-            'border-left:3px solid var(--rose,#f43f5e)">' +
-            '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">' +
-              '<span class="badge badge-rose" style="font-size:10px">Non Comply</span>' +
-              '<span style="font-size:11px;font-weight:600;color:var(--text-muted)">' +
-                '#' + f.nomor_persyaratan + '.' + f.check_item_no +
-              '</span>' +
+  if (!period) return;
+  Promise.all([
+    cachedApi('GET_FINDINGS_BY_AGENDA', { period_id: period.period_id, agenda_id: agendaId }, 10),
+    cachedApi('GET_AUDIT_RESULTS',      { period_id: period.period_id, agenda_id: agendaId }, 10),
+  ]).then(function(res) {
+    var findings   = res[0] || [];
+    var allResults = res[1] || [];
+    var el = document.getElementById('agr-hasil-section');
+    if (!el) return;
+
+    var totalCount     = allResults.length;
+    var nonComplyCount = findings.length;
+    var complyCount    = totalCount - nonComplyCount;
+
+    // ── Summary chips ──────────────────────────────────────────
+    var html =
+      '<div style="font-size:13px;font-weight:700;margin-bottom:10px">Hasil Audit</div>' +
+      '<div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">' +
+        '<span style="display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:20px;' +
+          'background:rgba(16,185,129,.1);color:var(--emerald,#10b981);font-size:12px;font-weight:600">' +
+          '<i data-lucide="check" style="width:12px;height:12px"></i>' + complyCount + ' Comply' +
+        '</span>' +
+        '<span style="display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:20px;' +
+          'background:rgba(244,63,94,.1);color:var(--rose,#f43f5e);font-size:12px;font-weight:600">' +
+          '<i data-lucide="x" style="width:12px;height:12px"></i>' + nonComplyCount + ' Non Comply' +
+        '</span>' +
+      '</div>';
+
+    // ── Non comply detail, grouped by persyaratan ───────────────
+    if (findings.length) {
+      var grouped = {}, groupOrder = [];
+      findings.forEach(function(f) {
+        var key = f.aspek + '||' + f.persyaratan;
+        if (!grouped[key]) {
+          grouped[key] = { aspek: f.aspek, persyaratan: f.persyaratan, items: [] };
+          groupOrder.push(key);
+        }
+        grouped[key].items.push(f);
+      });
+
+      html += '<div style="display:flex;flex-direction:column;gap:10px">';
+      groupOrder.forEach(function(key) {
+        var g = grouped[key];
+        html +=
+          '<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden">' +
+            // Group header
+            '<div style="padding:8px 12px;background:var(--bg);border-bottom:1px solid var(--border);' +
+              'font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:.03em">' +
+              escHtml(g.aspek) + ' · ' + escHtml(g.persyaratan) +
             '</div>' +
-            (f.deskripsi_temuan
-              ? '<div style="font-size:12px;color:var(--text-muted);line-height:1.4">' +
-                  escHtml(f.deskripsi_temuan) +
-                '</div>'
-              : '') +
+            // Items
+            g.items.map(function(f, idx) {
+              var isLast = idx === g.items.length - 1;
+              return '<div style="padding:10px 12px;border-left:3px solid var(--rose,#f43f5e);' +
+                (isLast ? '' : 'border-bottom:1px solid var(--border);') + '">' +
+                '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
+                  '<span class="badge badge-rose" style="font-size:10px">Non Comply</span>' +
+                  '<span style="font-size:11px;color:var(--text-muted);font-weight:600">#' + f.nomor_persyaratan + '.' + f.check_item_no + '</span>' +
+                '</div>' +
+                '<div style="font-size:13px;color:var(--text);margin-bottom:4px">' + escHtml(f.check_item) + '</div>' +
+                (f.standar_check_item
+                  ? '<div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;display:flex;gap:4px">' +
+                      '<i data-lucide="info" style="width:10px;height:10px;flex-shrink:0;margin-top:2px"></i>' +
+                      '<span>' + escHtml(f.standar_check_item) + '</span>' +
+                    '</div>'
+                  : '') +
+                (f.deskripsi_temuan
+                  ? '<div style="font-size:12px;color:var(--rose,#f43f5e);margin-top:4px">' +
+                      '<span style="font-weight:600">Temuan:</span> ' + escHtml(f.deskripsi_temuan) +
+                    '</div>'
+                  : '') +
+              '</div>';
+            }).join('') +
           '</div>';
-        }).join('');
-      lucide.createIcons();
-    }).catch(function() {});
-  }
+      });
+      html += '</div>';
+    } else {
+      html += '<div style="font-size:12px;color:var(--text-muted)">Tidak ada temuan di agenda ini.</div>';
+    }
+
+    el.innerHTML = html;
+    lucide.createIcons(el);
+  }).catch(function() {
+    var el = document.getElementById('agr-hasil-section');
+    if (el) el.innerHTML = '';
+  });
 }
 
 async function _submitAgreementAndFinish(agendaId, periodId) {
