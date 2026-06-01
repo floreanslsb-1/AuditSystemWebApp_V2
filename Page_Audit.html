@@ -740,7 +740,7 @@ function _renderCheckItem(gKey, item, ciNo, agenda, periodId, resultMap, finding
     var editBtn    = canEdit
       ? '<button title="Ubah status" style="display:inline-flex;align-items:center;padding:4px 6px;border-radius:6px;' +
           'border:1px solid var(--border);background:transparent;color:var(--text-muted);cursor:pointer;line-height:1" ' +
-          'onclick="_openEditStatusForm(\'' + item.item_id + '\',\'' + escAttr(gKey) + '\',' + item.nomor + ',' + ciNo + ',\'' + agenda.agenda_id + '\',\'' + periodId + '\',\'' + status + '\',\'' + (fromDraft ? '1' : '0') + '\')">' +
+          'onclick="_openEditStatusForm(\'' + escAttr(item.result_id) + '\',\'' + escAttr(gKey) + '\',\'' + agenda.agenda_id + '\',\'' + periodId + '\',\'' + status + '\',\'' + (fromDraft ? '1' : '0') + '\')">' +
           '<i data-lucide="pencil" style="width:12px;height:12px"></i>' +
         '</button>'
       : '';
@@ -762,14 +762,14 @@ function _renderCheckItem(gKey, item, ciNo, agenda, periodId, resultMap, finding
           'border:1.5px solid var(--emerald,#10b981);background:transparent;color:var(--emerald,#10b981);' +
           'font-size:12px;font-weight:600;cursor:pointer;transition:background .15s" ' +
           'onmouseover="this.style.background=\'rgba(16,185,129,.1)\'" onmouseout="this.style.background=\'transparent\'" ' +
-          'onclick="var btn=this;singleClick(btn,function(){ submitCheckItem(\'' + item.item_id + '\',\'' + escAttr(gKey) + '\',' + item.nomor + ',' + ciNo + ',\'COMPLY\',\'' + agenda.agenda_id + '\',\'' + periodId + '\', btn) })">' +
+          'onclick="var btn=this;singleClick(btn,function(){ submitCheckItem(\'' + escAttr(item.result_id) + '\',\'' + escAttr(gKey) + '\',\'COMPLY\',\'' + agenda.agenda_id + '\',\'' + periodId + '\', btn) })">' +
           '<i data-lucide="check" style="width:13px;height:13px"></i>Comply' +
         '</button>' +
         '<button style="display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:6px;' +
           'border:1.5px solid var(--rose,#f43f5e);background:transparent;color:var(--rose,#f43f5e);' +
           'font-size:12px;font-weight:600;cursor:pointer;transition:background .15s" ' +
           'onmouseover="this.style.background=\'rgba(244,63,94,.1)\'" onmouseout="this.style.background=\'transparent\'" ' +
-          'onclick="var btn=this;singleClick(btn,function(){ submitCheckItem(\'' + item.item_id + '\',\'' + escAttr(gKey) + '\',' + item.nomor + ',' + ciNo + ',\'NON_COMPLY\',\'' + agenda.agenda_id + '\',\'' + periodId + '\', btn) })">' +
+          'onclick="var btn=this;singleClick(btn,function(){ submitCheckItem(\'' + escAttr(item.result_id) + '\',\'' + escAttr(gKey) + '\',\'NON_COMPLY\',\'' + agenda.agenda_id + '\',\'' + periodId + '\', btn) })">' +
           '<i data-lucide="x" style="width:13px;height:13px"></i>Non Comply' +
         '</button>' +
       '</div>';
@@ -1001,10 +1001,10 @@ function _repaintCheckItemRow(gKey, resultId, status, fromDraft) {
   if (!merged.status) {
     newStatusHtml = '<div class="ci-action-btns" style="display:flex;gap:6px;flex-shrink:0">' +
       '<button style="display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:6px;border:1.5px solid var(--emerald,#10b981);background:transparent;color:var(--emerald,#10b981);font-size:12px;font-weight:600;cursor:pointer" ' +
-        'onclick="var btn=this;singleClick(btn,function(){ submitCheckItem(\'' + item.item_id + '\',\'' + escAttr(gKey) + '\',' + item.nomor + ',' + item.check_item_no + ',\'COMPLY\',\'' + ctx.agenda.agenda_id + '\',\'' + ctx.periodId + '\', btn) })">' +
+        'onclick="var btn=this;singleClick(btn,function(){ submitCheckItem(\'' + escAttr(item.result_id) + '\',\'' + escAttr(gKey) + '\',\'COMPLY\',\'' + ctx.agenda.agenda_id + '\',\'' + ctx.periodId + '\', btn) })">' +
         '<i data-lucide="check" style="width:13px;height:13px"></i>Comply</button>' +
       '<button style="display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:6px;border:1.5px solid var(--rose,#f43f5e);background:transparent;color:var(--rose,#f43f5e);font-size:12px;font-weight:600;cursor:pointer" ' +
-        'onclick="var btn=this;singleClick(btn,function(){ submitCheckItem(\'' + item.item_id + '\',\'' + escAttr(gKey) + '\',' + item.nomor + ',' + item.check_item_no + ',\'NON_COMPLY\',\'' + ctx.agenda.agenda_id + '\',\'' + ctx.periodId + '\', btn) })">' +
+        'onclick="var btn=this;singleClick(btn,function(){ submitCheckItem(\'' + escAttr(item.result_id) + '\',\'' + escAttr(gKey) + '\',\'NON_COMPLY\',\'' + ctx.agenda.agenda_id + '\',\'' + ctx.periodId + '\', btn) })">' +
         '<i data-lucide="x" style="width:13px;height:13px"></i>Non Comply</button></div>';
   } else {
     var badgeColor = isComply ? 'var(--emerald,#10b981)' : 'var(--rose,#f43f5e)';
@@ -1014,7 +1014,7 @@ function _repaintCheckItemRow(gKey, resultId, status, fromDraft) {
     var canEditR   = !ctx.isLocked && !gLocked;
     var editBtnR   = canEditR
       ? '<button title="Ubah status" style="display:inline-flex;align-items:center;padding:4px 6px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text-muted);cursor:pointer;line-height:1" ' +
-          'onclick="_openEditStatusForm(\'' + item.item_id + '\',\'' + escAttr(gKey) + '\',' + item.nomor + ',' + item.check_item_no + ',\'' + ctx.agenda.agenda_id + '\',\'' + ctx.periodId + '\',\'' + merged.status + '\',\'' + (fd ? '1' : '0') + '\')">' +
+          'onclick="_openEditStatusForm(\'' + escAttr(item.result_id) + '\',\'' + escAttr(gKey) + '\',\'' + ctx.agenda.agenda_id + '\',\'' + ctx.periodId + '\',\'' + merged.status + '\',\'' + (fd ? '1' : '0') + '\')">' +
           '<i data-lucide="pencil" style="width:12px;height:12px"></i></button>'
       : '';
     newStatusHtml =
@@ -1138,30 +1138,27 @@ function _updateProgressBar() {
 //  submitCheckItem  — now passes gKey
 // ============================================================
 
-// Tidak ada perubahan di sini — pastikan ini sudah ada dan benar:
-async function submitCheckItem(itemId, gKey, nomor, ciNo, status, agendaId, periodId, btn) {
-  var locked = await _ensureLockForGroup(agendaId, periodId, gKey, nomor);
-  if (!locked) return;
-
+async function submitCheckItem(resultId, gKey, status, agendaId, periodId, btn) {
   var _srCtx = window._auditRenderCtx;
   var _srGrp = _srCtx && _srCtx.groups.find(function(g) { return _groupKey(g) === gKey; });
-  var _srItm = _srGrp && _srGrp.items.find(function(i) {
-    return Number(i.nomor) === Number(nomor) && Number(i.check_item_no) === Number(ciNo);
-  });
-  var resultId = (_srItm && _srItm.result_id) || '';
+  var _srItm = _srGrp && _srGrp.items.find(function(i) { return i.result_id === resultId; });
+  if (!_srItm) return toast('Item tidak ditemukan.', 'error');
+
+  var locked = await _ensureLockForGroup(agendaId, periodId, gKey, Number(_srItm.nomor));
+  if (!locked) return;
 
   _draftSetItem(gKey, resultId, {
-    item_id:           itemId,
+    item_id:           _srItm.item_id,
     result_id:         resultId,
-    nomor_persyaratan: Number(nomor),
-    check_item_no:     Number(ciNo),
+    nomor_persyaratan: Number(_srItm.nomor),
+    check_item_no:     Number(_srItm.check_item_no),
     status:            status
   });
   _repaintCheckItemRow(gKey, resultId, status, true);
   _renderFloatingSaveBar(agendaId, periodId);
 
   if (status === 'NON_COMPLY') {
-    _openDraftFindingForm(itemId, gKey, nomor, ciNo, resultId, agendaId, periodId);
+    _openDraftFindingForm(_srItm.item_id, gKey, _srItm.nomor, _srItm.check_item_no, resultId, agendaId, periodId);
   }
 }
 
@@ -1249,7 +1246,7 @@ function _openDraftFindingForm(itemId, gKey, nomor, ciNo, resultId, agendaId, pe
       '</div>',
     footer:
       '<button class="btn btn-outline" onclick="closeModal(\'finding-form-modal\')">Batal</button>' +
-      '<button class="btn btn-danger" id="ff-save-btn" onclick="singleClick(this,function(){ _saveDraftFinding(\'' + escAttr(gKey) + '\',' + nomor + ',' + ciNo + ') })">' +
+      '<button class="btn btn-danger" id="ff-save-btn" onclick="singleClick(this,function(){ _saveDraftFinding(\'' + escAttr(gKey) + '\',\'' + escAttr(resultId) + '\') })">' +
         '<i data-lucide="triangle-alert" style="width:14px;height:14px"></i>Simpan ke Draf' +
       '</button>',
   });
@@ -1352,7 +1349,7 @@ function _validateImageFiles(files) {
   return true;
 }
 
-async function _saveDraftFinding(gKey, nomor, ciNo) {
+async function _saveDraftFinding(gKey, resultId) {
   var deskripsi = (document.getElementById('ff-deskripsi') || {}).value?.trim();
   if (!deskripsi) return toast('Deskripsi temuan wajib diisi.', 'error');
 
@@ -1361,15 +1358,9 @@ async function _saveDraftFinding(gKey, nomor, ciNo) {
   if (newFiles.length && !_validateImageFiles(newFiles)) return;
   var savedCount = (window._ffExistingSavedUrls || []).length;
 
-  // FIX 3: hitung juga pendingFiles yang sudah ada dari sesi sebelumnya
-  // Skenario: user sudah upload foto di modal sebelumnya, buka modal lagi
-  // tapi tidak upload lagi — foto lama masih ada di _auditPendingFiles
-    var _sdCtx = window._auditRenderCtx;
+  var _sdCtx = window._auditRenderCtx;
   var _sdGrp = _sdCtx && _sdCtx.groups.find(function(g) { return _groupKey(g) === gKey; });
-  var _sdItm = _sdGrp && _sdGrp.items.find(function(i) {
-    return Number(i.nomor) === Number(nomor) && Number(i.check_item_no) === Number(ciNo);
-  });
-  var resultId = (_sdItm && _sdItm.result_id) || '';
+  var _sdItm = _sdGrp && _sdGrp.items.find(function(i) { return i.result_id === resultId; });
 
   var dKey = _draftItemKey(gKey, resultId);
   var alreadyPending = (window._auditPendingFiles && window._auditPendingFiles[dKey])
@@ -1385,8 +1376,8 @@ async function _saveDraftFinding(gKey, nomor, ciNo) {
   _draftSetItem(gKey, resultId, {
     item_id:           (_sdItm && _sdItm.item_id) || '',
     result_id:         resultId,
-    nomor_persyaratan: Number(nomor),
-    check_item_no:     Number(ciNo),
+    nomor_persyaratan: _sdItm ? Number(_sdItm.nomor) : 0,
+    check_item_no:     _sdItm ? Number(_sdItm.check_item_no) : 0,
     status:            'NON_COMPLY',
     deskripsi_temuan:  deskripsi,
   });
@@ -1397,7 +1388,16 @@ async function _saveDraftFinding(gKey, nomor, ciNo) {
   _renderFloatingSaveBar(_sdCtx && _sdCtx.agenda && _sdCtx.agenda.agenda_id, _sdCtx && _sdCtx.periodId);
 }
 
-async function _openEditStatusForm(itemId, gKey, nomor, ciNo, agendaId, periodId, currentStatus, fromDraftStr) {
+async function _openEditStatusForm(resultId, gKey, agendaId, periodId, currentStatus, fromDraftStr) {
+  var fromDraft = fromDraftStr === '1' || fromDraftStr === true;
+
+  // Find item sekali, pakai result_id
+  var _esCtx = window._auditRenderCtx;
+  var _esGrp = _esCtx && _esCtx.groups.find(function(g) { return _groupKey(g) === gKey; });
+  var _esItm = _esGrp && _esGrp.items.find(function(i) { return i.result_id === resultId; });
+  var nomor  = _esItm ? Number(_esItm.nomor)         : 0;
+  var ciNo   = _esItm ? Number(_esItm.check_item_no) : 0;
+  var itemId = _esItm ? _esItm.item_id               : '';
   // Untuk item yang sudah tersimpan (bukan draft), jangan lock dulu saat pencil diklik.
   // Lock hanya dibutuhkan kalau user betul-betul menyimpan perubahan dari modal.
   // Kalau item masih draft (fromDraftStr === '1'), tetap perlu ensureLock karena sudah ada draft aktif.
@@ -1519,11 +1519,11 @@ async function _openEditStatusForm(itemId, gKey, nomor, ciNo, agendaId, periodId
 
       footer:
         '<button class="btn btn-outline" style="margin-right:auto" ' +
-          'onclick="singleClick(this,function(){ _switchToComply(\'' + itemId + '\',\'' + escAttr(gKey) + '\',' + nomor + ',' + ciNo + ',\'' + agendaId + '\',\'' + periodId + '\') })">' +
+          'onclick="singleClick(this,function(){ _switchToComply(\'' + escAttr(resultId) + '\',\'' + escAttr(gKey) + '\',\'' + agendaId + '\',\'' + periodId + '\') })">' +
           '<i data-lucide="check" style="width:13px;height:13px"></i> Ubah ke Comply' +
         '</button>' +
         '<button class="btn btn-outline" onclick="closeModal(\'edit-finding-modal\')">Batal</button>' +
-        '<button class="btn btn-danger" onclick="singleClick(this,function(){ _saveEditedFinding(\'' + escAttr(gKey) + '\',' + nomor + ',' + ciNo + ') })">' +
+        '<button class="btn btn-danger" onclick="singleClick(this,function(){ _saveEditedFinding(\'' + escAttr(gKey) + '\',\'' + escAttr(resultId) + '\') })">' +
           '<i data-lucide="save" style="width:13px;height:13px"></i> Simpan Temuan' +
         '</button>',
     });
@@ -1569,35 +1569,35 @@ function _buildSavedFotosHtml(prefix, fotoUrlsStr, gKey, resultId, agendaId, per
     '</div></div>';
 }
 
-async function _switchToComply(itemId, gKey, nomor, ciNo, agendaId, periodId) {
+async function _switchToComply(resultId, gKey, agendaId, periodId) {
   closeModal('edit-finding-modal');
-  var _scGrp = window._auditRenderCtx && window._auditRenderCtx.groups.find(function(g){ return _groupKey(g) === gKey; });
-  var _scItem = _scGrp && _scGrp.items.find(function(i){
-    return Number(i.nomor) === Number(nomor) && Number(i.check_item_no) === Number(ciNo);
-  });
-  var _scRid = (_scItem && _scItem.result_id) || '';
-  var dKey = _draftItemKey(gKey, _scRid);
+  var _scGrp  = window._auditRenderCtx && window._auditRenderCtx.groups.find(function(g){ return _groupKey(g) === gKey; });
+  var _scItem = _scGrp && _scGrp.items.find(function(i){ return i.result_id === resultId; });
+  var dKey    = _draftItemKey(gKey, resultId);
   if (window._auditPendingFiles && window._auditPendingFiles[dKey]) delete window._auditPendingFiles[dKey];
-  var resolvedItemId = ((_scItem && _scItem.item_id) || itemId) || '';
-  _draftSetItem(gKey, _scRid, { item_id: resolvedItemId, result_id: _scRid, nomor_persyaratan: Number(nomor), check_item_no: Number(ciNo), status: 'COMPLY', deskripsi_temuan: '' });
-  _repaintCheckItemRow(gKey, _scRid, 'COMPLY', true);
+  _draftSetItem(gKey, resultId, {
+    item_id:           (_scItem && _scItem.item_id) || '',
+    result_id:         resultId,
+    nomor_persyaratan: _scItem ? Number(_scItem.nomor) : 0,
+    check_item_no:     _scItem ? Number(_scItem.check_item_no) : 0,
+    status:            'COMPLY',
+    deskripsi_temuan:  ''
+  });
+  _repaintCheckItemRow(gKey, resultId, 'COMPLY', true);
   _renderFloatingSaveBar(agendaId, periodId);
 }
 
-async function _saveEditedFinding(gKey, nomor, ciNo) {
+async function _saveEditedFinding(gKey, resultId) {
   var deskripsi = (document.getElementById('ef-deskripsi') || {}).value?.trim();
   if (!deskripsi) return toast('Deskripsi temuan wajib diisi.', 'error');
 
-  // Resolve resultId dari renderCtx — single source of truth
-  var ctx = window._auditRenderCtx;
-  var _seGrp2 = ctx && ctx.groups.find(function(g){ return _groupKey(g) === gKey; });
-  var _seItm2 = _seGrp2 && _seGrp2.items.find(function(i){
-    return Number(i.nomor) === Number(nomor) && Number(i.check_item_no) === Number(ciNo);
-  });
-  var resolvedResultId = (_seItm2 && _seItm2.result_id) || '';
-  var resolvedItemId   = (_seItm2 && _seItm2.item_id)   || '';
+  var ctx    = window._auditRenderCtx;
+  var _seGrp = ctx && ctx.groups.find(function(g){ return _groupKey(g) === gKey; });
+  var _seItm = _seGrp && _seGrp.items.find(function(i){ return i.result_id === resultId; });
+  var nomor          = _seItm ? Number(_seItm.nomor)        : 0;
+  var ciNo           = _seItm ? Number(_seItm.check_item_no): 0;
+  var resolvedItemId = _seItm ? _seItm.item_id              : '';
 
-  // Acquire lock sekarang (saat user benar-benar menyimpan, bukan saat pencil diklik)
   var agendaId = ctx && ctx.agenda && ctx.agenda.agenda_id;
   var periodId = ctx && ctx.periodId;
   if (agendaId && periodId) {
@@ -1610,40 +1610,28 @@ async function _saveEditedFinding(gKey, nomor, ciNo) {
   var savedCount = (window._efExistingSavedUrls || []).length;
 
   if (!window._auditPendingFiles) window._auditPendingFiles = {};
-  var dKey = _draftItemKey(gKey, resolvedResultId);
-
-  // Hitung pending lama yang sudah ada sebelum modal ini dibuka
+  var dKey = _draftItemKey(gKey, resultId);
   var alreadyPendingEf = (window._auditPendingFiles[dKey] || []).length;
 
-  // Validasi: minimal 1 foto dari salah satu sumber
   if (newFiles.length + savedCount + alreadyPendingEf < 1) {
     return toast('Upload minimal 1 foto bukti temuan.', 'error');
   }
+  if (newFiles.length) window._auditPendingFiles[dKey] = newFiles;
 
-  // Kalau ada file baru, replace pending lama. Kalau tidak ada, pertahankan lama.
-  if (newFiles.length) {
-    window._auditPendingFiles[dKey] = newFiles;
-  }
-
-  if (!resolvedResultId) {
-    console.error('[saveEditedFinding] result_id tidak ditemukan untuk nomor=' + nomor + ' ciNo=' + ciNo);
-  }
-
-  _draftSetItem(gKey, resolvedResultId, {
+  _draftSetItem(gKey, resultId, {
     item_id:           resolvedItemId,
-    result_id:         resolvedResultId,
-    nomor_persyaratan: Number(nomor),
-    check_item_no:     Number(ciNo),
+    result_id:         resultId,
+    nomor_persyaratan: nomor,
+    check_item_no:     ciNo,
     status:            'NON_COMPLY',
     deskripsi_temuan:  deskripsi,
   });
-
   _draftSetActiveGroup(gKey);
 
   toast('Temuan diperbarui dalam draf.', 'success');
   closeModal('edit-finding-modal');
   window._efExistingSavedUrls = null;
-  _repaintCheckItemRow(gKey, resolvedResultId, 'NON_COMPLY', true);
+  _repaintCheckItemRow(gKey, resultId, 'NON_COMPLY', true);
   _renderFloatingSaveBar(agendaId, periodId);
 }
 
