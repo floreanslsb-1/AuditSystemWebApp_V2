@@ -1158,7 +1158,7 @@ function verifyFindings(spreadsheetId, agendaId, updates, verifiedBy) {
       _updateCell(sheet, result._rowIndex, C.SAVED_AT         + 1, now());
       _updateCell(sheet, result._rowIndex, C.FINDING_STATUS   + 1, '');
       _updateCell(sheet, result._rowIndex, C.TARGET_DATE      + 1, '');
-      _updateCell(sheet, result._rowIndex, C.TPP_STATUS       + 1, '');
+      _updateCell(sheet, result._rowIndex, C.IS_OVERDUE + 1, '');
       _updateCell(sheet, result._rowIndex, C.CLOSED_AT        + 1, '');
     } else {
       // Non Comply / OFI tetap → set OPEN
@@ -1170,14 +1170,14 @@ function verifyFindings(spreadsheetId, agendaId, updates, verifiedBy) {
     }
   });
   // Kirim notifikasi ke auditee untuk mengisi TPP
-  try {
-    const openFindings = getAuditResultsByAgenda(spreadsheetId, agendaId)
-      .filter(function(r) { return r.finding_status === CONFIG.FINDING_STATUS.OPEN; });
-    if (openFindings.length > 0) {
-      const ag = getAgendaById(agendaId);
-      if (ag) notifyFindingsVerified(ag, openFindings);
-    }
-  } catch(e) { console.warn('Notif requestCA gagal:', e.message); }
+    try {
+      const openFindings = getAuditResultsByAgenda(spreadsheetId, agendaId)
+        .filter(function(r) { return r.finding_status === CONFIG.FINDING_STATUS.OPEN; });
+      if (openFindings.length > 0) {
+        const ag = getAgendaById(agendaId);
+        if (ag) notifyRequestTPP(ag, openFindings);
+      }
+    } catch(e) { console.warn('Notif requestTPP gagal:', e.message); }
 
   return { success: true, verified: updates.length };
 }
