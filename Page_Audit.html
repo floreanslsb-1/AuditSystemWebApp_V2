@@ -434,13 +434,26 @@ function _skeletonChecklist() {
 }
 
 function _backToAuditAreas() {
+  // Cek active draft — harus disimpan/dibuang dulu
+  var _draft = window._auditDraft;
+  if (_draft && _draft.activeGroupKey !== null) {
+    toast('Simpan atau buang draf aktif sebelum kembali ke Daftar Area.', 'warning');
+    return;
+  }
+
   _stopLockPolling();
   _detachAuditUnloadGuard();
 
-  // BUG 5 FIX: Bersihkan lock state saat keluar dari area
-  window._auditLockState = {};
-  // Reset renderCtx agar _groupKey tidak menggunakan session lama
-  window._auditRenderCtx = null;
+  // Bersihkan floating elements dari DOM
+  ['audit-save-bar', 'audit-sticky-footer'].forEach(function(id) {
+    var el = document.getElementById(id); if (el) el.remove();
+  });
+
+  // Reset semua state audit
+  window._auditLockState   = {};
+  window._auditRenderCtx   = null;
+  window._auditDraft       = { activeGroupKey: null, items: {} };
+  window._auditPendingFiles = {};
 
   var grid = document.getElementById('audit-card-grid');
   if (grid) grid.style.display = 'grid';
@@ -564,7 +577,7 @@ async function renderAuditChecklist(panel, agenda, areaId, periodId) {
             ';border-radius:3px;transition:width .4s ease"></div></div>' +
       '</div>' +
     '</div></div>' +
-    '<div id="checklist-groups" style="display:flex;flex-direction:column;gap:10px;padding-bottom:80px">' + groupsHtml + '</div>' +
+    '<div id="checklist-groups" style="display:flex;flex-direction:column;gap:10px;padding-bottom:140px">' + groupsHtml + '</div>' +
     stickyFooter;
 
   _renderFloatingSaveBar(agenda.agenda_id, periodId);
@@ -833,6 +846,9 @@ function _renderCheckItem(gKey, item, ciNo, agenda, periodId, resultMap, finding
             return '<div style="position:relative;width:56px;height:56px;border-radius:6px;' +
               'overflow:hidden;border:1px solid var(--border);cursor:pointer;background:var(--bg)" ' +
               'onclick="_openFotoLightbox(\'' + escAttr(url) + '\')" title="Klik untuk perbesar">' +
+              '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">' +
+                '<i data-lucide="image" style="width:20px;height:20px;opacity:.2"></i>' +
+              '</div>' +
               _renderDriveImg(url) +
               '<div style="display:none;width:100%;height:100%;align-items:center;' +
                 'justify-content:center">' +
@@ -901,12 +917,10 @@ function _buildFotoGrid(prefix, fotoUrlsStr, gKey, resultId, agendaId, periodId)
         return '<div style="position:relative;width:80px;height:80px;border-radius:8px;overflow:hidden;' +
           'border:1px solid var(--border);background:var(--bg);cursor:pointer" ' +
           'onclick="_openFotoLightbox(\'' + escAttr(url) + '\')">' +
-          '<img src="' + escAttr(url) + '" ' +
-            'style="width:100%;height:100%;object-fit:cover" ' +
-            'onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">' +
-          '<div style="display:none;width:100%;height:100%;align-items:center;justify-content:center;' +
-            'font-size:10px;color:var(--text-muted);text-align:center;padding:4px">' +
-            '<i data-lucide="file" style="width:20px;height:20px;opacity:.4"></i></div>' +
+          '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">' +
+            '<i data-lucide="image" style="width:24px;height:24px;opacity:.2"></i>' +
+          '</div>' +
+          _renderDriveImg(url) +
           // Tombol buka tab baru
           '<a href="' + escAttr(url) + '" target="_blank" ' +
             'onclick="event.stopPropagation()" ' +
@@ -1091,6 +1105,9 @@ function _repaintCheckItemRow(gKey, resultId, status, fromDraft) {
                 return '<div style="position:relative;width:56px;height:56px;border-radius:6px;' +
                   'overflow:hidden;border:1px solid var(--border);cursor:pointer;background:var(--bg)" ' +
                   'onclick="_openFotoLightbox(\'' + escAttr(url) + '\')">' +
+                  '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">' +
+                    '<i data-lucide="image" style="width:20px;height:20px;opacity:.2"></i>' +
+                  '</div>' +
                   _renderDriveImg(url) +
                   '<a href="' + escAttr(url) + '" target="_blank" onclick="event.stopPropagation()" ' +
                     'style="position:absolute;bottom:1px;right:1px;background:rgba(0,0,0,.5);' +
@@ -1861,7 +1878,54 @@ async function _confirmDiscardDraft(agendaId, periodId) {
 //  Finish audit + agreement modal
 // ============================================================
 
-function finishAudit(agendaId, periodId) { _openAgreementModal(agendaId, periodId); }
+function finishAudit(agendaId, periodId) {
+  // 1. Blok jika ada draft aktif
+  var _draftFa = window._auditDraft;
+  if (_draftFa && _draftFa.activeGroupKey !== null) {
+    toast('Simpan atau buang draf aktif sebelum menyelesaikan audit.', 'warning');
+    return;
+  }
+
+  // 2. Validasi semua check item terisi
+  var ctx = window._auditRenderCtx;
+  if (ctx) {
+    var unfilledItems = 0;
+    var firstUnfilledGroup = null;
+    ctx.groups.forEach(function(g) {
+      var gKey = _groupKey(g);
+      g.items.forEach(function(item, idx) {
+        var m = _mergedStatus(gKey, item.nomor, idx + 1, ctx.resultMap, item.result_id);
+        if (!m.status) {
+          unfilledItems++;
+          if (!firstUnfilledGroup) firstUnfilledGroup = g;
+        }
+      });
+    });
+
+    if (unfilledItems > 0) {
+      toast(unfilledItems + ' check item belum diisi. Lengkapi semua item sebelum menyelesaikan audit.', 'error');
+
+      // Scroll ke group pertama yang belum lengkap dan buka accordion-nya
+      if (firstUnfilledGroup) {
+        var safeId = 'rg-' + (firstUnfilledGroup.items[0] ? Number(firstUnfilledGroup.items[0].nomor) : 0) +
+          '-' + firstUnfilledGroup.items.length;
+        var groupEl = document.getElementById(safeId);
+        if (groupEl) {
+          groupEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          var details = groupEl.querySelector('details');
+          if (details) details.open = true;
+          // Highlight group sebentar
+          groupEl.style.boxShadow = '0 0 0 2px var(--rose,#f43f5e)';
+          setTimeout(function() { groupEl.style.boxShadow = ''; }, 2000);
+        }
+      }
+      return;
+    }
+  }
+
+  // 3. Semua OK — buka agreement modal
+  _openAgreementModal(agendaId, periodId);
+}
 
 function _openAgreementModal(agendaId, periodId) {
   createModal({
@@ -2005,10 +2069,22 @@ async function _submitAgreementAndFinish(agendaId, periodId) {
     await api('SUBMIT_AGREEMENT', { period_id: periodId, agenda_id: agendaId, file_base64: fileUp.base64, file_name: fileUp.name, mime_type: fileUp.mime_type, auditee_hadir_names: auditeeNames });
     clearCache('GET_FINDINGS_BY_AGENDA'); clearCache('GET_ALL_FINDINGS_BY_PERIOD'); clearCache('GET_AGENDAS_BY_PERIOD'); clearCache('GET_DASHBOARD');
     _stopLockPolling();
+    _detachAuditUnloadGuard();
+
+    // Bersihkan semua state dan DOM audit
+    ['audit-save-bar', 'audit-sticky-footer'].forEach(function(id) {
+      var el = document.getElementById(id); if (el) el.remove();
+    });
+    window._auditLockState    = {};
+    window._auditRenderCtx    = null;
+    window._auditDraft        = { activeGroupKey: null, items: {} };
+    window._auditPendingFiles = {};
+
     toast('Audit selesai. Agreement berhasil disubmit.', 'success');
     closeModal('agreement-modal');
-    if (window._auditActiveAreaId) selectAuditArea(window._auditActiveAreaId, periodId);
-    else _backToAuditAreas();
+
+    // Re-render halaman Form Audit dari awal — cache sudah cleared, badge akan tampil "Done"
+    navigateTo(App.currentPage, App.currentParams);
   } catch(err) { toast(err.message, 'error'); restore(); }
 }
 
