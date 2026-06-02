@@ -171,7 +171,10 @@ function sendEmail(to, subject, htmlBody) {
   }
   try {
     const recipients = Array.isArray(to) ? to.join(',') : to;
-    GmailApp.sendEmail(recipients, subject, '', { htmlBody });
+    GmailApp.sendEmail(recipients, subject, '', {
+      htmlBody,
+      name: 'Audit System - Integrated Management System',
+    });
   } catch (e) {
     console.error('sendEmail error:', e.message);
   }
@@ -194,8 +197,9 @@ function emailTemplate(title, body, ctaLabel = '', ctaUrl = '') {
     : '';
   return `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#333;">
-      <div style="background:#1F3864;padding:20px 24px;">
-        <h2 style="color:#fff;margin:0;font-size:16px;">🔍 Audit System</h2>
+      <div style="background:#1F3864;padding:18px 24px;">
+        <div style="color:rgba(255,255,255,.7);font-size:12px;margin-bottom:4px;">Audit System</div>
+        <div style="color:#fff;font-size:16px;font-weight:bold;">Integrated Management System</div>
       </div>
       <div style="padding:24px;border:1px solid #e0e0e0;border-top:none;">
         <h3 style="color:#1F3864;margin-top:0;">${title}</h3>
@@ -203,7 +207,7 @@ function emailTemplate(title, body, ctaLabel = '', ctaUrl = '') {
         ${cta}
         <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
         <p style="font-size:11px;color:#999;">
-          Email ini dikirim otomatis oleh Audit System. Jangan reply email ini.
+          Email ini dikirim otomatis oleh sistem. Jangan balas email ini.
         </p>
       </div>
     </div>`;
