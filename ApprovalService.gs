@@ -1,58 +1,62 @@
 // ============================================================
-//  ApprovalService.gs — v2 (refactored)
-//  Perubahan dari v1:
-//  - submitAgreement() dipindah ke SheetService (update AUDIT_AGENDA langsung)
-//  - processApproval(): finding_id → result_id, session_id → agenda_id
-//  - massApprove(): findingIds → resultIds, sessionIds → agendaIds
-//  - _handleApprove(): updateFindingField → updateResultField, pakai AUDIT_RESULTS cols
-//  - _handleReject(): sama
-//  - _handleSkip(): sama
-//  - _checkAgendaAllClosed(): menggantikan _checkSessionAllClosed()
-//    cek semua Non Comply/OFI finding_status CLOSED/OVERDUE di agenda
-//  - _validateApprover(): session → agenda, dept_head_email & auditor_emails dari agenda
-//  - Semua fungsi lain (APPROVAL_CHAIN, _nextLevel, dll) tidak berubah
+//  ApprovalService.gs — v3
+//  Perubahan dari v2:
+//  - finding_status sebagai single source of truth untuk stage & level
+//  - processApproval: hapus stage, level, skipLevel, skipReason dari signature
+//  - Stage & level di-derive dari finding_status via STATUS_FLOW map
+//  - Hapus _handleSkip (fitur skip Koordinator dihapus)
+//  - Hapus _nextLevel (tidak relevan — status sudah embed next step)
+//  - Hapus APPROVAL_CHAIN constant
+//  - _validateApprover: validasi berdasarkan finding_status vs profile
+//    + lock check untuk Auditor (pakai resultId bukan agendaId)
+//  - _handleReject: rollback status dari flow.reject, bukan hardcode
+//  - _handleApprove: notif sudah pakai nama fungsi TPP yang benar
+//  - massApprove: hapus stage & level dari signature
 // ============================================================
 
-const APPROVAL_CHAIN = ['DeptHead', 'Auditor', 'Koordinator'];
+const FS = CONFIG.FINDING_STATUS;
+
+// Map finding_status → { stage, level, next, reject }
+const STATUS_FLOW = {
+  [FS.TPP_OR_DEPT_HEAD]:   { stage: 'TPP',  level: 'DeptHead',    next: FS.TPP_OR_AUDITOR,     reject: FS.OPEN      },
+  [FS.TPP_OR_AUDITOR]:     { stage: 'TPP',  level: 'Auditor',     next: FS.TPP_OR_KOORDINATOR, reject: FS.OPEN      },
+  [FS.TPP_OR_KOORDINATOR]: { stage: 'TPP',  level: 'Koordinator', next: FS.OPEN_IMPL,           reject: FS.OPEN      },
+  [FS.APP_DEPT_HEAD]:      { stage: 'IMPL', level: 'DeptHead',    next: FS.APP_AUDITOR,         reject: FS.OPEN_IMPL },
+  [FS.APP_AUDITOR]:        { stage: 'IMPL', level: 'Auditor',     next: FS.APP_KOORDINATOR,     reject: FS.OPEN_IMPL },
+  [FS.APP_KOORDINATOR]:    { stage: 'IMPL', level: 'Koordinator', next: FS.CLOSED,              reject: FS.OPEN_IMPL },
+};
 
 /**
- * Proses approval (approve/reject) untuk satu result (finding).
- * Koordinator bisa skip level tertentu dengan menyertakan skip_reason.
+ * Proses approval (approve/reject) untuk satu result.
+ * Stage & level di-derive dari finding_status — tidak perlu dari frontend.
  */
-function processApproval({
-  spreadsheetId, resultId, agendaId,
-  stage, level, action, byEmail,
-  komentar = '', skipLevel = null, skipReason = '',
-}) {
-  // Cari result di AUDIT_RESULTS — filter per agenda untuk efisiensi
+function processApproval({ spreadsheetId, resultId, agendaId, action, byEmail, komentar }) {
+  komentar = komentar || '';
+
   const result = getAuditResultsByAgenda(spreadsheetId, agendaId)
     .find(r => r.result_id === resultId);
   if (!result) throw new Error('Result ' + resultId + ' tidak ditemukan.');
 
-  // Cari agenda untuk validasi approver
+  const flow = STATUS_FLOW[result.finding_status];
+  if (!flow) throw new Error('Status temuan tidak valid untuk approval: ' + result.finding_status);
+
   const agenda = getAgendaById(agendaId);
   if (!agenda) throw new Error('Agenda ' + agendaId + ' tidak ditemukan.');
 
-  // Koordinator bisa skip level lain
-  if (skipLevel && skipLevel !== level) {
-    return _handleSkip({
-      spreadsheetId, result, agenda,
-      stage, skipLevel, byEmail, skipReason,
-    });
-  }
-
-  _validateApprover(agenda, level, byEmail);
+  _validateApprover(agenda, flow.level, byEmail, result.finding_status, spreadsheetId, result.result_id);
 
   if (action === CONFIG.APPROVAL_STATUS.REJECTED) {
-    return _handleReject({ spreadsheetId, result, agenda, stage, level, byEmail, komentar });
+    return _handleReject({ spreadsheetId, result, agenda, flow, byEmail, komentar });
   }
-  return _handleApprove({ spreadsheetId, result, agenda, stage, level, byEmail, komentar });
+  return _handleApprove({ spreadsheetId, result, agenda, flow, byEmail, komentar });
 }
 
 /**
- * Mass approve — koordinator approve banyak result sekaligus.
+ * Mass approve — Koordinator approve banyak result sekaligus.
+ * Stage & level di-derive dari finding_status masing-masing result.
  */
-function massApprove({ spreadsheetId, resultIds, agendaIds, stage, level, byEmail, komentar = '' }) {
+function massApprove({ spreadsheetId, resultIds, agendaIds, byEmail, komentar }) {
+  komentar = komentar || '';
   const results = [];
   resultIds.forEach(function(resultId, i) {
     try {
@@ -60,9 +64,7 @@ function massApprove({ spreadsheetId, resultIds, agendaIds, stage, level, byEmai
         spreadsheetId,
         resultId,
         agendaId: agendaIds[i] || agendaIds[0],
-        stage,
-        level,
-        action: CONFIG.APPROVAL_STATUS.APPROVED,
+        action:   CONFIG.APPROVAL_STATUS.APPROVED,
         byEmail,
         komentar,
       });
@@ -75,123 +77,108 @@ function massApprove({ spreadsheetId, resultIds, agendaIds, stage, level, byEmai
 }
 
 
-// ── Handlers ──────────────────────────────────────────────────────
+// ── Handlers ─────────────────────────────────────────────────────
 
-function _handleApprove({ spreadsheetId, result, agenda, stage, level, byEmail, komentar }) {
-  const isTPP = stage === 'TPP';
-  const C     = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
+function _handleApprove({ spreadsheetId, result, agenda, flow, byEmail, komentar }) {
+  const C = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
 
   appendApprovalLog(spreadsheetId, {
-    result_id: result.result_id, agenda_id: agenda.agenda_id,
-    stage, level, action: 'APPROVED', by_email: byEmail, komentar,
-    skipped: false, skip_reason: '',
+    result_id:   result.result_id,
+    agenda_id:   agenda.agenda_id,
+    stage:       flow.stage,
+    level:       flow.level,
+    action:      'APPROVED',
+    by_email:    byEmail,
+    komentar,
+    skipped:     false,
+    skip_reason: '',
   });
 
-  const nextLevel = _nextLevel(level);
-
-  if (nextLevel) {
-    // Update finding_status ke status "menunggu level berikutnya"
-    const nextStatus = isTPP
-      ? (nextLevel === 'Auditor'     ? CONFIG.FINDING_STATUS.TPP_OR_AUDITOR
-       : nextLevel === 'Koordinator' ? CONFIG.FINDING_STATUS.TPP_OR_KOORDINATOR
-       : result.finding_status)
-      : (nextLevel === 'Auditor'     ? CONFIG.FINDING_STATUS.APP_AUDITOR
-       : nextLevel === 'Koordinator' ? CONFIG.FINDING_STATUS.APP_KOORDINATOR
-       : result.finding_status);
-
-    updateResultField(spreadsheetId, result.result_id, C.FINDING_STATUS, nextStatus);
-
-    try {
-      if (isTPP) {
-        if (nextLevel === 'Auditor')     notifyCAToAuditors(agenda, result);
-        if (nextLevel === 'Koordinator') notifyCAApprovedByAuditor(agenda, result, byEmail);
-      } else {
-        if (nextLevel === 'Auditor')     notifyImplToAuditors(agenda, result);
-        if (nextLevel === 'Koordinator') notifyImplApprovedByAuditor(agenda, result, byEmail);
-      }
-    } catch(e) { console.warn('Notif approval gagal:', e.message); }
-
-    return { success: true, nextLevel };
-  }
-
-  // Level terakhir (Koordinator) approved
-  if (isTPP) {
-    // TPP fully approved → OPEN_IMPL
-    updateResultField(spreadsheetId, result.result_id,
-      C.FINDING_STATUS, CONFIG.FINDING_STATUS.OPEN_IMPL);
-    try { notifyCAFullyApproved(agenda, result); } catch(e) {}
-  } else {
-    // IMPL fully approved → CLOSED
-    updateResultField(spreadsheetId, result.result_id,
-      C.FINDING_STATUS, CONFIG.FINDING_STATUS.CLOSED);
-    updateResultField(spreadsheetId, result.result_id,
-      C.CLOSED_AT, now());
+  if (flow.next === FS.CLOSED) {
+    // APP_KOORDINATOR approve → CLOSED
+    updateResultField(spreadsheetId, result.result_id, C.FINDING_STATUS, FS.CLOSED);
+    updateResultField(spreadsheetId, result.result_id, C.CLOSED_AT, now());
     try { notifyFindingClosed(agenda, result); } catch(e) {}
     _checkAgendaAllClosed(spreadsheetId, agenda.agenda_id);
+
+  } else if (flow.next === FS.OPEN_IMPL) {
+    // TPP_OR_KOORDINATOR approve → OPEN_IMPL
+    updateResultField(spreadsheetId, result.result_id, C.FINDING_STATUS, FS.OPEN_IMPL);
+    try { notifyTPPFullyApproved(agenda, result); } catch(e) {}
+
+  } else {
+    // Maju ke level berikutnya
+    updateResultField(spreadsheetId, result.result_id, C.FINDING_STATUS, flow.next);
+    try {
+      if (flow.next === FS.TPP_OR_AUDITOR)     notifyTPPToAuditors(agenda, result);
+      if (flow.next === FS.TPP_OR_KOORDINATOR) notifyTPPApprovedByAuditor(agenda, result, byEmail);
+      if (flow.next === FS.APP_AUDITOR)        notifyImplToAuditors(agenda, result);
+      if (flow.next === FS.APP_KOORDINATOR)    notifyImplApprovedByAuditor(agenda, result, byEmail);
+    } catch(e) { console.warn('Notif approval gagal:', e.message); }
   }
 
-  return { success: true, nextLevel: null };
+  return { success: true, nextStatus: flow.next };
 }
 
-function _handleReject({ spreadsheetId, result, agenda, stage, level, byEmail, komentar }) {
-  const isTPP = stage === 'TPP';
-  const C     = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
+function _handleReject({ spreadsheetId, result, agenda, flow, byEmail, komentar }) {
+  const C = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
 
   appendApprovalLog(spreadsheetId, {
-    result_id: result.result_id, agenda_id: agenda.agenda_id,
-    stage, level, action: 'REJECTED', by_email: byEmail, komentar,
-    skipped: false, skip_reason: '',
+    result_id:   result.result_id,
+    agenda_id:   agenda.agenda_id,
+    stage:       flow.stage,
+    level:       flow.level,
+    action:      'REJECTED',
+    by_email:    byEmail,
+    komentar,
+    skipped:     false,
+    skip_reason: '',
   });
 
-  // Balik ke status sebelumnya
-  updateResultField(spreadsheetId, result.result_id,
-    C.FINDING_STATUS,
-    isTPP ? CONFIG.FINDING_STATUS.OPEN : CONFIG.FINDING_STATUS.OPEN_IMPL
-  );
-  // is_overdue tidak diubah saat reject — disabled untuk sekarang
+  // Rollback ke status awal berdasarkan flow.reject
+  // TPP apapun levelnya → OPEN, IMPL apapun levelnya → OPEN_IMPL
+  updateResultField(spreadsheetId, result.result_id, C.FINDING_STATUS, flow.reject);
 
-  try { notifyRejected(agenda, result, stage, byEmail, komentar); } catch(e) {}
+  try { notifyRejected(agenda, result, flow.stage, byEmail, komentar); } catch(e) {}
 
-  return { success: true, rejected: true };
-}
-
-function _handleSkip({ spreadsheetId, result, agenda, stage, skipLevel, byEmail, skipReason }) {
-  appendApprovalLog(spreadsheetId, {
-    result_id: result.result_id, agenda_id: agenda.agenda_id,
-    stage, level: skipLevel, action: 'APPROVED',
-    by_email: byEmail, komentar: '',
-    skipped: true, skip_reason: skipReason,
-  });
-
-  // Lanjut proses approval untuk level skipLevel seolah approve
-  return _handleApprove({
-    spreadsheetId, result, agenda,
-    stage, level: skipLevel,
-    byEmail, komentar: '[SKIP] ' + skipReason,
-  });
+  return { success: true, rejected: true, rollbackStatus: flow.reject };
 }
 
 
-// ── Helpers ──────────────────────────────────────────────────────
+// ── Validators ───────────────────────────────────────────────────
 
-function _nextLevel(level) {
-  const idx = APPROVAL_CHAIN.indexOf(level);
-  return idx < APPROVAL_CHAIN.length - 1 ? APPROVAL_CHAIN[idx + 1] : null;
-}
-
-/**
- * Validasi bahwa byEmail berhak approve di level ini untuk agenda ini.
- * Menggantikan _validateApprover() lama yang pakai session.
- */
-function _validateApprover(agenda, level, email) {
+function _validateApprover(agenda, level, email, findingStatus, spreadsheetId, resultId) {
   if (level === 'DeptHead') {
     if (normalizeEmail(agenda.dept_head_email) !== normalizeEmail(email)) {
       throw new Error('Anda bukan Dept Head untuk area ini.');
     }
+
   } else if (level === 'Auditor') {
     if (!emailInCSV(agenda.auditor_emails, email)) {
       throw new Error('Anda bukan Auditor untuk agenda ini.');
     }
+    // Lock check: apakah auditor lain sudah approve di stage & result ini
+    const stage = findingStatus.startsWith('TPP_') ? 'TPP' : 'IMPL';
+    try {
+      const logs = getApprovalLogByResult(spreadsheetId, resultId);
+      const alreadyApproved = logs.find(function(l) {
+        return l.stage  === stage       &&
+               l.level  === 'Auditor'  &&
+               l.action === 'APPROVED' &&
+               normalizeEmail(l.by_email) !== normalizeEmail(email);
+      });
+      if (alreadyApproved) {
+        throw new Error(
+          'Approval sudah diambil oleh ' +
+          alreadyApproved.by_email.split('@')[0] +
+          '. Tidak perlu tindakan dari Anda.'
+        );
+      }
+    } catch(e) {
+      if (e.message.includes('Approval sudah diambil')) throw e;
+      console.warn('Lock check gagal (non-fatal):', e.message);
+    }
+
   } else if (level === 'Koordinator') {
     const user = getUserByEmail(email);
     if (!user || !parseRoles(user.roles).includes(CONFIG.ROLES.KOORDINATOR)) {
@@ -200,18 +187,21 @@ function _validateApprover(agenda, level, email) {
   }
 }
 
+
+// ── Utilities ────────────────────────────────────────────────────
+
 /**
- * Cek apakah semua Non Comply/OFI di agenda ini sudah CLOSED atau OVERDUE.
- * Menggantikan _checkSessionAllClosed() — tidak ada lagi session status.
- * Saat ini tidak ada aksi otomatis saat semua closed (agenda tetap DONE),
- * tapi fungsi ini tetap ada untuk logging / future use.
+ * Cek apakah semua finding di agenda ini sudah CLOSED.
+ * Dipanggil setelah setiap APP_KOORDINATOR approve.
  */
 function _checkAgendaAllClosed(spreadsheetId, agendaId) {
   const findings = getFindingsByAgenda(spreadsheetId, agendaId);
   if (!findings.length) return false;
+
   const allClosed = findings.every(function(f) {
-    return f.finding_status === CONFIG.FINDING_STATUS.CLOSED;
+    return f.finding_status === FS.CLOSED;
   });
+
   if (allClosed) {
     console.log('[ApprovalService] Semua finding agenda ' + agendaId + ' sudah CLOSED.');
     try {
@@ -219,10 +209,16 @@ function _checkAgendaAllClosed(spreadsheetId, agendaId) {
       const koordinators = getAllKoordinators();
       if (ag && koordinators.length) {
         const subject = '[Audit System] Semua Temuan Closed — ' + ag.dept;
-        const body = 'Semua temuan untuk area ' + ag.dept + ' sudah ditutup (CLOSED).\n\nSalam,\nSistem Audit Internal';
-        sendEmail(koordinators.map(u => u.email), subject, emailTemplate('Semua Temuan Closed', `<p>${body}</p>`));
+        const body    = 'Semua temuan untuk area ' + ag.dept +
+                        ' sudah ditutup (CLOSED).\n\nSalam,\nSistem Audit Internal';
+        sendEmail(
+          koordinators.map(function(u) { return u.email; }),
+          subject,
+          emailTemplate('Semua Temuan Closed', '<p>' + body + '</p>')
+        );
       }
     } catch(e) { console.warn('Notif all closed gagal:', e.message); }
   }
+
   return allClosed;
 }
