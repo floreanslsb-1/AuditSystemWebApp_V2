@@ -395,30 +395,6 @@ function statusBadge(status) {
   return '<span class="badge ' + pair[0] + '">' + pair[1] + '</span>';
 }
 
-function approvalChainHtml(finding, stage) {
-  var prefix = stage === 'CA' ? 'ca' : 'impl';
-  var levels = [
-    { key: 'depthead', label: 'Dept Head',   icon: 'user' },
-    { key: 'auditor',  label: 'Auditor',     icon: 'search' },
-    { key: 'ims',      label: 'Koordinator', icon: 'shield-check' },
-  ];
-  return '<div class="approval-chain">' + levels.map(function(l, i) {
-    var status = finding[prefix + '_' + l.key + '_status'] || 'PENDING';
-    var by     = finding[prefix + '_' + l.key + '_by']     || '';
-    var cls    = status === 'APPROVED' ? 'done' : status === 'REJECTED' ? 'rejected' : (i === 0 ? 'active' : '');
-    var dot    = status === 'APPROVED'
-      ? '<i data-lucide="check-circle" style="width:14px;height:14px"></i>'
-      : status === 'REJECTED'
-      ? '<i data-lucide="x" style="width:14px;height:14px"></i>'
-      : '<i data-lucide="' + l.icon + '" style="width:14px;height:14px"></i>';
-    return '<div class="chain-step ' + cls + '">' +
-      '<div class="chain-dot">' + dot + '</div>' +
-      '<div class="chain-label">' + l.label + '</div>' +
-      (by ? '<div class="text-xs text-muted" style="text-align:center;max-width:80px;overflow:hidden;text-overflow:ellipsis">' + by.split('@')[0] + '</div>' : '') +
-    '</div>';
-  }).join('') + '</div>';
-}
-
 // ── Utilities ─────────────────────────────────────────────────
 function escHtml(str) {
   if (!str) return '';
