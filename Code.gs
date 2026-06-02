@@ -607,7 +607,7 @@ function _routeAction(action, payload, profile) {
           period_si.spreadsheet_id,
           payload.result_id,
           CONFIG.AUDIT_COLS.AUDIT_RESULTS.FINDING_STATUS,
-          CONFIG.FINDING_STATUS.PENDING_IMPL
+          CONFIG.FINDING_STATUS.APP_DEPT_HEAD
         );
         appendApprovalLog(period_si.spreadsheet_id, {
           result_id: payload.result_id,
