@@ -677,14 +677,19 @@ function _getDashboardData(profile, periodId) {
       }
     }
 
+    const fs = CONFIG.FINDING_STATUS;
     const summary = {
       total:                findings.length,
-      pending_verification: findings.filter(f => f.finding_status === CONFIG.FINDING_STATUS.PENDING_VERIFICATION).length,
-      open:                 findings.filter(f => f.finding_status === CONFIG.FINDING_STATUS.OPEN).length,
-      pending_tpp:          findings.filter(f => f.finding_status === CONFIG.FINDING_STATUS.PENDING_TPP).length,
-      pending_impl:         findings.filter(f => f.finding_status === CONFIG.FINDING_STATUS.PENDING_IMPL).length,
-      closed:               findings.filter(f => f.finding_status === CONFIG.FINDING_STATUS.CLOSED).length,
-      overdue:              findings.filter(f => f.finding_status === CONFIG.FINDING_STATUS.OVERDUE).length,
+      pending_verification: findings.filter(f => f.finding_status === fs.PENDING_VERIFICATION).length,
+      open:                 findings.filter(f => f.finding_status === fs.OPEN).length,
+      tpp_or_dept_head:     findings.filter(f => f.finding_status === fs.TPP_OR_DEPT_HEAD).length,
+      tpp_or_auditor:       findings.filter(f => f.finding_status === fs.TPP_OR_AUDITOR).length,
+      tpp_or_koordinator:   findings.filter(f => f.finding_status === fs.TPP_OR_KOORDINATOR).length,
+      open_impl:            findings.filter(f => f.finding_status === fs.OPEN_IMPL).length,
+      app_dept_head:        findings.filter(f => f.finding_status === fs.APP_DEPT_HEAD).length,
+      app_auditor:          findings.filter(f => f.finding_status === fs.APP_AUDITOR).length,
+      app_koordinator:      findings.filter(f => f.finding_status === fs.APP_KOORDINATOR).length,
+      closed:               findings.filter(f => f.finding_status === fs.CLOSED).length,
       agenda_planned:       agendas.filter(a => a.status === CONFIG.AGENDA_STATUS.PLANNED).length,
       agenda_started:       agendas.filter(a => a.status === CONFIG.AGENDA_STATUS.STARTED).length,
       agenda_done:          agendas.filter(a => a.status === CONFIG.AGENDA_STATUS.DONE).length,
@@ -704,8 +709,13 @@ function _getDashboardData(profile, periodId) {
 
 function _emptySummary() {
   return {
-    total: 0, pending_verification: 0, open: 0,
-    pending_tpp: 0, pending_impl: 0, closed: 0, overdue: 0,
+    total: 0,
+    pending_verification: 0,
+    open: 0,
+    tpp_or_dept_head: 0, tpp_or_auditor: 0, tpp_or_koordinator: 0,
+    open_impl: 0,
+    app_dept_head: 0, app_auditor: 0, app_koordinator: 0,
+    closed: 0,
     agenda_planned: 0, agenda_started: 0, agenda_done: 0,
   };
 }
