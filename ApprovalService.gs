@@ -210,8 +210,7 @@ function _checkAgendaAllClosed(spreadsheetId, agendaId) {
   const findings = getFindingsByAgenda(spreadsheetId, agendaId);
   if (!findings.length) return false;
   const allClosed = findings.every(function(f) {
-    return f.finding_status === CONFIG.FINDING_STATUS.CLOSED ||
-           f.finding_status === CONFIG.FINDING_STATUS.OVERDUE;
+    return f.finding_status === CONFIG.FINDING_STATUS.CLOSED;
   });
   if (allClosed) {
     console.log('[ApprovalService] Semua finding agenda ' + agendaId + ' sudah CLOSED.');
