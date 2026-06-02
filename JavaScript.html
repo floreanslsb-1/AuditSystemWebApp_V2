@@ -114,7 +114,8 @@ async function loadDriveImage(url, imgEl) {
 // Render img tag dengan data-drive-url; panggil _loadAllDriveImgs() setelah DOM ready
 function _renderDriveImg(url, styleExtra) {
   return '<img data-drive-url="' + escAttr(url) + '" src="" ' +
-    'style="width:100%;height:100%;object-fit:cover;transition:opacity .2s;opacity:.2;' + (styleExtra || '') + '">';
+    'style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;' +
+    'transition:opacity .2s;opacity:0;' + (styleExtra || '') + '">';
 }
 
 // Dipanggil setelah setiap render/repaint untuk trigger lazy load semua gambar di DOM
