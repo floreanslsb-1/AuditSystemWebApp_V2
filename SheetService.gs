@@ -565,7 +565,11 @@ function completePeriod(periodId, completedBy, force) {
   // Hitung temuan yang belum closed (masih dalam alur aktif)
   const FS = CONFIG.FINDING_STATUS;
   const openStatuses = [
-    FS.PENDING_VERIFICATION, FS.OPEN, FS.PENDING_TPP, FS.OPEN_IMPL, FS.PENDING_IMPL,
+    FS.PENDING_VERIFICATION,
+    FS.OPEN,
+    FS.TPP_OR_DEPT_HEAD, FS.TPP_OR_AUDITOR, FS.TPP_OR_KOORDINATOR,
+    FS.OPEN_IMPL,
+    FS.APP_DEPT_HEAD, FS.APP_AUDITOR, FS.APP_KOORDINATOR,
   ];
   const openFindings = getAuditResultsByPeriod(period.spreadsheet_id, periodId)
     .filter(function(r) { return openStatuses.indexOf(r.finding_status) !== -1; });
@@ -575,12 +579,13 @@ function completePeriod(periodId, completedBy, force) {
     return { requireConfirm: true, openCount: openFindings.length };
   }
 
-  // Force: tandai sisa temuan open jadi OVERDUE sebelum tutup
+  // Force: tandai sisa temuan open jadi CLOSED saat periode di-complete
+  // (overdue logic akan diimplementasi terpisah nanti)
   if (openFindings.length) {
     const sheetR = _getAuditSheet(period.spreadsheet_id, CONFIG.AUDIT_SHEETS.AUDIT_RESULTS);
     const C2     = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
     openFindings.forEach(function(r) {
-      _updateCell(sheetR, r._rowIndex, C2.FINDING_STATUS + 1, FS.OVERDUE);
+      _updateCell(sheetR, r._rowIndex, C2.FINDING_STATUS + 1, FS.CLOSED);
     });
   }
 
@@ -893,10 +898,15 @@ function markOverdueFindings(spreadsheetId, periodId) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const overdueStatuses = [
-    CONFIG.FINDING_STATUS.OPEN,
-    CONFIG.FINDING_STATUS.PENDING_TPP,
-    CONFIG.FINDING_STATUS.OPEN_IMPL,
-    CONFIG.FINDING_STATUS.PENDING_IMPL,
+    // Disabled — overdue logic akan diimplementasi nanti
+    // CONFIG.FINDING_STATUS.OPEN,
+    // CONFIG.FINDING_STATUS.TPP_OR_DEPT_HEAD,
+    // CONFIG.FINDING_STATUS.TPP_OR_AUDITOR,
+    // CONFIG.FINDING_STATUS.TPP_OR_KOORDINATOR,
+    // CONFIG.FINDING_STATUS.OPEN_IMPL,
+    // CONFIG.FINDING_STATUS.APP_DEPT_HEAD,
+    // CONFIG.FINDING_STATUS.APP_AUDITOR,
+    // CONFIG.FINDING_STATUS.APP_KOORDINATOR,
   ];
   const sheet   = _getAuditSheet(spreadsheetId, CONFIG.AUDIT_SHEETS.AUDIT_RESULTS);
   const results = getAuditResultsByPeriod(spreadsheetId, periodId);
