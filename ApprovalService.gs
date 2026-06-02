@@ -90,29 +90,38 @@ function _handleApprove({ spreadsheetId, result, agenda, stage, level, byEmail, 
   const nextLevel = _nextLevel(level);
 
   if (nextLevel) {
-    // Masih ada level berikutnya — kirim notif ke level berikutnya
+    // Update finding_status ke status "menunggu level berikutnya"
+    const nextStatus = isTPP
+      ? (nextLevel === 'Auditor'     ? CONFIG.FINDING_STATUS.TPP_OR_AUDITOR
+       : nextLevel === 'Koordinator' ? CONFIG.FINDING_STATUS.TPP_OR_KOORDINATOR
+       : result.finding_status)
+      : (nextLevel === 'Auditor'     ? CONFIG.FINDING_STATUS.APP_AUDITOR
+       : nextLevel === 'Koordinator' ? CONFIG.FINDING_STATUS.APP_KOORDINATOR
+       : result.finding_status);
+
+    updateResultField(spreadsheetId, result.result_id, C.FINDING_STATUS, nextStatus);
+
     try {
       if (isTPP) {
-        if (nextLevel === 'Auditor')     notifyTPPToAuditors(agenda, result);
-        if (nextLevel === 'Koordinator') notifyTPPApprovedByAuditor(agenda, result, byEmail);
+        if (nextLevel === 'Auditor')     notifyCAToAuditors(agenda, result);
+        if (nextLevel === 'Koordinator') notifyCAApprovedByAuditor(agenda, result, byEmail);
       } else {
         if (nextLevel === 'Auditor')     notifyImplToAuditors(agenda, result);
         if (nextLevel === 'Koordinator') notifyImplApprovedByAuditor(agenda, result, byEmail);
       }
     } catch(e) { console.warn('Notif approval gagal:', e.message); }
+
     return { success: true, nextLevel };
   }
 
   // Level terakhir (Koordinator) approved
   if (isTPP) {
-    // TPP approved → OPEN_IMPL (tunggu auditee upload bukti)
+    // TPP fully approved → OPEN_IMPL
     updateResultField(spreadsheetId, result.result_id,
       C.FINDING_STATUS, CONFIG.FINDING_STATUS.OPEN_IMPL);
-    updateResultField(spreadsheetId, result.result_id,
-      C.TPP_STATUS, CONFIG.APPROVAL_STATUS.APPROVED);
     try { notifyCAFullyApproved(agenda, result); } catch(e) {}
   } else {
-    // Stage IMPL approved → CLOSED
+    // IMPL fully approved → CLOSED
     updateResultField(spreadsheetId, result.result_id,
       C.FINDING_STATUS, CONFIG.FINDING_STATUS.CLOSED);
     updateResultField(spreadsheetId, result.result_id,
@@ -139,11 +148,7 @@ function _handleReject({ spreadsheetId, result, agenda, stage, level, byEmail, k
     C.FINDING_STATUS,
     isTPP ? CONFIG.FINDING_STATUS.OPEN : CONFIG.FINDING_STATUS.OPEN_IMPL
   );
-
-  if (isTPP) {
-    updateResultField(spreadsheetId, result.result_id,
-      C.TPP_STATUS, CONFIG.APPROVAL_STATUS.REJECTED);
-  }
+  // is_overdue tidak diubah saat reject — disabled untuk sekarang
 
   try { notifyRejected(agenda, result, stage, byEmail, komentar); } catch(e) {}
 
@@ -216,9 +221,7 @@ function _checkAgendaAllClosed(spreadsheetId, agendaId) {
       if (ag && koordinators.length) {
         const subject = '[Audit System] Semua Temuan Closed — ' + ag.dept;
         const body = 'Semua temuan untuk area ' + ag.dept + ' sudah ditutup (CLOSED).\n\nSalam,\nSistem Audit Internal';
-        koordinators.forEach(function(u) {
-          try { GmailApp.sendEmail(u.email, subject, body); } catch(e) {}
-        });
+        sendEmail(koordinators.map(u => u.email), subject, emailTemplate('Semua Temuan Closed', `<p>${body}</p>`));
       }
     } catch(e) { console.warn('Notif all closed gagal:', e.message); }
   }
