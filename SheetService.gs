@@ -1111,22 +1111,11 @@ function submitAgreement(spreadsheetId, agendaId, agreementFotoUrl, agreementBy,
       _updateCell(sheet, r._rowIndex, C.FINDING_STATUS + 1, CONFIG.FINDING_STATUS.PENDING_VERIFICATION);
     }
   });
-  // Kirim notifikasi SETELAH agreement berhasil diupload (bukan di finishAudit)
   try {
-    const findings     = results.filter(r => r.status === CONFIG.RESULT_STATUS.NON_COMPLY);
+    const findings      = results.filter(r => r.status === CONFIG.RESULT_STATUS.NON_COMPLY);
     const updatedAgenda = getAgendaById(agendaId);
-    const auditeeEmails = parseCSV(updatedAgenda.auditee_emails || '');
-    const subject       = '[Audit] Persetujuan Hasil Audit — ' + updatedAgenda.dept;
-    const body          =
-      'Yth. Tim ' + updatedAgenda.dept + ',\n\n' +
-      'Audit telah selesai dan foto agreement telah diupload.\n' +
-      'Total temuan: ' + findings.length + '\n\n' +
-      'Silakan buka sistem audit untuk melihat detail dan menindaklanjuti.\n\nSalam,\nSistem Audit Internal';
-    auditeeEmails.forEach(function(email) {
-      if (email && isAllowedDomain(normalizeEmail(email))) {
-        try { GmailApp.sendEmail(normalizeEmail(email), subject, body); } catch(e) {}
-      }
-    });
+    notifyAuditCompletedAuditor(updatedAgenda, findings.length);
+    notifyAuditCompletedKoordinator(updatedAgenda, findings.length);
   } catch(e) { console.warn('Notifikasi agreement gagal (non-fatal):', e.message); }
   return { success: true };
 }
@@ -1176,7 +1165,7 @@ function verifyFindings(spreadsheetId, agendaId, updates, verifiedBy) {
       .filter(function(r) { return r.finding_status === CONFIG.FINDING_STATUS.OPEN; });
     if (openFindings.length > 0) {
       const ag = getAgendaById(agendaId);
-      if (ag) notifyRequestCA(ag, openFindings);
+      if (ag) notifyFindingsVerified(ag, openFindings);
     }
   } catch(e) { console.warn('Notif requestCA gagal:', e.message); }
 
