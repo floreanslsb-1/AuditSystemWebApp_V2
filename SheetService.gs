@@ -781,7 +781,7 @@ function _setupAuditSheets(ss, periodId, namaPeriode) {
       // Grup 3: Diisi auditor
       'status','deskripsi_temuan','foto_urls','auditor_email','saved_at',
       // Grup 4: Tindak lanjut
-      'finding_status','target_date','tpp_status','closed_at',
+      'finding_status','target_date','is_overdue','closed_at',
     ],
     TPP_ITEMS: [
       'tpp_item_id','result_id','tipe',
@@ -847,7 +847,7 @@ const AUDIT_RESULT_HEADERS = [
   'item_id','tipe','kategori','nomor_persyaratan','check_item_no',
   'aspek','persyaratan','check_item','standar_check_item',
   'status','deskripsi_temuan','foto_urls','auditor_email','saved_at',
-  'finding_status','target_date','tpp_status','closed_at',
+  'finding_status','target_date','is_overdue','closed_at',
 ];
 
 function getAuditResultsByAgenda(spreadsheetId, agendaId) {
@@ -1277,8 +1277,8 @@ function submitTpp(spreadsheetId, resultId, agendaId, items, targetDate, submitt
     sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
   const C = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
   updateResultField(spreadsheetId, resultId, C.TARGET_DATE,    targetDate);
-  updateResultField(spreadsheetId, resultId, C.FINDING_STATUS, CONFIG.FINDING_STATUS.PENDING_TPP);
-  updateResultField(spreadsheetId, resultId, C.TPP_STATUS,     CONFIG.APPROVAL_STATUS.PENDING);
+  updateResultField(spreadsheetId, resultId, C.FINDING_STATUS, CONFIG.FINDING_STATUS.TPP_OR_DEPT_HEAD);
+  // is_overdue: tidak diset saat ini — disabled
   appendApprovalLog(spreadsheetId, {
     result_id: resultId, agenda_id: agendaId,
     stage: 'TPP', level: 'AUDITEE', action: 'SUBMITTED',
