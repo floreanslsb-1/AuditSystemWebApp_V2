@@ -364,25 +364,31 @@ function filesToBase64(files) {
 // ── Status Badge ──────────────────────────────────────────────
 function statusBadge(status) {
   var map = {
-    'OPEN':         ['badge-rose',    'Open'],
-    'IN_PROGRESS':  ['badge-amber',   'In Progress'],
-    'PENDING_CA':   ['badge-amber',   'Pending TPP'],
-    'CA_APPROVED':  ['badge-blue',    'TPP Disetujui'],
-    'OPEN_IMPL':    ['badge-blue',    'Open Implementasi'],
-    'PENDING_IMPL': ['badge-purple',  'Pending Approval Impl'],
-    'CLOSED':       ['badge-emerald', 'Closed'],
-    'OVERDUE':      ['badge-rose',    'Overdue'],
-    'APPROVED':     ['badge-emerald', 'Approved'],
-    'REJECTED':     ['badge-rose',    'Rejected'],
-    'PENDING':      ['badge-slate',   'Pending'],
-    'PLANNED':      ['badge-slate',   'Planned'],
-    'ACTIVE':       ['badge-emerald', 'Active'],
-    'COMPLETED':    ['badge-blue',    'Completed'],
-    'Non Comply':   ['badge-rose',    'Non Comply'],
-    'Comply':       ['badge-emerald', 'Comply'],
-    'STARTED':      ['badge-blue',    'Started'],
-    'DONE':         ['badge-emerald', 'Done'],
-    'AGREED':       ['badge-teal',    'Agreed'],
+    // Finding status — new
+    'PENDING_VERIFICATION': ['badge-amber',   'Menunggu Verifikasi'],
+    'OPEN':                 ['badge-rose',    'Open'],
+    'TPP_OR_DEPT_HEAD':     ['badge-amber',   'Review TPP — Dept Head'],
+    'TPP_OR_AUDITOR':       ['badge-amber',   'Review TPP — Auditor'],
+    'TPP_OR_KOORDINATOR':   ['badge-amber',   'Review TPP — Koordinator'],
+    'OPEN_IMPL':            ['badge-blue',    'Open Implementasi'],
+    'APP_DEPT_HEAD':        ['badge-purple',  'Approval Impl — Dept Head'],
+    'APP_AUDITOR':          ['badge-purple',  'Approval Impl — Auditor'],
+    'APP_KOORDINATOR':      ['badge-purple',  'Approval Impl — Koordinator'],
+    'CLOSED':               ['badge-emerald', 'Closed'],
+    // Agenda / period status
+    'PLANNED':    ['badge-slate',   'Planned'],
+    'STARTED':    ['badge-blue',    'Started'],
+    'DONE':       ['badge-emerald', 'Done'],
+    'ACTIVE':     ['badge-emerald', 'Active'],
+    'COMPLETED':  ['badge-blue',    'Completed'],
+    // Result status
+    'Non Comply': ['badge-rose',    'Non Comply'],
+    'Comply':     ['badge-emerald', 'Comply'],
+    // Approval action
+    'APPROVED':   ['badge-emerald', 'Approved'],
+    'REJECTED':   ['badge-rose',    'Rejected'],
+    'PENDING':    ['badge-slate',   'Pending'],
+    // Legacy — bisa dihapus nanti
     'PENDING_AGREEMENT': ['badge-amber', 'Menunggu Persetujuan'],
   };
   var pair = map[status] || ['badge-slate', status || '—'];
