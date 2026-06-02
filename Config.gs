@@ -54,11 +54,14 @@ const CONFIG = {
   FINDING_STATUS: {
     PENDING_VERIFICATION: 'PENDING_VERIFICATION',
     OPEN:                 'OPEN',
-    PENDING_TPP:          'PENDING_TPP',
+    TPP_OR_DEPT_HEAD:     'TPP_OR_DEPT_HEAD',
+    TPP_OR_AUDITOR:       'TPP_OR_AUDITOR',
+    TPP_OR_KOORDINATOR:   'TPP_OR_KOORDINATOR',
     OPEN_IMPL:            'OPEN_IMPL',
-    PENDING_IMPL:         'PENDING_IMPL',
+    APP_DEPT_HEAD:        'APP_DEPT_HEAD',
+    APP_AUDITOR:          'APP_AUDITOR',
+    APP_KOORDINATOR:      'APP_KOORDINATOR',
     CLOSED:               'CLOSED',
-    OVERDUE:              'OVERDUE',
   },
 
   AGENDA_STATUS: {
@@ -88,6 +91,8 @@ const CONFIG = {
     CORRECTION:        'CORRECTION',
     CORRECTIVE_ACTION: 'CORRECTIVE_ACTION',
   },
+
+  IS_OVERDUE: false, // disabled — akan diaktifkan saat logic overdue diimplementasi
 
   NOTIFICATIONS_ENABLED: false,  // ← set true untuk re-enable setelah trial selesai
 
@@ -189,9 +194,9 @@ const CONFIG = {
       SAVED_AT:         16,  // kapan terakhir diisi/diubah
 
       // Grup 4 — tindak lanjut temuan (hanya terisi untuk Non Comply / OFI)
-      FINDING_STATUS: 17,  // kosong → PENDING_VERIFICATION → OPEN → ... → CLOSED
+      FINDING_STATUS: 17,  // kosong → PENDING_VERIFICATION → OPEN → TPP_OR_DEPT_HEAD → ... → CLOSED
       TARGET_DATE:    18,  // diisi saat submit TPP
-      TPP_STATUS:     19,  // kosong → PENDING → APPROVED / REJECTED
+      IS_OVERDUE:     19,  // false (default) — disabled, akan diaktifkan nanti
       CLOSED_AT:      20,  // diisi saat CLOSED
     },
 
