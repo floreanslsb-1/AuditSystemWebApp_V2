@@ -1296,7 +1296,12 @@ function submitTpp(spreadsheetId, resultId, agendaId, items, targetDate, submitt
     by_email: submittedBy, skipped: false, skip_reason: '',
   });
   // Kirim notifikasi ke DeptHead
-  try { notifyCASubmitted(getAgendaById(agendaId), { result_id: resultId, nomor_persyaratan: '', check_item_no: '', target_date: targetDate }); } catch(e) {}
+  try {
+    const ag  = getAgendaById(agendaId);
+    const res = getAuditResultsByAgenda(spreadsheetId, agendaId).find(r => r.result_id === resultId)
+      || { result_id: resultId, nomor_persyaratan: '-', check_item_no: '-', target_date: targetDate };
+    if (ag) notifyTPPSubmitted(ag, res);
+  } catch(e) { console.warn('Notifikasi TPP submitted gagal:', e.message); }
 
   return { success: true, tpp_item_count: rows.length };
 }
