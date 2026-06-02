@@ -1,26 +1,10 @@
 // ============================================================
-//  NotificationService.gs — v2 (refactored)
-//  Perubahan dari v1:
-//  - Semua parameter "session" diganti "agenda" karena SESSIONS dihapus
-//  - session.nama_area      → agenda.dept (nama area dari dept)
-//  - session.session_id     → agenda.agenda_id
-//  - session.auditee_emails → agenda.auditee_emails
-//  - session.auditor_emails → agenda.auditor_emails
-//  - session.dept_head_email→ agenda.dept_head_email
-//  - finding.finding_id     → result.result_id
-//  - finding.status_persyaratan → result.status
-//  - finding.deskripsi_temuan   → result.deskripsi_temuan
-//  - _findingInfo(): pakai result + agenda
-//  - _appLink(): param session_id → agenda_id, finding_id → result_id
-//  - Semua fungsi notif tetap ada — tidak ada yang dihapus
+//  NotificationService.gs
+//  Semua notifikasi dikendalikan oleh NOTIFICATIONS_ENABLED di Config.gs.
+//  Terminologi: TPP = Tindakan Perbaikan dan Pencegahan (menggantikan CA)
 // ============================================================
 
 const APP_URL = ScriptApp.getService().getUrl();
-
-
-// ════════════════════════════════════════════════════════════
-//  INTERNAL HELPERS
-// ════════════════════════════════════════════════════════════
 
 function _appLink(page, params) {
   params = params || {};
@@ -30,257 +14,317 @@ function _appLink(page, params) {
   return APP_URL + '?page=' + page + (qs ? '&' + qs : '');
 }
 
-/**
- * Tabel info temuan untuk body email.
- * @param {Object} result  — row dari AUDIT_RESULTS
- * @param {Object} agenda  — row dari AUDIT_AGENDA
- */
 function _findingInfo(result, agenda) {
   return `
-    <table style="border-collapse:collapse;width:100%;font-size:13px;">
-      <tr>
-        <td style="padding:6px;color:#666;width:160px;">Area</td>
-        <td style="padding:6px;font-weight:bold;">${escapeHtml(agenda.dept)}</td>
-      </tr>
+    <table style="border-collapse:collapse;width:100%;font-size:13px;margin:16px 0;">
+      <tr><td style="padding:6px;color:#666;width:160px;">Area</td>
+          <td style="padding:6px;font-weight:bold;">${escapeHtml(agenda.dept)}</td></tr>
       <tr style="background:#f9f9f9;">
-        <td style="padding:6px;color:#666;">Persyaratan</td>
-        <td style="padding:6px;">#${result.nomor_persyaratan} — Check Item #${result.check_item_no}</td>
-      </tr>
-      <tr>
-        <td style="padding:6px;color:#666;">Check Item</td>
-        <td style="padding:6px;">${escapeHtml(result.check_item || '')}</td>
-      </tr>
+          <td style="padding:6px;color:#666;">Check Item</td>
+          <td style="padding:6px;">#${result.nomor_persyaratan}.${result.check_item_no} — ${escapeHtml(result.check_item || '')}</td></tr>
+      <tr><td style="padding:6px;color:#666;">Standar</td>
+          <td style="padding:6px;">${escapeHtml(result.standar_check_item || '-')}</td></tr>
       <tr style="background:#f9f9f9;">
-        <td style="padding:6px;color:#666;">Temuan</td>
-        <td style="padding:6px;">${escapeHtml(result.deskripsi_temuan || '')}</td>
-      </tr>
-      <tr>
-        <td style="padding:6px;color:#666;">Status</td>
-        <td style="padding:6px;"><strong>${escapeHtml(result.status || '')}</strong></td>
-      </tr>
+          <td style="padding:6px;color:#666;">Deskripsi Temuan</td>
+          <td style="padding:6px;">${escapeHtml(result.deskripsi_temuan || '')}</td></tr>
+      <tr><td style="padding:6px;color:#666;">Status</td>
+          <td style="padding:6px;font-weight:bold;">${escapeHtml(result.status || '')}</td></tr>
     </table>`;
 }
 
 
 // ════════════════════════════════════════════════════════════
-//  NOTIFIKASI — AUDIT FLOW
+//  AUDIT FLOW
 // ════════════════════════════════════════════════════════════
 
-/**
- * Notif ke auditee saat auditor mulai audit.
- * @param {Object} agenda  — row AUDIT_AGENDA
- */
 function notifyAuditStarted(agenda) {
   const auditees = parseCSV(agenda.auditee_emails);
   if (!auditees.length) return;
   const body = `
-    <p>Audit untuk area <strong>${escapeHtml(agenda.dept)}</strong>
-    telah dimulai pada <strong>${agenda.started_at}</strong>.</p>
-    <p>Auditor: <strong>${escapeHtml(agenda.auditor_emails)}</strong></p>
-    <p>Kamu terdaftar sebagai <strong>Auditee</strong> untuk sesi ini.</p>`;
+    <p>Pelaksanaan audit IMS untuk area <strong>${escapeHtml(agenda.dept)}</strong>
+    telah resmi dimulai dengan detail sebagai berikut:</p>
+    <table style="border-collapse:collapse;width:100%;font-size:13px;margin:16px 0;">
+      <tr><td style="padding:6px;color:#666;width:160px;">Area</td>
+          <td style="padding:6px;font-weight:bold;">${escapeHtml(agenda.dept)}</td></tr>
+      <tr style="background:#f9f9f9;">
+          <td style="padding:6px;color:#666;">Tanggal Mulai</td>
+          <td style="padding:6px;">${agenda.started_at}</td></tr>
+      <tr><td style="padding:6px;color:#666;">Tim Auditor</td>
+          <td style="padding:6px;">${escapeHtml(agenda.auditor_emails)}</td></tr>
+      <tr style="background:#f9f9f9;">
+          <td style="padding:6px;color:#666;">Area Sampling</td>
+          <td style="padding:6px;">${escapeHtml(agenda.area_sampling || '-')}</td></tr>
+    </table>
+    <p>Mohon menyiapkan dokumen dan bukti yang diperlukan serta memberikan
+    pendampingan kepada tim auditor selama proses berlangsung.</p>`;
   sendEmail(auditees,
-    `[Audit System] Audit Dimulai — ${agenda.dept}`,
-    emailTemplate('Audit Dimulai: ' + agenda.dept, body,
-      'Lihat Detail Audit', _appLink('audit', { agenda_id: agenda.agenda_id })));
+    `AUDIT DIMULAI — ${agenda.dept}`,
+    emailTemplate(`Audit Dimulai: ${agenda.dept}`, body,
+      'Lihat Form Audit', _appLink('form-audit', { agenda_id: agenda.agenda_id })));
 }
 
-/**
- * Notif ke auditee bahwa audit selesai dan butuh persetujuan (agreement).
- * @param {Object} agenda
- * @param {number} findingCount  jumlah Non Comply / OFI
- */
-function notifyRequestAgreement(agenda, findingCount) {
-  const auditees = parseCSV(agenda.auditee_emails);
-  if (!auditees.length) return;
-  const body = `
-    <p>Audit area <strong>${escapeHtml(agenda.dept)}</strong> telah selesai.</p>
-    <p>Ditemukan <strong>${findingCount} temuan</strong> (Non Comply / OFI).</p>
-    <p>Diperlukan <strong>persetujuan hasil audit</strong> dari Anda.</p>`;
-  sendEmail(auditees,
-    `[Audit System] Diperlukan: Persetujuan Hasil Audit — ${agenda.dept}`,
-    emailTemplate('Persetujuan Hasil Audit Diperlukan', body,
-      'Berikan Persetujuan', _appLink('agreement', { agenda_id: agenda.agenda_id })));
-}
-
-/**
- * Notif ke auditee bahwa agreement diterima dan perlu isi CA (TPP).
- * @param {Object} agenda
- * @param {Object[]} results  — array row AUDIT_RESULTS (Non Comply / OFI)
- */
-function notifyRequestCA(agenda, results) {
-  const auditees = parseCSV(agenda.auditee_emails);
-  if (!auditees.length) return;
-  const body = `
-    <p>Persetujuan hasil audit untuk area <strong>${escapeHtml(agenda.dept)}</strong> telah diterima.</p>
-    <p>Silakan isi <strong>Correction dan Rencana Corrective Action</strong>
-    untuk <strong>${results.length} temuan</strong>.</p>`;
-  sendEmail(auditees,
-    `[Audit System] Diperlukan: Isi Corrective Action — ${agenda.dept}`,
-    emailTemplate('Isi Corrective Action', body,
-      'Isi CA Sekarang', _appLink('corrective-action', { agenda_id: agenda.agenda_id })));
-}
-
-
-// ════════════════════════════════════════════════════════════
-//  NOTIFIKASI — TPP / CA APPROVAL CHAIN
-// ════════════════════════════════════════════════════════════
-
-/**
- * Notif ke DeptHead saat auditee submit CA (TPP).
- * @param {Object} agenda
- * @param {Object} result  — row AUDIT_RESULTS
- */
-function notifyCASubmitted(agenda, result) {
-  if (!agenda.dept_head_email) return;
-  const body = `
-    <p>Corrective Action untuk temuan berikut menunggu persetujuan Anda:</p>
-    ${_findingInfo(result, agenda)}
-    <p><strong>Target Selesai:</strong> ${result.target_date || '-'}</p>`;
-  sendEmail(agenda.dept_head_email,
-    `[Audit System] Approve CA — ${agenda.dept} | Temuan #${result.nomor_persyaratan}.${result.check_item_no}`,
-    emailTemplate('Persetujuan Corrective Action Diperlukan', body,
-      'Review & Approve', _appLink('approval', { result_id: result.result_id, stage: 'TPP', level: 'DeptHead' })));
-}
-
-/**
- * Notif ke auditor saat DeptHead approve CA.
- * @param {Object} agenda
- * @param {Object} result
- */
-function notifyCAToAuditors(agenda, result) {
+function notifyAuditCompletedAuditor(agenda, findingCount) {
   const auditors = parseCSV(agenda.auditor_emails);
   if (!auditors.length) return;
   const body = `
-    <p>Dept Head telah menyetujui CA. Diperlukan persetujuan <strong>salah satu Auditor</strong>:</p>
-    ${_findingInfo(result, agenda)}`;
+    <p>Audit IMS untuk area <strong>${escapeHtml(agenda.dept)}</strong>
+    telah selesai dilaksanakan. Berikut ringkasan pelaksanaan:</p>
+    <table style="border-collapse:collapse;width:100%;font-size:13px;margin:16px 0;">
+      <tr><td style="padding:6px;color:#666;width:160px;">Area</td>
+          <td style="padding:6px;font-weight:bold;">${escapeHtml(agenda.dept)}</td></tr>
+      <tr style="background:#f9f9f9;">
+          <td style="padding:6px;color:#666;">Tanggal Selesai</td>
+          <td style="padding:6px;">${agenda.agreement_at || now()}</td></tr>
+      <tr><td style="padding:6px;color:#666;">Diselesaikan oleh</td>
+          <td style="padding:6px;">${escapeHtml(agenda.agreement_by || '')}</td></tr>
+      <tr style="background:#f9f9f9;">
+          <td style="padding:6px;color:#666;">Auditee yang Hadir</td>
+          <td style="padding:6px;">${escapeHtml(agenda.auditee_hadir_names || '-')}</td></tr>
+      <tr><td style="padding:6px;color:#666;">Total Temuan Non Comply</td>
+          <td style="padding:6px;">${findingCount} temuan</td></tr>
+    </table>
+    <p>Foto persetujuan bersama auditee telah diupload.
+    Proses selanjutnya berada di tahap verifikasi oleh Koordinator.</p>`;
   sendEmail(auditors,
-    `[Audit System] Approve CA (Auditor) — ${agenda.dept} | Temuan #${result.nomor_persyaratan}.${result.check_item_no}`,
-    emailTemplate('Persetujuan CA oleh Auditor Diperlukan', body,
-      'Review & Approve', _appLink('approval', { result_id: result.result_id, stage: 'TPP', level: 'Auditor' })));
+    `AUDIT SELESAI — ${agenda.dept}`,
+    emailTemplate(`Audit Selesai: ${agenda.dept}`, body,
+      'Lihat Dashboard', _appLink('dashboard')));
 }
 
-/**
- * Notif ke auditor lain (gugur) + Koordinator saat salah satu auditor approve CA.
- * @param {Object} agenda
- * @param {Object} result
- * @param {string} approverEmail
- */
-function notifyCAApprovedByAuditor(agenda, result, approverEmail) {
-  // Auditor lain yang gugur
+function notifyAuditCompletedKoordinator(agenda, findingCount) {
+  const koordinators = getAllKoordinators();
+  if (!koordinators.length) return;
+  const body = `
+    <p>Audit IMS untuk area <strong>${escapeHtml(agenda.dept)}</strong>
+    telah selesai dan foto persetujuan telah diupload. Terdapat
+    <strong>${findingCount} temuan Non Comply</strong> yang menunggu verifikasi Anda.</p>
+    <table style="border-collapse:collapse;width:100%;font-size:13px;margin:16px 0;">
+      <tr><td style="padding:6px;color:#666;width:160px;">Area</td>
+          <td style="padding:6px;font-weight:bold;">${escapeHtml(agenda.dept)}</td></tr>
+      <tr style="background:#f9f9f9;">
+          <td style="padding:6px;color:#666;">Tanggal Selesai</td>
+          <td style="padding:6px;">${agenda.agreement_at || now()}</td></tr>
+      <tr><td style="padding:6px;color:#666;">Diselesaikan oleh</td>
+          <td style="padding:6px;">${escapeHtml(agenda.agreement_by || '')}</td></tr>
+      <tr style="background:#f9f9f9;">
+          <td style="padding:6px;color:#666;">Auditee yang Hadir</td>
+          <td style="padding:6px;">${escapeHtml(agenda.auditee_hadir_names || '-')}</td></tr>
+      <tr><td style="padding:6px;color:#666;">Total Temuan Non Comply</td>
+          <td style="padding:6px;font-weight:bold;">${findingCount} temuan</td></tr>
+    </table>
+    <p>Silakan lakukan verifikasi pada setiap temuan sebelum diteruskan kepada
+    auditee untuk tindak lanjut. Anda dapat menyesuaikan deskripsi temuan
+    atau mengubah status temuan jika diperlukan.</p>`;
+  sendEmail(koordinators.map(u => u.email),
+    `VERIFIKASI TEMUAN DIPERLUKAN — AUDIT SELESAI | ${agenda.dept}`,
+    emailTemplate(`Verifikasi Temuan Diperlukan: ${agenda.dept}`, body,
+      'Verifikasi Temuan di My Task', _appLink('my-task')));
+}
+
+function notifyFindingsVerified(agenda, findings) {
+  const auditees = parseCSV(agenda.auditee_emails);
+  if (!auditees.length || !findings.length) return;
+  const rows = findings.map(function(f) {
+    return `<tr>
+      <td style="padding:6px;border-bottom:1px solid #eee;white-space:nowrap;">
+        #${f.nomor_persyaratan}.${f.check_item_no}</td>
+      <td style="padding:6px;border-bottom:1px solid #eee;">${escapeHtml(f.check_item || '')}</td>
+      <td style="padding:6px;border-bottom:1px solid #eee;">${escapeHtml(f.deskripsi_temuan || '')}</td>
+    </tr>`;
+  }).join('');
+  const body = `
+    <p>Hasil audit IMS untuk area <strong>${escapeHtml(agenda.dept)}</strong>
+    telah diverifikasi oleh Koordinator. Terdapat
+    <strong>${findings.length} temuan Non Comply</strong> yang memerlukan tindak lanjut
+    berupa pengisian Tindakan Perbaikan dan Pencegahan (TPP).</p>
+    <p>Untuk setiap temuan, Anda wajib mengisi:</p>
+    <ul style="font-size:13px;line-height:1.9;padding-left:20px;">
+      <li><strong>Tindakan Perbaikan</strong> — tindakan segera untuk mengatasi temuan</li>
+      <li><strong>Tindakan Pencegahan</strong> — rencana agar temuan tidak berulang</li>
+      <li><strong>Target Penyelesaian</strong> — tanggal target implementasi selesai</li>
+    </ul>
+    <p style="font-weight:bold;margin-top:20px;">Daftar temuan yang perlu ditindaklanjuti:</p>
+    <table style="border-collapse:collapse;width:100%;font-size:13px;">
+      <thead>
+        <tr style="background:#f0f0f0;">
+          <th style="padding:8px;text-align:left;border-bottom:2px solid #ddd;">No</th>
+          <th style="padding:8px;text-align:left;border-bottom:2px solid #ddd;">Check Item</th>
+          <th style="padding:8px;text-align:left;border-bottom:2px solid #ddd;">Deskripsi Temuan</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <p style="margin-top:16px;">Silakan masuk ke sistem dan isi TPP untuk setiap temuan.</p>`;
+  sendEmail(auditees,
+    `TINDAK LANJUT DIPERLUKAN — HASIL AUDIT ${agenda.dept}`,
+    emailTemplate(`Tindak Lanjut Diperlukan: ${agenda.dept}`, body,
+      'Isi TPP di My Task', _appLink('my-task')));
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  TPP (TINDAKAN PERBAIKAN DAN PENCEGAHAN)
+// ════════════════════════════════════════════════════════════
+
+function notifyTPPSubmitted(agenda, result) {
+  if (!agenda.dept_head_email) return;
+  const body = `
+    <p>Auditee area <strong>${escapeHtml(agenda.dept)}</strong> telah mengajukan
+    Tindakan Perbaikan dan Pencegahan (TPP) untuk temuan berikut dan memerlukan
+    persetujuan Anda sebagai tahap pertama.</p>
+    ${_findingInfo(result, agenda)}
+    <table style="border-collapse:collapse;width:100%;font-size:13px;">
+      <tr><td style="padding:6px;color:#666;width:160px;">Target Penyelesaian</td>
+          <td style="padding:6px;">${result.target_date || '-'}</td></tr>
+    </table>
+    <p style="margin-top:16px;">Silakan tinjau dan berikan persetujuan atau
+    penolakan beserta komentar pada sistem.</p>`;
+  sendEmail(agenda.dept_head_email,
+    `PERSETUJUAN DIPERLUKAN — TPP ${agenda.dept} | Temuan #${result.nomor_persyaratan}.${result.check_item_no}`,
+    emailTemplate('Persetujuan TPP Diperlukan', body,
+      'Tinjau & Setujui di My Task', _appLink('my-task', { result_id: result.result_id })));
+}
+
+function notifyTPPToAuditors(agenda, result) {
+  const auditors = parseCSV(agenda.auditor_emails);
+  if (!auditors.length) return;
+  const body = `
+    <p>Dept Head telah menyetujui Tindakan Perbaikan dan Pencegahan (TPP) untuk
+    temuan berikut. Diperlukan persetujuan dari salah satu Auditor sebagai tahap kedua.</p>
+    ${_findingInfo(result, agenda)}
+    <table style="border-collapse:collapse;width:100%;font-size:13px;">
+      <tr><td style="padding:6px;color:#666;width:160px;">Target Penyelesaian</td>
+          <td style="padding:6px;">${result.target_date || '-'}</td></tr>
+    </table>
+    <p style="margin-top:16px;">Cukup satu Auditor dari tim yang memberikan persetujuan.
+    Auditor lain akan menerima notifikasi informasi secara otomatis.</p>`;
+  sendEmail(auditors,
+    `PERSETUJUAN DIPERLUKAN — TPP (AUDITOR) ${agenda.dept} | Temuan #${result.nomor_persyaratan}.${result.check_item_no}`,
+    emailTemplate('Persetujuan TPP oleh Auditor Diperlukan', body,
+      'Tinjau & Setujui di My Task', _appLink('my-task', { result_id: result.result_id })));
+}
+
+function notifyTPPApprovedByAuditor(agenda, result, approverEmail) {
   const otherAuditors = parseCSV(agenda.auditor_emails)
     .filter(a => normalizeEmail(a) !== normalizeEmail(approverEmail));
   if (otherAuditors.length) {
     sendEmail(otherAuditors,
-      `[Audit System] Info: CA Sudah Di-approve — ${agenda.dept}`,
-      emailTemplate('Info: CA Sudah Di-approve', `
-        <p>CA telah disetujui oleh <strong>${escapeHtml(approverEmail)}</strong>.</p>
+      `INFORMASI — TPP SUDAH DISETUJUI AUDITOR | ${agenda.dept}`,
+      emailTemplate('Informasi: TPP Sudah Disetujui', `
+        <p>Tindakan Perbaikan dan Pencegahan (TPP) untuk temuan berikut telah disetujui oleh
+        <strong>${escapeHtml(approverEmail)}</strong> atas nama tim Auditor.
+        Persetujuan Anda tidak diperlukan untuk temuan ini.</p>
         ${_findingInfo(result, agenda)}
-        <p>Approval Anda tidak diperlukan. Proses dilanjutkan ke Koordinator.</p>`));
+        <p>Proses approval dilanjutkan ke tahap Koordinator.</p>`,
+        'Lihat Dashboard', _appLink('dashboard')));
   }
-  // Koordinator
   const koordinators = getAllKoordinators();
   if (!koordinators.length) return;
   const body = `
-    <p>Dept Head dan Auditor telah menyetujui CA. Diperlukan persetujuan final <strong>Koordinator</strong>:</p>
-    ${_findingInfo(result, agenda)}`;
+    <p>Dept Head dan Auditor telah menyetujui Tindakan Perbaikan dan Pencegahan (TPP)
+    untuk temuan berikut. Diperlukan persetujuan final dari Koordinator sebelum
+    auditee melanjutkan ke tahap implementasi.</p>
+    ${_findingInfo(result, agenda)}
+    <table style="border-collapse:collapse;width:100%;font-size:13px;">
+      <tr><td style="padding:6px;color:#666;width:160px;">Target Penyelesaian</td>
+          <td style="padding:6px;">${result.target_date || '-'}</td></tr>
+      <tr style="background:#f9f9f9;">
+          <td style="padding:6px;color:#666;">Disetujui Dept Head</td>
+          <td style="padding:6px;">Ya</td></tr>
+      <tr><td style="padding:6px;color:#666;">Disetujui Auditor</td>
+          <td style="padding:6px;">Ya</td></tr>
+    </table>`;
   sendEmail(koordinators.map(u => u.email),
-    `[Audit System] Approve CA (Koordinator) — ${agenda.dept} | Temuan #${result.nomor_persyaratan}.${result.check_item_no}`,
-    emailTemplate('Persetujuan CA oleh Koordinator Diperlukan', body,
-      'Review & Approve', _appLink('approval', { result_id: result.result_id, stage: 'TPP', level: 'Koordinator' })));
+    `PERSETUJUAN FINAL DIPERLUKAN — TPP ${agenda.dept} | Temuan #${result.nomor_persyaratan}.${result.check_item_no}`,
+    emailTemplate('Persetujuan Final TPP oleh Koordinator', body,
+      'Tinjau & Setujui di My Task', _appLink('my-task', { result_id: result.result_id })));
 }
 
-/**
- * Notif ke auditee saat CA fully approved — minta upload bukti implementasi.
- * @param {Object} agenda
- * @param {Object} result
- */
-function notifyCAFullyApproved(agenda, result) {
+function notifyTPPFullyApproved(agenda, result) {
   const auditees = parseCSV(agenda.auditee_emails);
   if (!auditees.length) return;
   const body = `
-    <p>CA telah disetujui oleh semua pihak (Dept Head, Auditor, dan Koordinator).</p>
+    <p>Tindakan Perbaikan dan Pencegahan (TPP) yang Anda ajukan untuk temuan berikut
+    telah disetujui oleh seluruh pihak (Dept Head, Auditor, dan Koordinator).</p>
     ${_findingInfo(result, agenda)}
-    <p>Silakan lakukan implementasi dan <strong>upload bukti</strong>.</p>
-    <p><strong>Target Selesai:</strong> ${result.target_date || '-'}</p>`;
+    <table style="border-collapse:collapse;width:100%;font-size:13px;">
+      <tr><td style="padding:6px;color:#666;width:160px;">Target Penyelesaian</td>
+          <td style="padding:6px;">${result.target_date || '-'}</td></tr>
+    </table>
+    <p style="margin-top:16px;">Laksanakan tindakan perbaikan sesuai rencana yang telah
+    disetujui, kemudian upload bukti implementasi pada sistem sebelum tanggal target.</p>`;
   sendEmail(auditees,
-    `[Audit System] CA Disetujui — Upload Bukti Implementasi`,
-    emailTemplate('CA Disetujui: Silakan Upload Bukti', body,
-      'Upload Bukti Sekarang', _appLink('implementation', { result_id: result.result_id })));
+    `TPP DISETUJUI — LANJUTKAN KE IMPLEMENTASI | Temuan #${result.nomor_persyaratan}.${result.check_item_no}`,
+    emailTemplate('TPP Disetujui: Lanjutkan ke Implementasi', body,
+      'Upload Bukti Implementasi di My Task', _appLink('my-task', { result_id: result.result_id })));
 }
 
 
 // ════════════════════════════════════════════════════════════
-//  NOTIFIKASI — IMPLEMENTASI APPROVAL CHAIN
+//  IMPLEMENTASI
 // ════════════════════════════════════════════════════════════
 
-/**
- * Notif ke DeptHead saat auditee upload bukti implementasi.
- * @param {Object} agenda
- * @param {Object} result
- */
 function notifyImplSubmitted(agenda, result) {
   if (!agenda.dept_head_email) return;
   const body = `
-    <p>Auditee telah mengunggah bukti implementasi. Diperlukan persetujuan Anda:</p>
-    ${_findingInfo(result, agenda)}`;
+    <p>Auditee area <strong>${escapeHtml(agenda.dept)}</strong> telah mengunggah bukti
+    implementasi untuk temuan berikut dan memerlukan persetujuan Anda.</p>
+    ${_findingInfo(result, agenda)}
+    <p>Silakan tinjau bukti implementasi yang telah diupload dan berikan persetujuan
+    atau penolakan beserta komentar.</p>`;
   sendEmail(agenda.dept_head_email,
-    `[Audit System] Approve Implementasi — ${agenda.dept} | Temuan #${result.nomor_persyaratan}.${result.check_item_no}`,
-    emailTemplate('Persetujuan Bukti Implementasi Diperlukan', body,
-      'Review & Approve', _appLink('approval', { result_id: result.result_id, stage: 'IMPL', level: 'DeptHead' })));
+    `PERSETUJUAN DIPERLUKAN — IMPLEMENTASI ${agenda.dept} | Temuan #${result.nomor_persyaratan}.${result.check_item_no}`,
+    emailTemplate('Persetujuan Implementasi Diperlukan', body,
+      'Tinjau Bukti & Setujui di My Task', _appLink('my-task', { result_id: result.result_id })));
 }
 
-/**
- * Notif ke auditor saat DeptHead approve implementasi.
- * @param {Object} agenda
- * @param {Object} result
- */
 function notifyImplToAuditors(agenda, result) {
   const auditors = parseCSV(agenda.auditor_emails);
   if (!auditors.length) return;
   const body = `
-    <p>Dept Head telah menyetujui bukti implementasi.
-    Diperlukan persetujuan <strong>salah satu Auditor</strong>:</p>
-    ${_findingInfo(result, agenda)}`;
+    <p>Dept Head telah menyetujui bukti implementasi untuk temuan berikut.
+    Diperlukan persetujuan dari salah satu Auditor.</p>
+    ${_findingInfo(result, agenda)}
+    <p>Cukup satu Auditor dari tim yang memberikan persetujuan.
+    Auditor lain akan menerima notifikasi informasi secara otomatis.</p>`;
   sendEmail(auditors,
-    `[Audit System] Approve Implementasi (Auditor) — ${agenda.dept}`,
+    `PERSETUJUAN DIPERLUKAN — IMPLEMENTASI (AUDITOR) ${agenda.dept} | Temuan #${result.nomor_persyaratan}.${result.check_item_no}`,
     emailTemplate('Persetujuan Implementasi oleh Auditor Diperlukan', body,
-      'Review & Approve', _appLink('approval', { result_id: result.result_id, stage: 'IMPL', level: 'Auditor' })));
+      'Tinjau Bukti & Setujui di My Task', _appLink('my-task', { result_id: result.result_id })));
 }
 
-/**
- * Notif ke auditor lain (gugur) + Koordinator saat salah satu auditor approve implementasi.
- * @param {Object} agenda
- * @param {Object} result
- * @param {string} approverEmail
- */
 function notifyImplApprovedByAuditor(agenda, result, approverEmail) {
   const otherAuditors = parseCSV(agenda.auditor_emails)
     .filter(a => normalizeEmail(a) !== normalizeEmail(approverEmail));
   if (otherAuditors.length) {
     sendEmail(otherAuditors,
-      `[Audit System] Info: Implementasi Sudah Di-approve — ${agenda.dept}`,
-      emailTemplate('Info: Implementasi Di-approve', `
-        <p>Bukti implementasi telah disetujui oleh <strong>${escapeHtml(approverEmail)}</strong>.</p>
+      `INFORMASI — IMPLEMENTASI SUDAH DISETUJUI AUDITOR | ${agenda.dept}`,
+      emailTemplate('Informasi: Implementasi Sudah Disetujui', `
+        <p>Bukti implementasi untuk temuan berikut telah disetujui oleh
+        <strong>${escapeHtml(approverEmail)}</strong>. Persetujuan Anda tidak diperlukan.</p>
         ${_findingInfo(result, agenda)}
-        <p>Proses dilanjutkan ke Koordinator.</p>`));
+        <p>Proses dilanjutkan ke tahap persetujuan final Koordinator untuk penutupan temuan.</p>`,
+        'Lihat Dashboard', _appLink('dashboard')));
   }
   const koordinators = getAllKoordinators();
   if (!koordinators.length) return;
   const body = `
-    <p>Dept Head dan Auditor telah menyetujui bukti implementasi.
-    Diperlukan persetujuan final <strong>Koordinator</strong> untuk menutup temuan:</p>
-    ${_findingInfo(result, agenda)}`;
+    <p>Dept Head dan Auditor telah menyetujui bukti implementasi untuk temuan berikut.
+    Diperlukan persetujuan final dari Koordinator untuk resmi menutup temuan ini.</p>
+    ${_findingInfo(result, agenda)}
+    <table style="border-collapse:collapse;width:100%;font-size:13px;">
+      <tr style="background:#f9f9f9;">
+          <td style="padding:6px;color:#666;width:160px;">Disetujui Dept Head</td>
+          <td style="padding:6px;">Ya</td></tr>
+      <tr><td style="padding:6px;color:#666;">Disetujui Auditor</td>
+          <td style="padding:6px;">Ya</td></tr>
+    </table>`;
   sendEmail(koordinators.map(u => u.email),
-    `[Audit System] Approve Implementasi (Koordinator) — Final | Temuan #${result.nomor_persyaratan}.${result.check_item_no}`,
-    emailTemplate('Persetujuan Implementasi oleh Koordinator', body,
-      'Review & Close Finding', _appLink('approval', { result_id: result.result_id, stage: 'IMPL', level: 'Koordinator' })));
+    `PERSETUJUAN FINAL DIPERLUKAN — PENUTUPAN TEMUAN ${agenda.dept} | Temuan #${result.nomor_persyaratan}.${result.check_item_no}`,
+    emailTemplate('Persetujuan Final: Penutupan Temuan', body,
+      'Tinjau & Tutup Temuan di My Task', _appLink('my-task', { result_id: result.result_id })));
 }
 
-/**
- * Notif ke semua pihak saat temuan resmi ditutup (CLOSED).
- * @param {Object} agenda
- * @param {Object} result
- */
 function notifyFindingClosed(agenda, result) {
   const recipients = [
     ...parseCSV(agenda.auditee_emails),
@@ -288,44 +332,45 @@ function notifyFindingClosed(agenda, result) {
     agenda.dept_head_email,
     ...getAllKoordinators().map(u => u.email),
   ].filter(function(v, i, a) { return v && a.indexOf(v) === i; });
-
   const body = `
-    <p>Temuan berikut telah <strong>resmi ditutup (CLOSED)</strong>.</p>
+    <p>Temuan berikut telah resmi ditutup (CLOSED) setelah seluruh tahapan tindak
+    lanjut diselesaikan dan disetujui.</p>
     ${_findingInfo(result, agenda)}
-    <p>Ditutup pada: <strong>${now()}</strong></p>`;
+    <table style="border-collapse:collapse;width:100%;font-size:13px;">
+      <tr><td style="padding:6px;color:#666;width:160px;">Ditutup pada</td>
+          <td style="padding:6px;">${now()}</td></tr>
+    </table>
+    <p style="margin-top:16px;">Terima kasih atas kerja sama semua pihak dalam
+    menyelesaikan tindak lanjut temuan audit ini.</p>`;
   sendEmail(recipients,
-    `[Audit System] Temuan CLOSED — ${agenda.dept} | Temuan #${result.nomor_persyaratan}.${result.check_item_no}`,
-    emailTemplate('Temuan Berhasil Ditutup', body,
-      'Lihat Detail', _appLink('finding', { result_id: result.result_id })));
+    `TEMUAN CLOSED — ${agenda.dept} | Temuan #${result.nomor_persyaratan}.${result.check_item_no}`,
+    emailTemplate('Temuan Resmi Ditutup', body,
+      'Lihat Dashboard', _appLink('dashboard')));
 }
 
-/**
- * Notif ke semua pihak saat CA atau implementasi ditolak.
- * @param {Object} agenda
- * @param {Object} result
- * @param {string} stage         'TPP' | 'IMPL'
- * @param {string} rejecterEmail
- * @param {string} komentar
- */
 function notifyRejected(agenda, result, stage, rejecterEmail, komentar) {
   const allParties = [
     ...parseCSV(agenda.auditee_emails),
     ...parseCSV(agenda.auditor_emails),
     agenda.dept_head_email,
   ].filter(function(v, i, a) { return v && a.indexOf(v) === i; });
-
-  const stageLabel = stage === 'TPP' ? 'Corrective Action' : 'Bukti Implementasi';
+  const stageLabel   = stage === 'TPP' ? 'Tindakan Perbaikan dan Pencegahan (TPP)' : 'Implementasi';
+  const stageSubject = stage === 'TPP' ? 'TPP' : 'IMPLEMENTASI';
   const body = `
-    <p><strong>${stageLabel}</strong> untuk temuan berikut telah
-    <strong>DITOLAK</strong> oleh <strong>${escapeHtml(rejecterEmail)}</strong>.</p>
+    <p><strong>${escapeHtml(stageLabel)}</strong> untuk temuan berikut telah
+    <strong>ditolak</strong> dan perlu diperbaiki sebelum diajukan kembali.</p>
     ${_findingInfo(result, agenda)}
-    <p><strong>Alasan:</strong><br>${escapeHtml(komentar) || '<em>tidak ada komentar</em>'}</p>
-    <p>Auditee perlu memperbaiki dan mengajukan ulang. Approval dimulai dari awal.</p>`;
+    <table style="border-collapse:collapse;width:100%;font-size:13px;">
+      <tr><td style="padding:6px;color:#666;width:160px;">Ditolak oleh</td>
+          <td style="padding:6px;">${escapeHtml(rejecterEmail)}</td></tr>
+      <tr style="background:#f9f9f9;">
+          <td style="padding:6px;color:#666;">Alasan Penolakan</td>
+          <td style="padding:6px;">${escapeHtml(komentar) || '-'}</td></tr>
+    </table>
+    <p style="margin-top:16px;">Auditee dimohon memperbaiki dan mengajukan ulang.
+    Proses approval akan dimulai kembali dari tahap Dept Head.</p>`;
   sendEmail(allParties,
-    `[Audit System] ${stageLabel} Ditolak — ${agenda.dept}`,
-    emailTemplate(stageLabel + ' Ditolak', body,
-      'Perbaiki Sekarang', _appLink(
-        stage === 'TPP' ? 'corrective-action' : 'implementation',
-        { result_id: result.result_id }
-      )));
+    `DITOLAK — ${stageSubject} ${agenda.dept} | Temuan #${result.nomor_persyaratan}.${result.check_item_no}`,
+    emailTemplate(`${stageLabel} Ditolak`, body,
+      'Perbaiki & Ajukan Ulang di My Task', _appLink('my-task', { result_id: result.result_id })));
 }
