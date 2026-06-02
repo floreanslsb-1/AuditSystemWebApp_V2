@@ -89,6 +89,8 @@ const CONFIG = {
     CORRECTIVE_ACTION: 'CORRECTIVE_ACTION',
   },
 
+  NOTIFICATIONS_ENABLED: false,  // ← set true untuk re-enable setelah trial selesai
+
   LOCK_TIMEOUT_MINUTES: 60,
   CACHE_TTL_SECONDS:    21600,
 
