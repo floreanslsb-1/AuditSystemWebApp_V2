@@ -93,8 +93,8 @@ function _handleApprove({ spreadsheetId, result, agenda, stage, level, byEmail, 
     // Masih ada level berikutnya — kirim notif ke level berikutnya
     try {
       if (isTPP) {
-        if (nextLevel === 'Auditor')     notifyCAToAuditors(agenda, result);
-        if (nextLevel === 'Koordinator') notifyCAApprovedByAuditor(agenda, result, byEmail);
+        if (nextLevel === 'Auditor')     notifyTPPToAuditors(agenda, result);
+        if (nextLevel === 'Koordinator') notifyTPPApprovedByAuditor(agenda, result, byEmail);
       } else {
         if (nextLevel === 'Auditor')     notifyImplToAuditors(agenda, result);
         if (nextLevel === 'Koordinator') notifyImplApprovedByAuditor(agenda, result, byEmail);
