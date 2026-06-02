@@ -374,7 +374,7 @@ async function _renderVerifikasiPage(container, task, period) {
             : '') +
           // Hapus temuan
           '<button class="btn btn-ghost btn-sm" style="color:var(--rose)" ' +
-            'onclick="_confirmDeleteFinding(\'' + f.result_id + '\',\'' + period.period_id + '\',' + i + ')">' +
+            'onclick="_confirmDeleteFinding(\'' + f.result_id + '\',\'' + task.agenda_id + '\',\'' + period.period_id + '\',' + i + ')">' +
             '<i data-lucide="trash-2" style="width:13px;height:13px"></i> Hapus Temuan Ini' +
           '</button>' +
         '</div>' +
@@ -414,7 +414,7 @@ function _buildStatusOptions(current) {
   }).join('');
 }
 
-async function _confirmDeleteFinding(resultId, periodId, cardIdx) {
+async function _confirmDeleteFinding(resultId, agendaId, periodId, cardIdx) {
   var ok = await showConfirm({
     title:       'Hapus Temuan',
     message:     'Hapus temuan ini?',
@@ -426,9 +426,7 @@ async function _confirmDeleteFinding(resultId, periodId, cardIdx) {
   try {
     await api('VERIFY_FINDINGS', {
       period_id: periodId,
-      agenda_id: window._myTaskPeriod && window._myTaskList
-        ? (window._myTaskList.find(function(t) { return t.type === 'VERIFIKASI'; }) || {}).agenda_id || ''
-        : '',
+      agenda_id: agendaId,
       updates: [{ result_id: resultId, final_status: 'Comply' }],
     });
     var card = document.getElementById('verif-card-' + cardIdx);
@@ -694,7 +692,7 @@ async function _renderUploadImplPage(container, task, period) {
         '<div class="card-body">' +
           '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">' +
             '<span class="badge ' + (item.tipe === 'CORRECTION' ? 'badge-blue' : 'badge-purple') + '" style="font-size:10px">' +
-              (item.tipe === 'CORRECTION' ? 'Correction' : 'Corrective Action') +
+              (item.tipe === 'CORRECTION' ? 'Koreksi' : 'Tindakan Pencegahan') +
             '</span>' +
             (alreadySubmitted ? '<span class="badge badge-emerald" style="font-size:10px">✓ Sudah disubmit</span>' : '') +
           '</div>' +
@@ -829,7 +827,7 @@ async function _renderApprovalPage(container, task, period) {
           tppItems.map(function(item) {
             return '<div style="padding:10px;border:1px solid var(--border);border-radius:6px;margin-bottom:8px">' +
               '<span class="badge ' + (item.tipe === 'CORRECTION' ? 'badge-blue' : 'badge-purple') + '" style="font-size:10px;margin-bottom:6px">' +
-                (item.tipe === 'CORRECTION' ? 'Correction' : 'Corrective Action') +
+                (item.tipe === 'CORRECTION' ? 'Koreksi' : 'Tindakan Pencegahan') +
               '</span>' +
               '<div style="font-size:13px">' + escHtml(item.deskripsi) + '</div>' +
             '</div>';
@@ -866,7 +864,7 @@ async function _renderApprovalPage(container, task, period) {
           tppItems.map(function(item) {
             return '<div style="padding:10px;border:1px solid var(--border);border-radius:6px;margin-bottom:8px">' +
               '<span class="badge ' + (item.tipe === 'CORRECTION' ? 'badge-blue' : 'badge-purple') + '" style="font-size:10px;margin-bottom:6px">' +
-                (item.tipe === 'CORRECTION' ? 'Correction' : 'Corrective Action') +
+                (item.tipe === 'CORRECTION' ? 'Koreksi' : 'Tindakan Pencegahan') +
               '</span>' +
               '<div style="font-size:13px;margin-bottom:8px">' + escHtml(item.deskripsi) + '</div>' +
               (item.impl_keterangan
