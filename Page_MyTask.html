@@ -127,38 +127,36 @@ async function _buildTaskList(findings, agendas, period) {
   }
 
 // ── 4 & 5. APPROVAL TPP / IMPLEMENTASI ───────────────────
-  var approvalFindings = findings.filter(function(f) {
-    return f.finding_status === 'PENDING_TPP' || f.finding_status === 'PENDING_IMPL';
-  });
+// Finding_status sudah embed stage & level — tidak perlu baca APPROVAL_LOG
+// Filter langsung berdasarkan status dan match ke profile user
 
-  // Muat approval log untuk tiap result (paralel)
-  var logs = await Promise.all(approvalFindings.map(function(f) {
-    return api('GET_APPROVAL_LOG', {
-      period_id: period.period_id,
-      result_id: f.result_id,
-    }).catch(function() { return []; });
-  }));
+  var APPROVAL_STATUS_MAP = {
+    'TPP_OR_DEPT_HEAD':   { type: 'APPROVAL_TPP',  label: 'Review TPP',          badge: 'badge-amber',   icon: 'check-circle',  matchFn: function(p, ag) { return !!p.isDeptHead && ag && p.deptHeadAreas && p.deptHeadAreas.indexOf(ag.area_id) !== -1; } },
+    'TPP_OR_AUDITOR':     { type: 'APPROVAL_TPP',  label: 'Review TPP',          badge: 'badge-amber',   icon: 'check-circle',  matchFn: function(p, ag) { return !!p.isAuditor  && ag && _emailInCsv(ag.auditor_emails, p.email); } },
+    'TPP_OR_KOORDINATOR': { type: 'APPROVAL_TPP',  label: 'Approval TPP Final',  badge: 'badge-teal',    icon: 'check-circle',  matchFn: function(p)     { return !!p.isKoordinator; } },
+    'APP_DEPT_HEAD':      { type: 'APPROVAL_IMPL', label: 'Review Implementasi', badge: 'badge-purple',  icon: 'upload-cloud',  matchFn: function(p, ag) { return !!p.isDeptHead && ag && p.deptHeadAreas && p.deptHeadAreas.indexOf(ag.area_id) !== -1; } },
+    'APP_AUDITOR':        { type: 'APPROVAL_IMPL', label: 'Review Implementasi', badge: 'badge-purple',  icon: 'upload-cloud',  matchFn: function(p, ag) { return !!p.isAuditor  && ag && _emailInCsv(ag.auditor_emails, p.email); } },
+    'APP_KOORDINATOR':    { type: 'APPROVAL_IMPL', label: 'Approval Impl Final', badge: 'badge-emerald', icon: 'upload-cloud',  matchFn: function(p)     { return !!p.isKoordinator; } },
+  };
 
-  approvalFindings.forEach(function(f, idx) {
-    var ag    = f._agenda;
-    var stage = f.finding_status === 'PENDING_TPP' ? 'TPP' : 'IMPL';
-    var next  = _nextApprovalLevel(logs[idx], stage);
-    if (!next) return;
-    if (!_userMatchesLevel(next, p, ag)) return;
+  findings.forEach(function(f) {
+    var meta = APPROVAL_STATUS_MAP[f.finding_status];
+    if (!meta) return;                           // status bukan approval status
+    var ag = f._agenda;
+    if (!meta.matchFn(p, ag)) return;            // user tidak berhak di status ini
 
     tasks.push({
-      type:       stage === 'TPP' ? 'APPROVAL_TPP' : 'APPROVAL_IMPL',
-      badge:      stage === 'TPP' ? 'badge-teal' : 'badge-emerald',
-      label:      stage === 'TPP' ? 'Approval TPP' : 'Approval Implementasi',
-      level:      next,
-      agenda:     ag,
-      agenda_id:  f.agenda_id,
-      period_id:  period.period_id,
-      finding:    f,
-      result_id:  f.result_id,
-      icon:       stage === 'TPP' ? 'check-circle' : 'upload-cloud',
-      desc:       '#' + f.nomor_persyaratan + '.' + f.check_item_no +
-                  ' · ' + escHtml(ag ? ag.dept : ''),
+      type:      meta.type,
+      badge:     meta.badge,
+      label:     meta.label,
+      agenda:    ag,
+      agenda_id: f.agenda_id,
+      period_id: period.period_id,
+      finding:   f,
+      result_id: f.result_id,
+      icon:      meta.icon,
+      desc:      '#' + f.nomor_persyaratan + '.' + f.check_item_no +
+                 ' · ' + escHtml(ag ? ag.dept : ''),
     });
   });
 
@@ -166,35 +164,6 @@ async function _buildTaskList(findings, agendas, period) {
 }
 
 var APPROVAL_CHAIN = ['DeptHead', 'Auditor', 'Koordinator'];
-
-// Level berikutnya yang harus approve untuk satu stage, dihitung dari log.
-// Mengembalikan 'DeptHead' | 'Auditor' | 'Koordinator', atau null kalau rantai selesai.
-function _nextApprovalLevel(log, stage) {
-  var approved = (log || [])
-    .filter(function(l) {
-      return l.stage === stage && l.action === 'APPROVED';
-    })
-    .map(function(l) { return l.level; });
-  for (var i = 0; i < APPROVAL_CHAIN.length; i++) {
-    if (approved.indexOf(APPROVAL_CHAIN[i]) === -1) return APPROVAL_CHAIN[i];
-  }
-  return null;
-}
-
-// Apakah `email` memenuhi syarat sebagai `level` untuk session ini.
-function _userMatchesLevel(level, profile, agenda) {
-  if (level === 'Koordinator') return !!profile.isKoordinator;
-  if (level === 'DeptHead') {
-    return !!profile.isDeptHead && agenda &&
-      profile.deptHeadAreas && profile.deptHeadAreas.indexOf(agenda.area_id) !== -1;
-  }
-  if (level === 'Auditor') {
-    return !!profile.isAuditor && agenda &&
-      _emailInCsv(agenda.auditor_emails, profile.email);
-  }
-  return false;
-}
-
 
 function _isAuditeeOf(agenda, email) {
   if (!agenda || !agenda.auditee_emails || !email) return false;
@@ -915,27 +884,6 @@ async function _renderApprovalPage(container, task, period) {
           }).join('') +
         '</div></div>';
 
-    // Skip panel (hanya koordinator)
-    var skipHtml = isKoord
-      ? '<div class="card mb-16" style="border:1px dashed var(--border)">' +
-          '<div class="card-body">' +
-            '<div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text-muted)">Skip Level (Force Majeur)</div>' +
-            '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
-              '<select class="form-control" id="skip-level-select" style="max-width:160px;font-size:13px">' +
-                '<option value="">— Pilih level —</option>' +
-                '<option value="DeptHead">Skip Dept Head</option>' +
-                '<option value="Auditor">Skip Auditor</option>' +
-              '</select>' +
-              '<input class="form-control" id="skip-reason-input" placeholder="Alasan skip..." style="flex:1;font-size:13px">' +
-              '<button class="btn btn-outline btn-sm" onclick="_submitSkipApproval(\'' +
-                task.result_id + '\',\'' + task.agenda_id + '\',\'' + period.period_id + '\',\'' + stage + '\')">' +
-                '<i data-lucide="fast-forward" style="width:13px;height:13px"></i> Skip & Approve' +
-              '</button>' +
-            '</div>' +
-          '</div>' +
-        '</div>'
-      : '';
-
     container.innerHTML =
       _subPageHeader(
         (isTPP ? 'Approval TPP' : 'Approval Implementasi') +
@@ -1000,10 +948,9 @@ async function _processApproval(resultId, agendaId, periodId, stage, level, acti
       period_id: periodId,
       result_id: resultId,
       agenda_id: agendaId,
-      stage:     stage,
-      level:     level,
       action:    action,
       komentar:  komentar,
+      // stage & level dihapus — derive dari finding_status di server
     });
     clearCache('GET_ALL_FINDINGS_BY_PERIOD');
     clearCache('GET_FINDINGS_BY_AGENDA');
@@ -1015,33 +962,6 @@ async function _processApproval(resultId, agendaId, periodId, stage, level, acti
     toast(err.message, 'error');
     btn.disabled = false;
   }
-}
-
-async function _submitSkipApproval(resultId, agendaId, periodId, stage) {
-  var skipLevel  = document.getElementById('skip-level-select') ?
-    document.getElementById('skip-level-select').value : '';
-  var skipReason = document.getElementById('skip-reason-input') ?
-    document.getElementById('skip-reason-input').value.trim() : '';
-
-  if (!skipLevel)  return toast('Pilih level yang akan di-skip.', 'error');
-  if (!skipReason) return toast('Isi alasan skip.', 'error');
-
-  try {
-    await api('PROCESS_APPROVAL', {
-      period_id:   periodId,
-      result_id:   resultId,
-      agenda_id:   agendaId,
-      stage:       stage,
-      level:       'Koordinator',
-      action:      'APPROVED',
-      komentar:    '',
-      skip_level:  skipLevel,
-      skip_reason: skipReason,
-    });
-    clearCache('GET_ALL_FINDINGS_BY_PERIOD');
-    toast('Level ' + skipLevel + ' di-skip. Approval dilanjutkan.', 'success');
-    navigateTo('mytask');
-  } catch(err) { toast(err.message, 'error'); }
 }
 
 // ── Mass Approve ─────────────────────────────────────────────
@@ -1068,8 +988,7 @@ async function _massApproveAll(stage) {
       period_id:  period.period_id,
       result_ids: tasks.map(function(t) { return t.result_id; }),
       agenda_ids: tasks.map(function(t) { return t.agenda_id; }),
-      stage:      stage,
-      level:      level,
+      // stage & level dihapus — derive dari finding_status di server
     });
     clearCache('GET_ALL_FINDINGS_BY_PERIOD');
     toast(tasks.length + ' finding berhasil di-approve.', 'success');
