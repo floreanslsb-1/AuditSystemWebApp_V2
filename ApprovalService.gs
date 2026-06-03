@@ -14,16 +14,14 @@
 //  - massApprove: hapus stage & level dari signature
 // ============================================================
 
-const FS = CONFIG.FINDING_STATUS;
-
-// Map finding_status → { stage, level, next, reject }
+// STATUS_FLOW pakai string literal — tidak bergantung pada load order CONFIG
 const STATUS_FLOW = {
-  [FS.TPP_OR_DEPT_HEAD]:   { stage: 'TPP',  level: 'DeptHead',    next: FS.TPP_OR_AUDITOR,     reject: FS.OPEN      },
-  [FS.TPP_OR_AUDITOR]:     { stage: 'TPP',  level: 'Auditor',     next: FS.TPP_OR_KOORDINATOR, reject: FS.OPEN      },
-  [FS.TPP_OR_KOORDINATOR]: { stage: 'TPP',  level: 'Koordinator', next: FS.OPEN_IMPL,           reject: FS.OPEN      },
-  [FS.APP_DEPT_HEAD]:      { stage: 'IMPL', level: 'DeptHead',    next: FS.APP_AUDITOR,         reject: FS.OPEN_IMPL },
-  [FS.APP_AUDITOR]:        { stage: 'IMPL', level: 'Auditor',     next: FS.APP_KOORDINATOR,     reject: FS.OPEN_IMPL },
-  [FS.APP_KOORDINATOR]:    { stage: 'IMPL', level: 'Koordinator', next: FS.CLOSED,              reject: FS.OPEN_IMPL },
+  'TPP_OR_DEPT_HEAD':   { stage: 'TPP',  level: 'DeptHead',    next: 'TPP_OR_AUDITOR',     reject: 'OPEN'      },
+  'TPP_OR_AUDITOR':     { stage: 'TPP',  level: 'Auditor',     next: 'TPP_OR_KOORDINATOR', reject: 'OPEN'      },
+  'TPP_OR_KOORDINATOR': { stage: 'TPP',  level: 'Koordinator', next: 'OPEN_IMPL',           reject: 'OPEN'      },
+  'APP_DEPT_HEAD':      { stage: 'IMPL', level: 'DeptHead',    next: 'APP_AUDITOR',         reject: 'OPEN_IMPL' },
+  'APP_AUDITOR':        { stage: 'IMPL', level: 'Auditor',     next: 'APP_KOORDINATOR',     reject: 'OPEN_IMPL' },
+  'APP_KOORDINATOR':    { stage: 'IMPL', level: 'Koordinator', next: 'CLOSED',              reject: 'OPEN_IMPL' },
 };
 
 /**
@@ -80,7 +78,8 @@ function massApprove({ spreadsheetId, resultIds, agendaIds, byEmail, komentar })
 // ── Handlers ─────────────────────────────────────────────────────
 
 function _handleApprove({ spreadsheetId, result, agenda, flow, byEmail, komentar }) {
-  const C = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
+  const FS = CONFIG.FINDING_STATUS;
+  const C  = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
 
   appendApprovalLog(spreadsheetId, {
     result_id:   result.result_id,
@@ -195,6 +194,7 @@ function _validateApprover(agenda, level, email, findingStatus, spreadsheetId, r
  * Dipanggil setelah setiap APP_KOORDINATOR approve.
  */
 function _checkAgendaAllClosed(spreadsheetId, agendaId) {
+  const FS       = CONFIG.FINDING_STATUS;
   const findings = getFindingsByAgenda(spreadsheetId, agendaId);
   if (!findings.length) return false;
 
