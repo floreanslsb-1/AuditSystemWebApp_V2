@@ -385,14 +385,14 @@ function _routeAction(action, payload, profile) {
     }
 
     case 'GET_FINDINGS_BY_AGENDA': {
-      // Hanya Non Comply / OFI — untuk halaman verifikasi koordinator
+      // Hanya Non Comply — untuk halaman verifikasi koordinator
       const period_gfa = getPeriodById(payload.period_id);
       if (!period_gfa) throw new Error('Periode tidak ditemukan.');
       return getFindingsByAgenda(period_gfa.spreadsheet_id, payload.agenda_id).map(_sanitizeObj);
     }
 
     case 'GET_ALL_FINDINGS_BY_PERIOD': {
-      // Semua Non Comply / OFI lintas agenda — untuk dashboard
+      // Semua Non Comply lintas agenda — untuk dashboard
       const period_gafp = getPeriodById(payload.period_id);
       if (!period_gafp || !period_gafp.spreadsheet_id) return [];
       return getAllFindingsByPeriod(period_gafp.spreadsheet_id, payload.period_id).map(_sanitizeObj);
@@ -517,7 +517,7 @@ function _routeAction(action, payload, profile) {
       );
     }
 
-    // ── TPP (Corrective Action) ───────────────────────────────
+    // ── TPP (Tindakan Perbaikan dan Pencegahan) ───────────────
     case 'SUBMIT_TPP': {
       requireAccess(['isAuditee', 'isDeptHead'], profile);
       const period_tpp = getPeriodById(payload.period_id);
@@ -542,15 +542,12 @@ function _routeAction(action, payload, profile) {
       const period_pa = getPeriodById(payload.period_id);
       return processApproval({
         spreadsheetId: period_pa.spreadsheet_id,
-        resultId:      payload.result_id,    // sebelumnya findingId
-        agendaId:      payload.agenda_id,    // sebelumnya sessionId
-        stage:         payload.stage,
-        level:         payload.level,
+        resultId:      payload.result_id,
+        agendaId:      payload.agenda_id,
         action:        payload.action,
         byEmail:       profile.email,
-        komentar:      payload.komentar  || '',
-        skipLevel:     payload.skip_level  || null,
-        skipReason:    payload.skip_reason || '',
+        komentar:      payload.komentar || '',
+        // stage, level, skipLevel, skipReason dihapus — derive dari finding_status
       });
     }
 
@@ -559,12 +556,11 @@ function _routeAction(action, payload, profile) {
       const period_ma = getPeriodById(payload.period_id);
       return massApprove({
         spreadsheetId: period_ma.spreadsheet_id,
-        resultIds:     payload.result_ids,   // sebelumnya findingIds
-        agendaIds:     payload.agenda_ids,   // sebelumnya sessionIds
-        stage:         payload.stage,
-        level:         payload.level,
+        resultIds:     payload.result_ids,
+        agendaIds:     payload.agenda_ids,
         byEmail:       profile.email,
         komentar:      payload.komentar || '',
+        // stage & level dihapus — derive dari finding_status
       });
     }
 
