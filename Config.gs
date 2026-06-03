@@ -62,6 +62,7 @@ const CONFIG = {
     APP_AUDITOR:          'APP_AUDITOR',
     APP_KOORDINATOR:      'APP_KOORDINATOR',
     CLOSED:               'CLOSED',
+    OVERDUE:              'OVERDUE', // Set saat Koordinator force-complete periode
   },
 
   AGENDA_STATUS: {
