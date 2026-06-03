@@ -199,7 +199,7 @@ function _checkAgendaAllClosed(spreadsheetId, agendaId) {
   if (!findings.length) return false;
 
   const allClosed = findings.every(function(f) {
-    return f.finding_status === FS.CLOSED;
+    return f.finding_status === FS.CLOSED || f.finding_status === FS.OVERDUE;
   });
 
   if (allClosed) {
