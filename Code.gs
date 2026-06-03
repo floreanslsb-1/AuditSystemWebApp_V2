@@ -690,6 +690,7 @@ function _getDashboardData(profile, periodId) {
       app_auditor:          findings.filter(f => f.finding_status === fs.APP_AUDITOR).length,
       app_koordinator:      findings.filter(f => f.finding_status === fs.APP_KOORDINATOR).length,
       closed:               findings.filter(f => f.finding_status === fs.CLOSED).length,
+      overdue:              findings.filter(f => f.finding_status === fs.OVERDUE).length,
       agenda_planned:       agendas.filter(a => a.status === CONFIG.AGENDA_STATUS.PLANNED).length,
       agenda_started:       agendas.filter(a => a.status === CONFIG.AGENDA_STATUS.STARTED).length,
       agenda_done:          agendas.filter(a => a.status === CONFIG.AGENDA_STATUS.DONE).length,
@@ -716,6 +717,7 @@ function _emptySummary() {
     open_impl: 0,
     app_dept_head: 0, app_auditor: 0, app_koordinator: 0,
     closed: 0,
+    overdue: 0,
     agenda_planned: 0, agenda_started: 0, agenda_done: 0,
   };
 }
