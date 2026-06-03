@@ -8,7 +8,7 @@ Pages['home'] = function(container) {
       page: 'dashboard',
       icon: 'bar-chart-2',
       label: 'Dashboard',
-      desc:  'Ringkasan temuan, status audit, dan progres corrective action',
+      desc:  'Ringkasan temuan, status audit, dan progres TPP',
       color: '#3b82f6',
       bg:    'rgba(59,130,246,.08)',
       show:  true,
@@ -32,12 +32,6 @@ Pages['home'] = function(container) {
       show:  !!p.isKoordinator,
     },
   ].filter(function(n) { return n.show; });
-
-  var roleLabel = p.isKoordinator ? 'Koordinator Audit'
-    : p.isAuditor   ? 'Auditor'
-    : p.isDeptHead  ? 'Department Head'
-    : p.isAuditee   ? 'Auditee'
-    : 'Viewer';
 
   var periodHtml = App.activePeriod
     ? '<div class="lp-period lp-period--active">' +
@@ -203,25 +197,6 @@ Pages['home'] = function(container) {
       '}' +
       '.lp-card:hover .lp-card-arrow{opacity:1;transform:translateX(0);}' +
 
-      // User footer
-      '.lp-footer{' +
-        'display:flex;align-items:center;gap:10px;' +
-        'padding-top:20px;' +
-        'border-top:1px solid var(--border);' +
-        'animation:lpFadeUp .5s .3s ease both;' +
-      '}' +
-
-      '.lp-avatar{' +
-        'width:32px;height:32px;border-radius:50%;' +
-        'background:var(--blue,#3b82f6);' +
-        'color:#fff;font-size:12px;font-weight:700;' +
-        'display:flex;align-items:center;justify-content:center;' +
-        'flex-shrink:0;' +
-      '}' +
-
-      '.lp-user-name{font-size:13px;font-weight:500;color:var(--text);}' +
-      '.lp-user-role{font-size:11px;color:var(--text-muted);}' +
-
       // Animations
       '@keyframes lpFadeUp{' +
         'from{opacity:0;transform:translateY(12px);}' +
@@ -247,7 +222,7 @@ Pages['home'] = function(container) {
           '<div class="lp-eyebrow">Integrated Management System Department · PT Sayap Mas Utama</div>' +
           '<h1 class="lp-title">Sistem Audit <em>Internal</em><br>Terintegrasi</h1>' +
           '<p class="lp-subtitle">' +
-            'Platform terpadu untuk mengelola checklist audit, temuan, corrective action, dan laporan — dari lapangan hingga persetujuan akhir.' +
+            'Platform terpadu untuk mengelola checklist audit, temuan, Tindakan Perbaikan dan Pencegahan (TPP), serta laporan — dari lapangan hingga persetujuan akhir.' +
           '</p>' +
           periodHtml +
         '</div>' +
