@@ -2092,9 +2092,4 @@ async function _submitAgreementAndFinish(agendaId, periodId) {
 //  Helpers
 // ============================================================
 
-function _emailInCsv(csv, email) {
-  if (!csv || !email) return false;
-  var target = String(email).trim().toLowerCase();
-  return String(csv).split(',').map(function(e) { return e.trim().toLowerCase(); }).indexOf(target) !== -1;
-}
 </script>
