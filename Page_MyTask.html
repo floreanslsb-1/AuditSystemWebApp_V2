@@ -78,8 +78,8 @@ async function _buildTaskList(findings, agendas, period) {
     Object.values(pendingVerif).forEach(function(t) { tasks.push(t); });
   }
 
-  // ── 2. ISI TPP (Auditee) ─────────────────────────────────
-  if (p.isAuditee) {
+  // ── 2. ISI TPP (Auditee — DeptHead dikecualikan) ─────────
+  if (p.isAuditee && !p.isDeptHead) {
     findings
       .filter(function(f) {
         return f.finding_status === 'OPEN' &&
@@ -102,8 +102,8 @@ async function _buildTaskList(findings, agendas, period) {
       });
   }
 
-  // ── 3. UPLOAD IMPLEMENTASI (Auditee) ─────────────────────
-  if (p.isAuditee) {
+  // ── 3. UPLOAD IMPLEMENTASI (Auditee — DeptHead dikecualikan) ─────────────
+  if (p.isAuditee && !p.isDeptHead) {
     findings
       .filter(function(f) {
         return f.finding_status === 'OPEN_IMPL' &&
@@ -162,8 +162,6 @@ async function _buildTaskList(findings, agendas, period) {
 
   return tasks;
 }
-
-var APPROVAL_CHAIN = ['DeptHead', 'Auditor', 'Koordinator'];
 
 function _isAuditeeOf(agenda, email) {
   if (!agenda || !agenda.auditee_emails || !email) return false;
@@ -683,10 +681,10 @@ async function _renderUploadImplPage(container, task, period) {
     var historyHtml = _renderApprovalHistory(log, 'IMPL');
 
     var itemsHtml = tppItems.map(function(item, i) {
-      var isRejected = log.some(function(l) {
-        return l.stage === 'IMPL' && l.action === 'REJECTED';
-      });
-      var alreadySubmitted = !!item.impl_submitted_at && !isRejected;
+      // Selalu tampilkan upload zone di OPEN_IMPL — auditee bisa upload / re-upload
+      // Data sebelumnya ditampilkan sebagai referensi di atas upload zone
+      var hadPreviousSubmit = !!item.impl_submitted_at;
+      var alreadySubmitted  = false; // OPEN_IMPL = selalu perlu (re)submit
 
       return '<div class="card mb-12">' +
         '<div class="card-body">' +
@@ -698,39 +696,47 @@ async function _renderUploadImplPage(container, task, period) {
           '</div>' +
           '<div style="font-size:13px;margin-bottom:12px">' + escHtml(item.deskripsi) + '</div>' +
 
-          (alreadySubmitted
-            // Sudah submit — tampilkan bukti lama
-            ? (item.impl_foto_urls
-                ? '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+          // Tampilkan bukti sebelumnya jika ada (referensi — tidak dihapus saat reject)
+          (hadPreviousSubmit && item.impl_foto_urls
+            ? '<div class="card mb-8" style="background:var(--bg);border:1px solid var(--border)">' +
+                '<div class="card-body" style="padding:10px 12px">' +
+                  '<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;display:flex;align-items:center;gap:4px">' +
+                    '<i data-lucide="history" style="width:11px;height:11px"></i> ' +
+                    'Bukti sebelumnya:' +
+                  '</div>' +
+                  '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
                     item.impl_foto_urls.split(',').filter(Boolean).map(function(url) {
                       return '<a href="' + url + '" target="_blank" class="btn btn-outline btn-sm">' +
-                        '<i data-lucide="image" style="width:12px;height:12px"></i> Lihat Bukti</a>';
+                        '<i data-lucide="image" style="width:12px;height:12px"></i> Lihat</a>';
                     }).join('') +
-                  '</div>'
-                : '') +
-                (item.impl_keterangan
-                  ? '<div style="font-size:12px;color:var(--text-muted);margin-top:6px">' +
-                      escHtml(item.impl_keterangan) +
-                    '</div>'
-                  : '')
-            // Belum submit atau perlu resubmit
-            : '<div class="upload-zone" id="impl-zone-' + item.tpp_item_id + '">' +
-                '<i data-lucide="camera" style="width:24px;height:24px;opacity:.3;margin-bottom:6px"></i>' +
-                '<div class="upload-text">Upload foto/dokumen bukti</div>' +
-              '</div>' +
-              '<div class="upload-previews" id="impl-preview-' + item.tpp_item_id + '"></div>' +
-              '<div class="form-group" style="margin-top:10px">' +
-                '<label class="form-label" style="font-size:12px">Keterangan (opsional)</label>' +
-                '<textarea class="form-control" id="impl-ket-' + item.tpp_item_id + '" rows="2" ' +
-                  'placeholder="Jelaskan apa yang sudah dilakukan..."></textarea>' +
-              '</div>' +
-              '<button class="btn btn-primary btn-sm" id="impl-btn-' + item.tpp_item_id + '" ' +
-                'onclick="singleClick(this,function(){ _submitImplItem(\'' +
-                  item.tpp_item_id + '\',\'' + task.result_id + '\',\'' +
-                  task.agenda_id + '\',\'' + period.period_id + '\') })">' +
-                '<i data-lucide="upload" style="width:13px;height:13px"></i> Submit Bukti' +
-              '</button>'
-          ) +
+                  '</div>' +
+                  (item.impl_keterangan
+                    ? '<div style="font-size:11px;color:var(--text-muted);margin-top:6px">' +
+                        escHtml(item.impl_keterangan) +
+                      '</div>'
+                    : '') +
+                '</div>' +
+              '</div>'
+            : '') +
+          // Upload zone — selalu tampil agar auditee bisa upload / re-upload
+          '<div class="upload-zone" id="impl-zone-' + item.tpp_item_id + '">' +
+            '<i data-lucide="camera" style="width:24px;height:24px;opacity:.3;margin-bottom:6px"></i>' +
+            '<div class="upload-text">' + (hadPreviousSubmit ? 'Upload ulang bukti' : 'Upload foto/dokumen bukti') + '</div>' +
+          '</div>' +
+          '<div class="upload-previews" id="impl-preview-' + item.tpp_item_id + '"></div>' +
+          '<div class="form-group" style="margin-top:10px">' +
+            '<label class="form-label" style="font-size:12px">Keterangan (opsional)</label>' +
+            '<textarea class="form-control" id="impl-ket-' + item.tpp_item_id + '" rows="2" ' +
+              'placeholder="Jelaskan apa yang sudah dilakukan...">' +
+              escHtml(item.impl_keterangan || '') +
+            '</textarea>' +
+          '</div>' +
+          '<button class="btn btn-primary btn-sm" id="impl-btn-' + item.tpp_item_id + '" ' +
+            'onclick="singleClick(this,function(){ _submitImplItem(\'' +
+              item.tpp_item_id + '\',\'' + task.result_id + '\',\'' +
+              task.agenda_id + '\',\'' + period.period_id + '\') })">' +
+            '<i data-lucide="upload" style="width:13px;height:13px"></i> ' + (hadPreviousSubmit ? 'Upload Ulang' : 'Submit Bukti') +
+          '</button>' +
         '</div>' +
       '</div>';
     }).join('');
@@ -744,11 +750,9 @@ async function _renderUploadImplPage(container, task, period) {
       historyHtml +
       itemsHtml;
 
-    // Setup upload zones
+    // Setup upload zones — selalu untuk semua item di OPEN_IMPL
     tppItems.forEach(function(item) {
-      if (!item.impl_submitted_at) {
-        setupUploadZone('impl-zone-' + item.tpp_item_id, 'impl-preview-' + item.tpp_item_id);
-      }
+      setupUploadZone('impl-zone-' + item.tpp_item_id, 'impl-preview-' + item.tpp_item_id);
     });
 
     lucide.createIcons();
@@ -886,7 +890,8 @@ async function _renderApprovalPage(container, task, period) {
       _subPageHeader(
         (isTPP ? 'Approval TPP' : 'Approval Implementasi') +
           ' — ' + escHtml(task.agenda ? task.agenda.dept : ''),
-        'Level: ' + (task.level || '') + ' · #' + (f ? f.nomor_persyaratan + '.' + f.check_item_no : '')
+        '#' + (f ? f.nomor_persyaratan + '.' + f.check_item_no : '') +
+        ' · ' + escHtml(f ? f.deskripsi_temuan : '')
       ) +
 
       // Info temuan
