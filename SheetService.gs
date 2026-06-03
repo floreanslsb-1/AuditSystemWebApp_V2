@@ -579,13 +579,12 @@ function completePeriod(periodId, completedBy, force) {
     return { requireConfirm: true, openCount: openFindings.length };
   }
 
-  // Force: tandai sisa temuan open jadi CLOSED saat periode di-complete
-  // (overdue logic akan diimplementasi terpisah nanti)
+  // Force: tandai sisa temuan belum CLOSED sebagai OVERDUE saat periode di-force-complete
   if (openFindings.length) {
     const sheetR = _getAuditSheet(period.spreadsheet_id, CONFIG.AUDIT_SHEETS.AUDIT_RESULTS);
     const C2     = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
     openFindings.forEach(function(r) {
-      _updateCell(sheetR, r._rowIndex, C2.FINDING_STATUS + 1, FS.CLOSED);
+      _updateCell(sheetR, r._rowIndex, C2.FINDING_STATUS + 1, FS.OVERDUE);
     });
   }
 
@@ -708,7 +707,7 @@ function resetAgendaData(spreadsheetId, agendaId) {
   const results = getAuditResultsByAgenda(spreadsheetId, agendaId);
   const clearCols = [
     C.STATUS, C.DESKRIPSI_TEMUAN, C.FOTO_URLS, C.AUDITOR_EMAIL, C.SAVED_AT,
-    C.FINDING_STATUS, C.TARGET_DATE, C.TPP_STATUS, C.CLOSED_AT
+    C.FINDING_STATUS, C.TARGET_DATE, C.IS_OVERDUE, C.CLOSED_AT
   ];
   results.forEach(function(r) {
     clearCols.forEach(function(col) { _updateCell(sheet, r._rowIndex, col + 1, ''); });
@@ -924,7 +923,6 @@ function markOverdueFindings(spreadsheetId, periodId) {
 
 // Ambil semua Non Comply lintas agenda untuk satu periode (dashboard)
 function getAllFindingsByPeriod(spreadsheetId, periodId) {
-  try { markOverdueFindings(spreadsheetId, periodId); } catch(e) { console.warn('markOverdue gagal:', e.message); }
   return getAuditResultsByPeriod(spreadsheetId, periodId).filter(r =>
     r.status === CONFIG.RESULT_STATUS.NON_COMPLY
   );
