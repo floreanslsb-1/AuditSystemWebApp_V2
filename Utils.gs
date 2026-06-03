@@ -38,7 +38,7 @@ function generateSequentialId(prefix, existingCount) {
  * @returns {string}  e.g. '2025-07-01 14:30:22'
  */
 function now() {
-  return Utilities.formatDate(new Date(), 'Asia/Jakarta', 'yyyy-MM-dd HH:mm:ss');
+  return new Date().toISOString(); // e.g. "2026-06-03T03:00:00.000Z"
 }
 
 /**
