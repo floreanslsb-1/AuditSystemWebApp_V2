@@ -10,7 +10,6 @@
 //  - AUDIT_COLS.REQUIREMENT_LOCKS: session_id → agenda_id
 //  - Hapus AUDIT_COLS.SESSIONS, FINDINGS, AGENDA_CHECKLIST
 //  - Hapus SESSION_STATUS (tidak ada lagi)
-//  - Tambah FINDING_STATUS.OPEN_OFI untuk membedakan OFI dengan Non Comply
 // ============================================================
 
 const CONFIG = {
@@ -189,9 +188,9 @@ const CONFIG = {
       STANDAR_CHECK_ITEM: 11,  // kriteria/referensi standar
 
       // Grup 3 — diisi auditor saat audit (awalnya kosong)
-      STATUS:           12,  // kosong → Comply / Non Comply / OFI
-      DESKRIPSI_TEMUAN: 13,  // diisi kalau Non Comply / OFI
-      FOTO_URLS:        14,  // diisi kalau Non Comply / OFI
+      STATUS:           12,  // kosong → Comply / Non Comply
+      DESKRIPSI_TEMUAN: 13,  // diisi kalau Non Comply
+      FOTO_URLS:        14,  // diisi kalau Non Comply
       AUDITOR_EMAIL:    15,  // siapa yang mengisi
       SAVED_AT:         16,  // kapan terakhir diisi/diubah
 
