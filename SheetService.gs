@@ -519,11 +519,24 @@ function getActivePeriod() {
 }
 
 function createPeriod({ namaPeriode, tanggalMulai, tanggalSelesai, createdBy }) {
-  const period_id = generateId('PRD');
-  const { spreadsheet_id, spreadsheet_url } = _createAuditSpreadsheet(period_id, namaPeriode);
+  // Validasi nama tidak boleh sama persis (case-insensitive)
+  const existing = getAllPeriods(true);
+  const namaTrim = (namaPeriode || '').trim();
+  if (!namaTrim) throw new Error('Nama periode tidak boleh kosong.');
+  const duplikat = existing.find(p =>
+    (p.nama_periode || '').trim().toLowerCase() === namaTrim.toLowerCase()
+  );
+  if (duplikat) throw new Error('Nama periode "' + namaTrim + '" sudah digunakan. Gunakan nama yang berbeda.');
+
+  const period_id = generatePeriodId(namaTrim);
+  // Cek period_id juga tidak tabrakan (seharusnya tidak kalau nama sudah unik)
+  if (existing.find(p => p.period_id === period_id))
+    throw new Error('ID periode "' + period_id + '" sudah ada. Coba gunakan nama yang lebih spesifik.');
+
+  const { spreadsheet_id, spreadsheet_url } = _createAuditSpreadsheet(period_id, namaTrim);
   const sheet = _getMasterSheet(CONFIG.SHEETS.AUDIT_REGISTRY);
   _appendRow(sheet, [
-    period_id, namaPeriode, spreadsheet_id, spreadsheet_url,
+    period_id, namaTrim, spreadsheet_id, spreadsheet_url,
     tanggalMulai, tanggalSelesai, CONFIG.PERIOD_STATUS.PLANNED,
     createdBy, now(), false, '', '',
   ]);
@@ -726,7 +739,7 @@ function createAgenda({ periodId, areaId, auditorEmails, leadAuditor, jadwalTang
   if (leadAuditor && !auditors.map(normalizeEmail).includes(normalizeEmail(leadAuditor)))
     throw new Error('Lead auditor harus merupakan salah satu dari auditor yang ditugaskan.');
 
-  const agenda_id = generateId('AGN');
+  const agenda_id = generateAgendaId(periodId, area.dept);
   const sheet     = _getMasterSheet(CONFIG.SHEETS.AUDIT_AGENDA);
   const C         = CONFIG.COLS.AUDIT_AGENDA;
   const row       = new Array(Object.keys(C).length).fill('');
@@ -1046,12 +1059,16 @@ function populateAuditResults(agendaId, itemIds, spreadsheetId, periodId) {
     });
   if (!selected.length) return { success: true, count: 0 };
 
+  const agendaForResult = getAgendaById(agendaId);
+  const deptForResult   = agendaForResult ? (agendaForResult.dept || agendaId) : agendaId;
+  let   resultCounter   = 0;
   const ciCounterMap = {};
   const rows = selected.map(function(item) {
     if (!ciCounterMap[item.nomor]) ciCounterMap[item.nomor] = 0;
     ciCounterMap[item.nomor]++;
+    resultCounter++;
     const row = new Array(AUDIT_RESULT_HEADERS.length).fill('');
-    row[C.RESULT_ID]          = generateId('RES');
+    row[C.RESULT_ID]          = generateResultId(deptForResult, resultCounter);
     row[C.AGENDA_ID]          = agendaId;
     row[C.PERIOD_ID]          = periodId;
     row[C.ITEM_ID]            = item.item_id;
