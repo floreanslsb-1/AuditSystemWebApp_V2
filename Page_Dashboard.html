@@ -85,8 +85,11 @@ function _renderDashboard(container, data) {
       '</div>' +
     '</div>' +
 
-    // ── Section 1: Audit Progress ────────────────────────────
-    _dbProgressSection(agendas, s, donePct, totalAgendas) +
+    // ── Section 1: Audit Progress + OFI Summary (side by side) ──
+    '<div class="db-top-row">' +
+      _dbProgressSection(agendas, s, donePct, totalAgendas) +
+      _dbOfiSection(agendas) +
+    '</div>' +
 
     // ── Section 2: Approval Table ────────────────────────────
     _dbApprovalSection(agendas, findings, s);
@@ -103,7 +106,7 @@ function _dbStyles() {
     /* Progress section */
     '.db-progress-grid{display:grid;grid-template-columns:auto 1fr auto;gap:28px;align-items:center}' +
     '@media(max-width:640px){.db-progress-grid{grid-template-columns:1fr;gap:16px}}' +
-    '.db-sep{width:1px;height:72px;background:var(--border)}' +
+    '.db-sep{width:1px;height:72px;background:var(--surface)}' +
     '@media(max-width:640px){.db-sep{display:none}}' +
 
     /* Approval table */
@@ -146,6 +149,40 @@ function _dbStyles() {
     /* Hover row */
     '.db-tbl tbody tr:hover td{background:var(--surface2);transition:background .1s}' +
     '.db-tbl tbody tr:hover .db-col-area{background:var(--surface2)}' +
+
+    /* Top row layout — Progress + OFI side by side */
+    '.db-top-row{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:start;margin-bottom:24px}' +
+    '@media(max-width:900px){.db-top-row{grid-template-columns:1fr;}}' +
+
+    /* OFI table */
+    '.db-ofi-tbl{width:100%;border-collapse:collapse}' +
+    '.db-ofi-tbl th{' +
+      'padding:8px 12px;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;' +
+      'color:var(--text-muted);background:var(--surface2);text-align:left;' +
+      'border-bottom:1px solid var(--border)' +
+    '}' +
+    '.db-ofi-tbl td{' +
+      'padding:10px 12px;font-size:13px;border-bottom:1px solid var(--border);' +
+      'vertical-align:top;line-height:1.5' +
+    '}' +
+    '.db-ofi-tbl tbody tr:last-child td{border-bottom:none}' +
+    '.db-ofi-tbl .db-ofi-no{width:36px;text-align:center;color:var(--text-muted);font-size:12px;font-weight:600}' +
+    '.db-ofi-tbl .db-ofi-dept{width:140px;white-space:nowrap}' +
+    '.db-ofi-empty{text-align:center;padding:40px!important;color:var(--text-muted);font-size:13px}' +
+    '.db-ofi-search{' +
+      'width:100%;box-sizing:border-box;' +
+      'padding:7px 12px 7px 32px;' +
+      'font-size:13px;border:1px solid var(--border);border-radius:var(--radius-sm);' +
+      'background:var(--bg);color:var(--text);outline:none;' +
+      'transition:border-color .15s' +
+    '}' +
+    '.db-ofi-search:focus{border-color:var(--blue)}' +
+    '.db-ofi-search-wrap{position:relative}' +
+    '.db-ofi-search-icon{' +
+      'position:absolute;left:9px;top:50%;transform:translateY(-50%);' +
+      'width:14px;height:14px;color:var(--text-muted);pointer-events:none' +
+    '}' +
+
   '</style>';
 }
 
@@ -164,7 +201,7 @@ function _dbProgressSection(agendas, s, donePct, totalAgendas) {
   var pendingVerif = s.pending_verification || 0;
   var hasOverdue   = (s.overdue || 0) > 0;
 
-  return '<div class="card mb-24" style="max-width:560px">' +
+  return '<div class="card" style="max-width:560px">' +
     '<div class="card-header">' +
       '<div>' +
         '<div class="card-title">Progres Audit</div>' +
@@ -179,11 +216,11 @@ function _dbProgressSection(agendas, s, donePct, totalAgendas) {
       '<div class="db-progress-grid">' +
 
         // Donut chart
-        '<div style="position:relative;cursor:pointer;flex-shrink:0;width:96px;height:96px" onclick="_dbOpenProgressModal()" title="Klik untuk detail area">' +
-          _dbDonut(donePct, 96, s.agenda_done || 0, s.agenda_started || 0, totalAgendas) +
-          '<div style="position:absolute;top:0;left:0;width:96px;height:96px;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none">' +
-            '<div style="font-size:20px;font-weight:800;color:var(--text);line-height:1">' + donePct + '%</div>' +
-            '<div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-top:2px">Selesai</div>' +
+        '<div style="position:relative;cursor:pointer;flex-shrink:0;width:120px;height:120px;margin:0 auto" onclick="_dbOpenProgressModal()" title="Klik untuk detail area">' +
+          _dbDonut(donePct, 120, s.agenda_done || 0, s.agenda_started || 0, totalAgendas) +
+          '<div style="position:absolute;top:0;left:0;width:120px;height:120px;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none">' +
+            '<div style="font-size:26px;font-weight:800;color:var(--text);line-height:1">' + donePct + '%</div>' +
+            '<div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-top:3px">Selesai</div>' +
           '</div>' +
         '</div>' +
 
@@ -197,7 +234,7 @@ function _dbProgressSection(agendas, s, donePct, totalAgendas) {
         '<div class="db-sep"></div>' +
 
         // Findings summary
-        '<div style="min-width:160px">' +
+        '<div style="min-width:160px;padding-left:16px">' +
           '<div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Temuan</div>' +
           '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:10px">' +
             '<span style="font-size:36px;font-weight:800;color:var(--text);line-height:1;font-family:\'DM Mono\',monospace">' + (s.total || 0) + '</span>' +
@@ -227,13 +264,114 @@ function _dbProgressSection(agendas, s, donePct, totalAgendas) {
   '</div>';
 }
 
+// ════════════════════════════════════════════════════════════
+//  SECTION 1b — OFI SUMMARY
+// ════════════════════════════════════════════════════════════
+
+function _dbOfiSection(agendas) {
+  // Ambil hanya agenda DONE yang punya OFI
+  var ofiRows = agendas
+    .filter(function(a) { return a.status === 'DONE' && a.ofi && a.ofi.trim() && a.ofi.trim() !== '-'; })
+    .map(function(a, i) {
+      return {
+        no:   i + 1,
+        dept: a.dept || a.area_id,
+        ofi:  a.ofi.trim(),
+      };
+    });
+
+  // Selalu tampilkan card, walau kosong
+  var tableId  = 'db-ofi-table-body';
+  var searchId = 'db-ofi-search';
+
+  var tableRows = ofiRows.length
+    ? ofiRows.map(function(r) {
+        return '<tr data-dept="' + escAttr(r.dept.toLowerCase()) + '" data-ofi="' + escAttr(r.ofi.toLowerCase()) + '">' +
+          '<td class="db-ofi-no">' + r.no + '</td>' +
+          '<td class="db-ofi-dept"><strong>' + escHtml(r.dept) + '</strong></td>' +
+          '<td>' + escHtml(r.ofi) + '</td>' +
+        '</tr>';
+      }).join('')
+    : '<tr id="db-ofi-empty-row"><td colspan="3" class="db-ofi-empty">' +
+        '<i data-lucide="smile" style="width:28px;height:28px;opacity:.25;display:block;margin:0 auto 8px"></i>' +
+        'Belum ada OFI yang tercatat.' +
+      '</td></tr>';
+
+  return '<div class="card" style="flex:1;min-width:0;display:flex;flex-direction:column">' +
+    '<div class="card-header" style="flex-wrap:wrap;gap:10px">' +
+      '<div>' +
+        '<div class="card-title">OFI Summary</div>' +
+        '<div class="card-subtitle">Opportunity for Improvement per area</div>' +
+      '</div>' +
+      // Search bar
+      '<div class="db-ofi-search-wrap" style="flex:0 0 auto;width:180px">' +
+        '<svg class="db-ofi-search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+          '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>' +
+        '</svg>' +
+        '<input type="text" id="' + searchId + '" class="db-ofi-search" placeholder="Cari dept atau OFI..." ' +
+          'oninput="_dbOfiFilter(this.value)">' +
+      '</div>' +
+    '</div>' +
+    '<div class="card-body" style="padding:0;overflow-y:auto;max-height:260px">' +
+      '<table class="db-ofi-tbl">' +
+        '<thead><tr>' +
+          '<th class="db-ofi-no">#</th>' +
+          '<th>Dept / Bagian</th>' +
+          '<th>Opportunity for Improvement (OFI)</th>' +
+        '</tr></thead>' +
+        '<tbody id="' + tableId + '">' +
+          tableRows +
+        '</tbody>' +
+      '</table>' +
+    '</div>' +
+  '</div>';
+}
+
+function _dbOfiFilter(query) {
+  var q    = (query || '').toLowerCase().trim();
+  var body = document.getElementById('db-ofi-table-body');
+  if (!body) return;
+  var rows     = body.querySelectorAll('tr[data-dept]');
+  var emptyRow = document.getElementById('db-ofi-empty-row');
+  var visible  = 0;
+
+  rows.forEach(function(row) {
+    var dept = row.getAttribute('data-dept') || '';
+    var ofi  = row.getAttribute('data-ofi')  || '';
+    var match = !q || dept.includes(q) || ofi.includes(q);
+    row.style.display = match ? '' : 'none';
+    if (match) visible++;
+  });
+
+  // Tampilkan baris "tidak ditemukan" kalau semua tersembunyi
+  if (emptyRow) {
+    emptyRow.style.display = 'none';
+  } else {
+    var noResult = document.getElementById('db-ofi-no-result');
+    if (!noResult) {
+      noResult = document.createElement('tr');
+      noResult.id = 'db-ofi-no-result';
+      noResult.innerHTML = '<td colspan="3" class="db-ofi-empty">Tidak ada hasil untuk "<strong>' + escHtml(query) + '</strong>".</td>';
+      body.appendChild(noResult);
+    }
+    noResult.style.display = (visible === 0 && q) ? '' : 'none';
+  }
+
+  // Nomor urut ulang sesuai yang visible
+  var counter = 1;
+  rows.forEach(function(row) {
+    if (row.style.display !== 'none') {
+      var noCell = row.querySelector('.db-ofi-no');
+      if (noCell) noCell.textContent = counter++;
+    }
+  });
+}
+
 function _dbProgressLegend(color, label, count, total) {
-  var pct = _dbPct(count, total);
   return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">' +
     '<div style="width:10px;height:10px;border-radius:50%;background:' + color + ';flex-shrink:0"></div>' +
     '<div style="flex:1;font-size:13px;color:var(--text-muted)">' + label + '</div>' +
-    '<div style="font-size:15px;font-weight:700;color:var(--text);min-width:24px;text-align:right">' + count + '</div>' +
-    '<div style="font-size:11px;color:var(--text-muted);min-width:36px">area</div>' +
+    '<div style="font-size:13px;font-weight:700;color:var(--text)">' + count + ' <span style="font-weight:400;color:var(--text-muted)">area</span></div>' +
   '</div>';
 }
 
@@ -280,57 +418,129 @@ function _dbOpenProgressModal() {
     return (o[a.status] || 1) - (o[b.status] || 1);
   });
 
-  var rows = sorted.map(function(ag) {
-    var isDone    = ag.status === 'DONE';
-    var isStarted = ag.status === 'STARTED';
-    var icon  = isDone ? 'check-circle' : isStarted ? 'play-circle' : 'circle';
-    var color = isDone ? 'var(--emerald)' : isStarted ? 'var(--blue)' : 'var(--border)';
-    var dateInfo = isDone    ? (ag.agreement_at ? 'Selesai: ' + formatDate(ag.agreement_at) : 'Selesai') :
-                   isStarted ? (ag.started_at   ? 'Dimulai: ' + formatDate(ag.started_at)   : 'Berjalan') :
-                   'Belum dimulai';
-    return '<tr>' +
-      '<td>' +
-        '<div style="display:flex;align-items:center;gap:10px">' +
-          '<i data-lucide="' + icon + '" style="width:15px;height:15px;color:' + color + ';flex-shrink:0"></i>' +
-          '<div>' +
-            '<div style="font-size:13px;font-weight:600">' + escHtml(ag.dept || ag.area_id) + '</div>' +
-            (ag.kategori ? '<div style="font-size:11px;color:var(--text-muted)">' + escHtml(ag.kategori) + '</div>' : '') +
-          '</div>' +
-        '</div>' +
-      '</td>' +
-      '<td>' + statusBadge(ag.status || 'PLANNED') + '</td>' +
-      '<td style="font-size:12px;color:var(--text-muted)">' + dateInfo + '</td>' +
-    '</tr>';
-  }).join('');
-
-  var total    = sorted.length;
-  var doneCount    = sorted.filter(function(a) { return a.status === 'DONE'; }).length;
+  var doneCount    = sorted.filter(function(a) { return a.status === 'DONE';    }).length;
   var startedCount = sorted.filter(function(a) { return a.status === 'STARTED'; }).length;
   var plannedCount = sorted.filter(function(a) { return a.status === 'PLANNED'; }).length;
+
+  // ── Buat baris tabel — simpan data-status untuk filter ───
+  function _makeRows(agList) {
+    return agList.map(function(ag) {
+      var isDone    = ag.status === 'DONE';
+      var isStarted = ag.status === 'STARTED';
+      var icon  = isDone ? 'check-circle' : isStarted ? 'play-circle' : 'circle';
+      var color = isDone ? 'var(--emerald)' : isStarted ? 'var(--blue)' : 'var(--border)';
+      var dateInfo = isDone    ? (ag.agreement_at ? 'Selesai: ' + formatDate(ag.agreement_at) : 'Selesai') :
+                     isStarted ? (ag.started_at   ? 'Dimulai: ' + formatDate(ag.started_at)   : 'Berjalan') :
+                     'Belum dimulai';
+
+      // Auditor list — parse CSV, tandai lead
+      var auditorHtml = (ag.auditor_emails || '')
+        .split(',')
+        .map(function(e) { return e.trim(); })
+        .filter(Boolean)
+        .map(function(email) {
+          var shortName = email.split('@')[0];
+          var isLead    = email === (ag.lead_auditor || '').trim();
+          return '<div style="font-size:12px;line-height:1.6;' +
+            (isLead ? 'font-weight:700;color:var(--blue)' : 'color:var(--text-muted)') + '">' +
+            escHtml(shortName) +
+            (isLead ? ' <span style="font-size:10px;font-weight:600;' +
+              'background:rgba(59,130,246,.1);color:var(--blue);' +
+              'border-radius:4px;padding:1px 5px;vertical-align:middle">Lead</span>' : '') +
+          '</div>';
+        }).join('');
+
+      return '<tr data-status="' + ag.status + '">' +
+        '<td>' +
+          '<div style="display:flex;align-items:center;gap:10px">' +
+            '<i data-lucide="' + icon + '" style="width:15px;height:15px;color:' + color + ';flex-shrink:0"></i>' +
+            '<div>' +
+              '<div style="font-size:13px;font-weight:600">' + escHtml(ag.dept || ag.area_id) + '</div>' +
+              (ag.kategori ? '<div style="font-size:11px;color:var(--text-muted)">' + escHtml(ag.kategori) + '</div>' : '') +
+            '</div>' +
+          '</div>' +
+        '</td>' +
+        '<td>' + (auditorHtml || '<span style="font-size:12px;color:var(--text-muted)">—</span>') + '</td>' +
+        '<td>' + statusBadge(ag.status || 'PLANNED') + '</td>' +
+        '<td style="font-size:12px;color:var(--text-muted)">' + dateInfo + '</td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  // ── Filter pill helper ────────────────────────────────────
+  function _pill(status, label, count, color) {
+    return '<button onclick="_dbProgressFilter(\'' + status + '\',this)" ' +
+      'data-filter="' + status + '" ' +
+      'style="display:inline-flex;align-items:center;gap:5px;' +
+        'padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;' +
+        'border:1.5px solid var(--border);background:var(--surface2);color:var(--text);' +
+        'transition:all .15s">' +
+      '<span style="width:7px;height:7px;border-radius:50%;background:' + color + ';flex-shrink:0"></span>' +
+      count + ' ' + label +
+    '</button>';
+  }
 
   createModal({
     id: 'db-progress-modal',
     title: 'Detail Progres Audit Per Area',
     size: 'modal-lg',
     body:
-      // Summary pills
+      // Filter pills
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">' +
-        _dbPill('var(--emerald)', doneCount + ' Selesai') +
-        _dbPill('var(--blue)',    startedCount + ' Berjalan') +
-        _dbPill('var(--text-muted)', plannedCount + ' Belum Dimulai') +
+        '<button onclick="_dbProgressFilter(\'ALL\',this)" data-filter="ALL" ' +
+          'style="display:inline-flex;align-items:center;gap:5px;' +
+            'padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;' +
+            'border:1.5px solid var(--blue);background:var(--blue);color:#fff;transition:all .15s">' +
+          'Semua (' + sorted.length + ')' +
+        '</button>' +
+        _pill('DONE',    'Selesai',       doneCount,    'var(--emerald)') +
+        _pill('STARTED', 'Sedang Berjalan', startedCount, 'var(--blue)') +
+        _pill('PLANNED', 'Belum Dimulai',  plannedCount, 'var(--border)') +
       '</div>' +
+
       '<div class="table-wrap">' +
-        '<table>' +
+        '<table id="db-progress-table">' +
           '<thead><tr>' +
-            '<th>Area</th><th>Status</th><th>Info</th>' +
+            '<th>Area</th>' +
+            '<th>Auditor</th>' +
+            '<th>Status</th>' +
+            '<th>Info</th>' +
           '</tr></thead>' +
-          '<tbody>' + rows + '</tbody>' +
+          '<tbody id="db-progress-tbody">' + _makeRows(sorted) + '</tbody>' +
         '</table>' +
+        '<div id="db-progress-empty" style="display:none;text-align:center;padding:32px;' +
+          'font-size:13px;color:var(--text-muted)">Tidak ada data untuk filter ini.</div>' +
       '</div>',
     footer:
       '<button class="btn btn-outline" onclick="closeModal(\'db-progress-modal\')">Tutup</button>',
   });
   lucide.createIcons();
+}
+
+// ── Filter handler — dipanggil dari pill buttons ─────────────
+function _dbProgressFilter(status, btn) {
+  // Update pill styles
+  document.querySelectorAll('#db-progress-modal [data-filter]').forEach(function(b) {
+    var isActive = b === btn;
+    b.style.background   = isActive ? 'var(--blue)' : 'var(--surface2)';
+    b.style.color        = isActive ? '#fff'        : 'var(--text)';
+    b.style.borderColor  = isActive ? 'var(--blue)' : 'var(--border)';
+  });
+
+  var tbody   = document.getElementById('db-progress-tbody');
+  var empty   = document.getElementById('db-progress-empty');
+  if (!tbody) return;
+
+  var rows    = tbody.querySelectorAll('tr[data-status]');
+  var visible = 0;
+  rows.forEach(function(row) {
+    var match = (status === 'ALL') || (row.getAttribute('data-status') === status);
+    row.style.display = match ? '' : 'none';
+    if (match) visible++;
+  });
+
+  empty.style.display  = visible === 0 ? '' : 'none';
+  tbody.style.display  = visible === 0 ? 'none' : '';
 }
 
 function _dbPill(color, label) {
@@ -382,6 +592,7 @@ function _dbApprovalSection(agendas, findings, s) {
     '<th colspan="3" class="db-gh-impl" style="color:var(--purple,#8b5cf6);border-bottom:2px solid var(--purple,#8b5cf6)">Approval Implementasi</th>' +
     '<th rowspan="2" class="db-gh-closed" style="vertical-align:middle;color:var(--emerald,#10b981);border-bottom:2px solid var(--emerald,#10b981)">Closed</th>' +
     (showOverdue ? '<th rowspan="2" class="db-gh-overdue" style="vertical-align:middle;color:var(--rose,#f43f5e);border-bottom:2px solid var(--rose,#f43f5e)">Overdue</th>' : '') +
+    '<th rowspan="2" style="vertical-align:middle;color:var(--text);border-bottom:2px solid var(--text);background:var(--surface2)!important">Total</th>' +
   '</tr>';
 
   // ── Header row 2 (column labels) ─────────────────────────
@@ -398,15 +609,21 @@ function _dbApprovalSection(agendas, findings, s) {
   '</tr>';
 
   // ── Data rows ─────────────────────────────────────────────
-  var dataRows = tableData.map(function(row) {
+  var dataRows = tableData.map(function(row, idx) {
     var hasAny = (row.n_open + row.n_tpp_dh + row.n_tpp_aud + row.n_tpp_koor +
                   row.n_open_impl + row.n_app_dh + row.n_app_aud + row.n_app_koor +
                   row.n_closed + row.n_overdue) > 0;
 
     return '<tr' + (!hasAny ? ' style="opacity:.5"' : '') + '>' +
       '<td class="db-col-area">' +
-        '<div style="font-size:13px;font-weight:600">' + escHtml(row.dept) + '</div>' +
-        (row.kategori ? '<div style="font-size:10px;color:var(--text-muted);font-weight:400">' + escHtml(row.kategori) + '</div>' : '') +
+        '<div style="display:flex;align-items:center;gap:12px">' +
+          '<span style="font-size:11px;font-weight:700;color:var(--text-muted);' +
+            'min-width:18px;text-align:right;flex-shrink:0">' + (idx + 1) + '</span>' +
+          '<div>' +
+            '<div style="font-size:13px;font-weight:600">' + escHtml(row.dept) + '</div>' +
+            (row.kategori ? '<div style="font-size:10px;color:var(--text-muted);font-weight:400">' + escHtml(row.kategori) + '</div>' : '') +
+          '</div>' +
+        '</div>' +
       '</td>' +
       _dbTd(row.n_open,     'db-g-open') +
       _dbTd(row.n_tpp_dh,   'db-g-tpp') +
@@ -418,6 +635,9 @@ function _dbApprovalSection(agendas, findings, s) {
       _dbTd(row.n_app_koor, 'db-g-impl') +
       _dbTd(row.n_closed,   'db-g-closed') +
       (showOverdue ? _dbTd(row.n_overdue, 'db-g-overdue') : '') +
+      _dbTdTotal(row.n_open + row.n_tpp_dh + row.n_tpp_aud + row.n_tpp_koor +
+                 row.n_open_impl + row.n_app_dh + row.n_app_aud + row.n_app_koor +
+                 row.n_closed + row.n_overdue) +
     '</tr>';
   }).join('');
 
@@ -437,6 +657,9 @@ function _dbApprovalSection(agendas, findings, s) {
     _dbTd(totals.n_app_koor, 'db-g-impl', true) +
     _dbTd(totals.n_closed,   'db-g-closed', true) +
     (showOverdue ? _dbTd(totals.n_overdue, 'db-g-overdue', true) : '') +
+    _dbTdTotal(totals.n_open + totals.n_tpp_dh + totals.n_tpp_aud + totals.n_tpp_koor +
+               totals.n_open_impl + totals.n_app_dh + totals.n_app_aud + totals.n_app_koor +
+               totals.n_closed + totals.n_overdue, true) +
   '</tr>';
 
   // ── Pending verification note ─────────────────────────────
@@ -464,16 +687,43 @@ function _dbApprovalSection(agendas, findings, s) {
     : '';
 
   return '<div class="card">' +
-    title +
-    '<div style="overflow-x:auto;max-height:520px;overflow-y:auto">' +
-      '<table class="db-tbl">' +
-        '<thead>' + gh + ch + '</thead>' +
-        '<tbody>' + dataRows + totalRow + '</tbody>' +
-      '</table>' +
+    '<div class="card-header" style="cursor:pointer;user-select:none" onclick="_dbToggleApproval()">' +
+      '<div>' +
+        '<div class="card-title">Status Tindak Lanjut Temuan</div>' +
+        '<div class="card-subtitle">Progress TPP dan implementasi per area</div>' +
+      '</div>' +
+      '<button style="display:inline-flex;align-items:center;gap:5px;' +
+        'padding:5px 10px;border-radius:var(--radius-sm);font-size:12px;font-weight:600;' +
+        'border:1px solid var(--border);background:var(--surface2);color:var(--text-muted);' +
+        'cursor:pointer" id="db-approval-toggle-btn">' +
+        '<svg id="db-approval-chevron" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="transition:transform .25s;transform:rotate(0deg)">' +
+          '<polyline points="6 9 12 15 18 9"/>' +
+        '</svg>' +
+        '<span id="db-approval-toggle-label">Sembunyikan</span>' +
+      '</button>' +
     '</div>' +
-    pendingNote +
-    inAuditNote +
+    '<div id="db-approval-body">' +
+      '<div style="overflow-x:auto;max-height:520px;overflow-y:auto">' +
+        '<table class="db-tbl">' +
+          '<thead>' + gh + ch + '</thead>' +
+          '<tbody>' + dataRows + totalRow + '</tbody>' +
+        '</table>' +
+      '</div>' +
+      pendingNote +
+      inAuditNote +
+    '</div>' +
   '</div>';
+}
+
+function _dbToggleApproval() {
+  var body    = document.getElementById('db-approval-body');
+  var chevron = document.getElementById('db-approval-chevron');
+  var label   = document.getElementById('db-approval-toggle-label');
+  if (!body) return;
+  var isHidden = body.style.display === 'none';
+  body.style.display      = isHidden ? '' : 'none';
+  if (chevron) chevron.style.transform = isHidden ? 'rotate(0deg)' : 'rotate(-90deg)';
+  if (label)   label.textContent       = isHidden ? 'Sembunyikan' : 'Tampilkan';
 }
 
 function _dbTd(n, groupClass, isTotalRow) {
@@ -481,6 +731,20 @@ function _dbTd(n, groupClass, isTotalRow) {
   if (n > 0) cls += ' db-pos';
   else cls += ' db-zero';
   return '<td class="' + cls + '">' + (n > 0 ? n : '—') + '</td>';
+}
+
+function _dbTdTotal(n, isTotalRow) {
+  return '<td style="' +
+    'font-size:' + (isTotalRow ? '14px' : '13px') + ';' +
+    'font-weight:800;' +
+    'color:var(--text);' +
+    'text-align:center;' +
+    'vertical-align:middle;' +
+    'background:var(--surface2);' +
+    'border-bottom:1px solid var(--border);' +
+    'border-right:none;' +
+    (isTotalRow ? 'border-top:2px solid var(--border);' : '') +
+  '">' + (n > 0 ? n : '—') + '</td>';
 }
 
 // ════════════════════════════════════════════════════════════
