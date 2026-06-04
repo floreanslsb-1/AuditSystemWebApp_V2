@@ -37,8 +37,8 @@ function _sheetToObjects(sheet, headers) {
   const data = sheet.getRange(3, 1, lastRow - 2, headers.length).getValues();
   return data
     .filter(row => row[0] !== '')
-    .map(row => {
-      const obj = { _rowIndex: data.indexOf(row) + 3 };
+    .map((row, i) => {
+      const obj = { _rowIndex: i + 3 };
       headers.forEach((h, j) => { obj[h] = row[j]; });
       return obj;
     });
@@ -1195,7 +1195,6 @@ function startAudit({ agendaId, periodId, areaId, startedBy }) {
     started_at:    now(),
     area_sampling: area ? (area.area_sampling || '') : '',
   });
-  invalidateAgendasCache(periodId);
   try { notifyAuditStarted(getAgendaById(agendaId)); } catch(e) { console.warn('Notif audit started gagal:', e.message); }
   return { agenda_id: agendaId };
 }
@@ -1225,7 +1224,6 @@ function finishAudit(periodId, agendaId, auditorEmail) {
 function submitAgreement(spreadsheetId, agendaId, agreementFotoUrl, agreementBy, ofi, auditeeHadirNames) {
   const agenda = getAgendaById(agendaId);
   if (!agenda) throw new Error('Agenda tidak ditemukan: ' + agendaId);
-  invalidateAgendasCache(agenda.period_id);
   updateAgenda(agendaId, {
     status:              CONFIG.AGENDA_STATUS.DONE,
     agreement_foto_url:  agreementFotoUrl,
