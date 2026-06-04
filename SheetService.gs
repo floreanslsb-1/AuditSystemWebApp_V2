@@ -817,7 +817,7 @@ function resetAgendaData(spreadsheetId, agendaId) {
   const C       = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
   const results = getAuditResultsByAgenda(spreadsheetId, agendaId);
   const clearCols = [
-    C.STATUS, C.DESKRIPSI_TEMUAN, C.FOTO_URLS, C.AUDITOR_EMAIL, C.SAVED_AT,
+    C.STATUS, C.DESKRIPSI_TEMUAN, C.LOKASI_TEMUAN, C.FOTO_URLS, C.AUDITOR_EMAIL, C.SAVED_AT,
     C.FINDING_STATUS, C.TARGET_DATE, C.IS_OVERDUE, C.CLOSED_AT
   ];
   results.forEach(function(r) {
@@ -892,14 +892,10 @@ function _createAuditSpreadsheet(periodId, namaPeriode) {
 function _setupAuditSheets(ss, periodId, namaPeriode) {
   const HEADERS = {
     AUDIT_RESULTS: [
-      // Grup 1: Identitas
       'result_id','agenda_id','period_id',
-      // Grup 2: Snapshot checklist
       'item_id','tipe','kategori','nomor_persyaratan','check_item_no',
       'aspek','persyaratan','check_item','standar_check_item',
-      // Grup 3: Diisi auditor
-      'status','deskripsi_temuan','foto_urls','auditor_email','saved_at',
-      // Grup 4: Tindak lanjut
+      'status','deskripsi_temuan','lokasi_temuan','foto_urls','auditor_email','saved_at',
       'finding_status','target_date','is_overdue','closed_at',
     ],
     TPP_ITEMS: [
@@ -966,7 +962,7 @@ const AUDIT_RESULT_HEADERS = [
   'result_id','agenda_id','period_id',
   'item_id','tipe','kategori','nomor_persyaratan','check_item_no',
   'aspek','persyaratan','check_item','standar_check_item',
-  'status','deskripsi_temuan','foto_urls','auditor_email','saved_at',
+  'status','deskripsi_temuan','lokasi_temuan','foto_urls','auditor_email','saved_at',
   'finding_status','target_date','is_overdue','closed_at',
 ];
 
@@ -1096,7 +1092,7 @@ function populateAuditResults(agendaId, itemIds, spreadsheetId, periodId) {
  * Update satu check item hasil audit (update Grup 3).
  * Row sudah ada sejak agenda dibuat — tinggal update.
  */
-function saveCheckItemResult({ period_id, agenda_id, result_id, status, deskripsi_temuan, foto_urls, auditor_email }) {
+function saveCheckItemResult({ period_id, agenda_id, result_id, status, deskripsi_temuan, lokasi_temuan, foto_urls, auditor_email }) {
   console.log('[SCI] result_id=' + result_id + ' agenda_id=' + agenda_id + ' status=' + status + ' foto_len=' + (foto_urls||'').length);
   const reg = getPeriodById(period_id);
   if (!reg) throw new Error('Periode tidak ditemukan: ' + period_id);
@@ -1114,23 +1110,24 @@ function saveCheckItemResult({ period_id, agenda_id, result_id, status, deskrips
 
   const C = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
 
-  // Sanitasi semua nilai jadi string (cegah setValue(undefined) → "Invalid argument")
-  const _status = String(status == null ? '' : status);
-  const _desc   = String(deskripsi_temuan == null ? '' : deskripsi_temuan);
-  const _foto   = String(foto_urls == null ? '' : foto_urls);
-  const _email  = String(auditor_email == null ? '' : auditor_email);
-  const _saved  = String(now() == null ? '' : now());
+const _status  = String(status == null ? '' : status);
+  const _desc    = String(deskripsi_temuan == null ? '' : deskripsi_temuan);
+  const _lokasi  = String(lokasi_temuan == null ? '' : lokasi_temuan);
+  const _foto    = String(foto_urls == null ? '' : foto_urls);
+  const _email   = String(auditor_email == null ? '' : auditor_email);
+  const _saved   = String(now() == null ? '' : now());
 
-  // Tulis 5 kolom sekaligus (STATUS..SAVED_AT) — atomic & cepat
-  console.log('[PRE_SETVALUES] row=' + row + ' status=' + _status + ' descLen=' + _desc.length + ' fotoLen=' + _foto.length + ' email=' + _email + ' startCol=' + (C.STATUS + 1) + ' maxCol=' + maxCol);
+  // Tulis 6 kolom sekaligus (STATUS..SAVED_AT) — atomic & cepat
+  console.log('[PRE_SETVALUES] row=' + row + ' status=' + _status + ' descLen=' + _desc.length + ' lokasiLen=' + _lokasi.length + ' fotoLen=' + _foto.length + ' email=' + _email + ' startCol=' + (C.STATUS + 1) + ' maxCol=' + maxCol);
   try {
-    sheet.getRange(row, C.STATUS + 1, 1, 5)
-         .setValues([[_status, _desc, _foto, _email, _saved]]);
+    sheet.getRange(row, C.STATUS + 1, 1, 6)
+         .setValues([[_status, _desc, _lokasi, _foto, _email, _saved]]);
     console.log('[SETVALUES_OK] row=' + row);
   } catch (e) {
     console.error('[SETVALUES_FAIL] row=' + row +
                     ' status=' + JSON.stringify(_status) +
                     ' descLen=' + _desc.length +
+                    ' lokasiLen=' + _lokasi.length +
                     ' fotoLen=' + _foto.length +
                     ' email=' + JSON.stringify(_email) +
                     ' startCol=' + (C.STATUS + 1) +
@@ -1139,6 +1136,7 @@ function saveCheckItemResult({ period_id, agenda_id, result_id, status, deskrips
     throw new Error('setValues row=' + row +
                     ' status=' + JSON.stringify(_status) +
                     ' descLen=' + _desc.length +
+                    ' lokasiLen=' + _lokasi.length +
                     ' fotoLen=' + _foto.length +
                     ' email=' + JSON.stringify(_email) +
                     ' :: ' + e.message);
@@ -1269,9 +1267,9 @@ function verifyFindings(spreadsheetId, agendaId, updates, verifiedBy) {
       console.warn('[verifyFindings] bukan PENDING_VERIFICATION:', upd.result_id); return;
     }
     if (upd.final_status === CONFIG.RESULT_STATUS.COMPLY) {
-      // Hapus temuan → ubah ke Comply, bersihkan semua kolom finding
       _updateCell(sheet, result._rowIndex, C.STATUS           + 1, CONFIG.RESULT_STATUS.COMPLY);
       _updateCell(sheet, result._rowIndex, C.DESKRIPSI_TEMUAN + 1, '');
+      _updateCell(sheet, result._rowIndex, C.LOKASI_TEMUAN    + 1, '');
       _updateCell(sheet, result._rowIndex, C.FOTO_URLS        + 1, '');
       _updateCell(sheet, result._rowIndex, C.AUDITOR_EMAIL    + 1, verifiedBy);
       _updateCell(sheet, result._rowIndex, C.SAVED_AT         + 1, now());
