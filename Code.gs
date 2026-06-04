@@ -243,8 +243,7 @@ function _routeAction(action, payload, profile) {
         periodId:      payload.period_id,
         areaId:        payload.area_id,
         auditorEmails: payload.auditor_emails,
-        leadAuditor:   payload.lead_auditor   || '',
-        jadwalTanggal: payload.jadwal_tanggal || '',
+        leadAuditor:   payload.lead_auditor || '',
         assignedBy:    profile.email,
       });
 
@@ -338,13 +337,14 @@ function _routeAction(action, payload, profile) {
       const fileUrl_sa = uploadFileToDrive(
         payload.file_base64, payload.file_name, payload.mime_type, folder_sa
       );
-      submitAgreement(
-        period_sa.spreadsheet_id,
-        payload.agenda_id,
-        fileUrl_sa,
-        profile.email,
-        payload.auditee_hadir_names || ''
-      );
+    submitAgreement(
+      period_sa.spreadsheet_id,
+      payload.agenda_id,
+      fileUrl_sa,
+      profile.email,
+      payload.ofi               || '',   // ← TAMBAH
+      payload.auditee_hadir_names || ''
+    );
       return { success: true, file_url: fileUrl_sa };
     }
 
