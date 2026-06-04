@@ -74,6 +74,29 @@ function _deleteRowsByColValue(spreadsheetId, sheetName, colIdx, matchValue) {
 // ════════════════════════════════════════════════════════════
 
 const USER_HEADERS = ['user_id', 'email', 'nama', 'roles', 'aktif'];
+const USERS_CACHE_KEY = 'USERS_ALL';
+
+function getCachedUsers() {
+  const cache = CacheService.getScriptCache();
+  if (_isCacheInvalidated(USERS_CACHE_KEY)) return _refreshUsersCache();
+  const cached = cache.get(USERS_CACHE_KEY);
+  if (cached) { try { return JSON.parse(cached); } catch(e) {} }
+  return _refreshUsersCache();
+}
+
+function _refreshUsersCache() {
+  const data = getAllUsers();
+  try {
+    CacheService.getScriptCache().put(USERS_CACHE_KEY, JSON.stringify(data), 21600);
+  } catch(e) { console.warn('Users cache put failed:', e.message); }
+  _setCacheMetaRow(USERS_CACHE_KEY, false);
+  return data;
+}
+
+function invalidateUsersCache() {
+  CacheService.getScriptCache().remove(USERS_CACHE_KEY);
+  _setCacheMetaInvalidated(USERS_CACHE_KEY, true);
+}
 
 function getAllUsers() {
   return _sheetToObjects(_getMasterSheet(CONFIG.SHEETS.USERS), USER_HEADERS);
@@ -97,6 +120,7 @@ function createUser({ email, nama, roles }) {
   if (!rolesArr.length) throw new Error('Minimal satu role harus dipilih.');
   const user_id = generateSequentialId('USR', existing.length);
   _appendRow(sheet, [user_id, normalizeEmail(email), nama, toCSV(rolesArr), true]);
+  invalidateUsersCache();
   return { user_id, email, nama, roles: rolesArr };
 }
 
@@ -117,6 +141,7 @@ function updateUser(email, updates) {
   if (updates.nama  !== undefined) _updateCell(sheet, user._rowIndex, C.NAMA  + 1, updates.nama);
   if (updates.email !== undefined) _updateCell(sheet, user._rowIndex, C.EMAIL + 1, normalizeEmail(updates.email));
   if (updates.roles !== undefined) _updateCell(sheet, user._rowIndex, C.ROLES + 1, updates.roles);
+  invalidateUsersCache();
   return { success: true };
 }
 
@@ -125,6 +150,7 @@ function deleteUser(email) {
   const user  = getAllUsers().find(u => normalizeEmail(u.email) === normalizeEmail(email));
   if (!user) throw new Error('User tidak ditemukan: ' + email);
   sheet.deleteRow(user._rowIndex);
+  invalidateUsersCache();
   return { success: true };
 }
 
@@ -140,6 +166,7 @@ function batchDeleteUsers(emails) {
     rows.push(user._rowIndex);
   });
   rows.sort((a, b) => b - a).forEach(r => sheet.deleteRow(r));
+  if (rows.length > 0) invalidateUsersCache();
   return { deleted: rows.length, skipped };
 }
 
@@ -174,6 +201,7 @@ function batchCreateUsers(items) {
   });
   if (rows.length > 0) {
     sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+    invalidateUsersCache(); 
   }
   return { created: rows.length, skipped };
 }
@@ -225,7 +253,7 @@ function getCachedAreas() {
 function _refreshAreasCache() {
   const data = getAllAreas();
   try {
-    CacheService.getScriptCache().put(AREAS_CACHE_KEY, JSON.stringify(data), CONFIG.CACHE_TTL_SECONDS);
+    CacheService.getScriptCache().put(AREAS_CACHE_KEY, JSON.stringify(data), 21600);
   } catch(e) { console.warn('Areas cache put failed:', e.message); }
   _setCacheMetaRow(AREAS_CACHE_KEY, false);
   return data;
@@ -448,6 +476,35 @@ const REGISTRY_HEADERS = [
   'archived','archived_at','completed_at'
 ];
 
+const PERIODS_CACHE_KEY = 'PERIODS_ALL';
+
+function getCachedPeriods(includeArchived) {
+  const cache = CacheService.getScriptCache();
+  if (_isCacheInvalidated(PERIODS_CACHE_KEY)) return _refreshPeriodsCache(includeArchived);
+  const cached = cache.get(PERIODS_CACHE_KEY);
+  if (cached) {
+    try {
+      const all = JSON.parse(cached);
+      return includeArchived ? all : all.filter(p => !p.archived || p.archived === 'FALSE' || p.archived === false);
+    } catch(e) {}
+  }
+  return _refreshPeriodsCache(includeArchived);
+}
+
+function _refreshPeriodsCache(includeArchived) {
+  const data = getAllPeriods(true); // selalu simpan semua (termasuk archived)
+  try {
+    CacheService.getScriptCache().put(PERIODS_CACHE_KEY, JSON.stringify(data), 21600);
+  } catch(e) { console.warn('Periods cache put failed:', e.message); }
+  _setCacheMetaRow(PERIODS_CACHE_KEY, false);
+  return includeArchived ? data : data.filter(p => !p.archived || p.archived === 'FALSE' || p.archived === false);
+}
+
+function invalidatePeriodsCache() {
+  CacheService.getScriptCache().remove(PERIODS_CACHE_KEY);
+  _setCacheMetaInvalidated(PERIODS_CACHE_KEY, true);
+}
+
 function getAllPeriods(includeArchived) {
   const all = _sheetToObjects(_getMasterSheet(CONFIG.SHEETS.AUDIT_REGISTRY), REGISTRY_HEADERS);
   return includeArchived ? all : all.filter(p => !p.archived || p.archived === 'FALSE' || p.archived === false);
@@ -470,6 +527,7 @@ function createPeriod({ namaPeriode, tanggalMulai, tanggalSelesai, createdBy }) 
     tanggalMulai, tanggalSelesai, CONFIG.PERIOD_STATUS.PLANNED,
     createdBy, now(), false, '', '',
   ]);
+  invalidatePeriodsCache();
   return { period_id, spreadsheet_id, spreadsheet_url };
 }
 
@@ -481,6 +539,7 @@ function updatePeriodStatus(periodId, status) {
   _updateCell(sheet, period._rowIndex, C.STATUS + 1, status);
   if (status === CONFIG.PERIOD_STATUS.COMPLETED)
     _updateCell(sheet, period._rowIndex, C.COMPLETED_AT + 1, now());
+  invalidatePeriodsCache();
   return { success: true };
 }
 
@@ -490,6 +549,7 @@ function activatePeriod(periodId) {
     throw new Error('Sudah ada periode ACTIVE: ' + existing.nama_periode + '. Selesaikan dulu sebelum mengaktifkan yang baru.');
   }
   updatePeriodStatus(periodId, CONFIG.PERIOD_STATUS.ACTIVE);
+  invalidatePeriodsCache();
   return { success: true };
 }
 
@@ -501,6 +561,7 @@ function updatePeriod(periodId, updates) {
   if (updates.nama_periode    !== undefined) _updateCell(sheet, period._rowIndex, C.NAMA_PERIODE    + 1, updates.nama_periode);
   if (updates.tanggal_mulai   !== undefined) _updateCell(sheet, period._rowIndex, C.TANGGAL_MULAI   + 1, updates.tanggal_mulai);
   if (updates.tanggal_selesai !== undefined) _updateCell(sheet, period._rowIndex, C.TANGGAL_SELESAI + 1, updates.tanggal_selesai);
+  invalidatePeriodsCache();
   return { success: true };
 }
 
@@ -513,6 +574,7 @@ function archivePeriod(periodId) {
   const C = CONFIG.COLS.AUDIT_REGISTRY;
   _updateCell(sheet, period._rowIndex, C.ARCHIVED    + 1, true);
   _updateCell(sheet, period._rowIndex, C.ARCHIVED_AT + 1, now());
+  invalidatePeriodsCache();
   return { success: true };
 }
 
@@ -523,6 +585,7 @@ function restoreArchivedPeriod(periodId) {
   const C = CONFIG.COLS.AUDIT_REGISTRY;
   _updateCell(sheet, period._rowIndex, C.ARCHIVED    + 1, false);
   _updateCell(sheet, period._rowIndex, C.ARCHIVED_AT + 1, '');
+  invalidatePeriodsCache();
   return { success: true };
 }
 
@@ -549,6 +612,7 @@ function deletePeriod(periodId) {
     agendas.map(a => a._rowIndex).sort((a, b) => b - a).forEach(r => agendaSheet.deleteRow(r));
   }
   sheet.deleteRow(period._rowIndex);
+  invalidatePeriodsCache();
   return { success: true };
 }
 
@@ -593,6 +657,7 @@ function completePeriod(periodId, completedBy, force) {
   const C     = CONFIG.COLS.AUDIT_REGISTRY;
   _updateCell(sheet, period._rowIndex, C.STATUS       + 1, CONFIG.PERIOD_STATUS.COMPLETED);
   _updateCell(sheet, period._rowIndex, C.COMPLETED_AT + 1, now());
+  invalidatePeriodsCache();
   return { success: true };
 }
 
