@@ -302,9 +302,7 @@ function _routeAction(action, payload, profile) {
       const agUpdates = {};
       if (payload.auditor_emails  !== undefined) agUpdates.auditor_emails  = payload.auditor_emails;
       if (payload.lead_auditor    !== undefined) agUpdates.lead_auditor    = payload.lead_auditor;
-      if (payload.jadwal_tanggal  !== undefined) agUpdates.jadwal_tanggal  = payload.jadwal_tanggal;
       if (Object.keys(agUpdates).length) updateAgenda(payload.agenda_id, agUpdates);
-
       return { success: true };
     }
 
