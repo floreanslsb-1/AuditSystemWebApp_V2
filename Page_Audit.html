@@ -1284,6 +1284,12 @@ function _openDraftFindingForm(itemId, gKey, nomor, ciNo, resultId, agendaId, pe
           escHtml(existing.deskripsi_temuan || '') + '</textarea>' +
       '</div>' +
       '<div class="form-group">' +
+        '<label class="form-label">Lokasi Temuan <span class="required">*</span></label>' +
+        '<input type="text" class="form-control" id="ff-lokasi" ' +
+          'placeholder="e.g. Gudang B, Lantai 2, Area penyimpanan kimia" ' +
+          'value="' + escHtml(existing.lokasi_temuan || '') + '">' +
+      '</div>' +
+      '<div class="form-group">' +
         '<label class="form-label">Foto Bukti <span class="required">*</span>' +
           '<span id="ff-upload-hint" style="font-size:11px;color:var(--rose,#f43f5e);font-weight:400;margin-left:6px">' +
             (savedUrls.length || pendingFiles.length ? '' : '(wajib upload minimal 1 foto)') +
@@ -1341,6 +1347,7 @@ function _openDraftFindingForm(itemId, gKey, nomor, ciNo, resultId, agendaId, pe
     }
   }, 50);
 }
+
 async function _deleteSavedFoto(url, idx, gKey, resultId, agendaId, periodId, prefix) {
   prefix = prefix || 'ff';
   var ok = await showConfirm({
@@ -1405,6 +1412,8 @@ function _validateImageFiles(files) {
 async function _saveDraftFinding(gKey, resultId) {
   var deskripsi = (document.getElementById('ff-deskripsi') || {}).value?.trim();
   if (!deskripsi) return toast('Deskripsi temuan wajib diisi.', 'error');
+  var lokasi = (document.getElementById('ff-lokasi') || {}).value?.trim();
+  if (!lokasi) return toast('Lokasi temuan wajib diisi.', 'error');
 
   var zone     = document.getElementById('ff-upload-zone');
   var newFiles = zone && zone._getFiles ? zone._getFiles() : [];
@@ -1433,6 +1442,7 @@ async function _saveDraftFinding(gKey, resultId) {
     check_item_no:     _sdItm ? Number(_sdItm.check_item_no) : 0,
     status:            'NON_COMPLY',
     deskripsi_temuan:  deskripsi,
+    lokasi_temuan:     lokasi,
   });
   toast('Temuan ditambahkan ke draf. Klik "Simpan" untuk menyimpan ke sistem.', 'success');
   closeModal('finding-form-modal');
@@ -1508,7 +1518,7 @@ async function _openEditStatusForm(resultId, gKey, agendaId, periodId, currentSt
     var draftEf   = _draftGetItem(gKey, resultId) || {};
     // Merge: draft lebih prioritas, fallback ke `existing` yang sudah diisi dari server di atas
     var initialDeskripsi = draftEf.deskripsi_temuan || existing.deskripsi_temuan || '';
-
+    var initialLokasi    = draftEf.lokasi_temuan    || (window._auditRenderCtx && window._auditRenderCtx.findingMap && window._auditRenderCtx.findingMap[resultId] ? window._auditRenderCtx.findingMap[resultId].lokasi_temuan : '') || '';
 
     // Tentukan foto_urls: prioritas draft → server finding
     var savedFotoUrls = draftEf.foto_urls || '';
@@ -1533,6 +1543,12 @@ async function _openEditStatusForm(resultId, gKey, agendaId, periodId, currentSt
           '<label class="form-label">Deskripsi Temuan <span class="required">*</span></label>' +
           '<textarea class="form-control" id="ef-deskripsi" rows="4" placeholder="Jelaskan kondisi yang ditemukan...">' +
             escHtml(initialDeskripsi) + '</textarea>' +
+        '</div>' +
+        '<div class="form-group">' +
+          '<label class="form-label">Lokasi Temuan <span class="required">*</span></label>' +
+          '<input type="text" class="form-control" id="ef-lokasi" ' +
+            'placeholder="e.g. Gudang B, Lantai 2, Area penyimpanan kimia" ' +
+            'value="' + escHtml(initialLokasi) + '">' +
         '</div>' +
         '<div class="form-group">' +
           '<label class="form-label">Foto Bukti <span class="required">*</span>' +
@@ -1629,6 +1645,8 @@ async function _switchToComply(resultId, gKey, agendaId, periodId) {
 async function _saveEditedFinding(gKey, resultId) {
   var deskripsi = (document.getElementById('ef-deskripsi') || {}).value?.trim();
   if (!deskripsi) return toast('Deskripsi temuan wajib diisi.', 'error');
+  var lokasi = (document.getElementById('ef-lokasi') || {}).value?.trim();
+  if (!lokasi) return toast('Lokasi temuan wajib diisi.', 'error');
 
   var ctx    = window._auditRenderCtx;
   var _seGrp = ctx && ctx.groups.find(function(g){ return _groupKey(g) === gKey; });
@@ -1664,6 +1682,7 @@ async function _saveEditedFinding(gKey, resultId) {
     check_item_no:     ciNo,
     status:            'NON_COMPLY',
     deskripsi_temuan:  deskripsi,
+    lokasi_temuan:     lokasi,
   });
   _draftSetActiveGroup(gKey);
 
@@ -1700,6 +1719,7 @@ async function _saveRequirement(agendaId, periodId, btn) {
         check_item_no:      d.check_item_no,
         status:             d.status === 'COMPLY' ? 'Comply' : d.status === 'NON_COMPLY' ? 'Non Comply' : d.status,
         deskripsi_temuan:   d.deskripsi_temuan || '',
+        lokasi_temuan:      d.lokasi_temuan    || '',
         existing_foto_urls: existingFotoUrls,
       };
     });
@@ -1710,7 +1730,8 @@ async function _saveRequirement(agendaId, periodId, btn) {
   // (foto bisa ada di pendingFiles meski foto_urls di draft kosong)
   var missing = items.filter(function(it) {
     if (it.status !== 'Non Comply') return false;
-    if (!it.deskripsi_temuan) return true;  // tidak ada deskripsi
+    if (!it.deskripsi_temuan) return true;
+    if (!it.lokasi_temuan)    return true;  // tidak ada deskripsi
 
     // Cek apakah ada foto (pending atau saved)
     var dKey2 = _draftItemKey(gKey, it.result_id);
