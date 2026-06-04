@@ -141,19 +141,20 @@ const CONFIG = {
       // Grup 2 — assignment
       AUDITOR_EMAILS:  5,
       LEAD_AUDITOR:    6,
-      AUDITEE_EMAILS:  7,   // dari AREAS, bisa di-override saat start
+      AUDITEE_EMAILS:  7,   // dari AREAS
       DEPT_HEAD_EMAIL: 8,   // snapshot dari AREAS
       ASSIGNED_BY:     9,
       ASSIGNED_AT:     10,
-      JADWAL_TANGGAL:  11,
+      // JADWAL_TANGGAL dihapus
 
       // Grup 3 — operasional (diisi saat audit berjalan)
-      STATUS:           12,  // PLANNED / STARTED / DONE
-      STARTED_BY:       13,
-      STARTED_AT:       14,
-      AREA_SAMPLING:    15,  // snapshot dari AREAS
+      STATUS:        11,    // PLANNED / STARTED / DONE
+      STARTED_BY:    12,
+      STARTED_AT:    13,
+      AREA_SAMPLING: 14,   // snapshot dari AREAS
 
       // Grup 4 — agreement (diisi saat auditor selesai)
+      OFI:                  15,  // Opportunity for Improvement — free text
       AGREEMENT_FOTO_URL:   16,
       AGREEMENT_BY:         17,
       AGREEMENT_AT:         18,
@@ -254,11 +255,11 @@ const CONFIG = {
       DEPT_HEAD_EMAIL:   8,
       ASSIGNED_BY:       9,
       ASSIGNED_AT:       10,
-      JADWAL_TANGGAL:    11,
-      STATUS:            12,
-      STARTED_BY:        13,
-      STARTED_AT:        14,
-      AREA_SAMPLING:     15,
+      STATUS:            11,
+      STARTED_BY:        12,
+      STARTED_AT:        13,
+      AREA_SAMPLING:     14,
+      OFI:               15,
       AGREEMENT_FOTO_URL:   16,
       AGREEMENT_BY:         17,
       AGREEMENT_AT:         18,
