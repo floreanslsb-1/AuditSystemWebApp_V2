@@ -190,15 +190,16 @@ const CONFIG = {
       // Grup 3 — diisi auditor saat audit (awalnya kosong)
       STATUS:           12,  // kosong → Comply / Non Comply
       DESKRIPSI_TEMUAN: 13,  // diisi kalau Non Comply
-      FOTO_URLS:        14,  // diisi kalau Non Comply
-      AUDITOR_EMAIL:    15,  // siapa yang mengisi
-      SAVED_AT:         16,  // kapan terakhir diisi/diubah
+      LOKASI_TEMUAN:    14,  // diisi kalau Non Comply — free text lokasi
+      FOTO_URLS:        15,  // diisi kalau Non Comply
+      AUDITOR_EMAIL:    16,  // siapa yang mengisi
+      SAVED_AT:         17,  // kapan terakhir diisi/diubah
 
-      // Grup 4 — tindak lanjut temuan (hanya terisi untuk Non Comply / OFI)
-      FINDING_STATUS: 17,  // kosong → PENDING_VERIFICATION → OPEN → TPP_OR_DEPT_HEAD → ... → CLOSED
-      TARGET_DATE:    18,  // diisi saat submit TPP
-      IS_OVERDUE:     19,  // false (default) — disabled, akan diaktifkan nanti
-      CLOSED_AT:      20,  // diisi saat CLOSED
+      // Grup 4 — tindak lanjut temuan (hanya terisi untuk Non Comply)
+      FINDING_STATUS: 18,
+      TARGET_DATE:    19,
+      IS_OVERDUE:     20,
+      CLOSED_AT:      21,
     },
 
     // TPP_ITEMS — result_id menggantikan finding_id
