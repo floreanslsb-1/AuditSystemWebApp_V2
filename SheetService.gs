@@ -676,6 +676,30 @@ const AGENDA_HEADERS = [
   'agreement_foto_url','agreement_by','agreement_at','auditee_hadir_names'
 ];
 
+function _agendaCacheKey(periodId) {
+  return 'AGENDAS_' + periodId;
+}
+
+function getCachedAgendasByPeriod(periodId) {
+  const key    = _agendaCacheKey(periodId);
+  const cached = CacheService.getScriptCache().get(key);
+  if (cached) { try { return JSON.parse(cached); } catch(e) {} }
+  return _refreshAgendasCache(periodId);
+}
+
+function _refreshAgendasCache(periodId) {
+  const data = getAllAgendas().filter(a => a.period_id === periodId);
+  try {
+    CacheService.getScriptCache().put(_agendaCacheKey(periodId), JSON.stringify(data), 21600);
+  } catch(e) { console.warn('Agendas cache put failed:', e.message); }
+  return data;
+}
+
+function invalidateAgendasCache(periodId) {
+  if (!periodId) return;
+  CacheService.getScriptCache().remove(_agendaCacheKey(periodId));
+}
+
 function getAllAgendas() {
   return _sheetToObjects(_getMasterSheet(CONFIG.SHEETS.AUDIT_AGENDA), AGENDA_HEADERS);
 }
@@ -719,6 +743,7 @@ function createAgenda({ periodId, areaId, auditorEmails, leadAuditor, jadwalTang
   row[C.ASSIGNED_AT]     = now();
   row[C.STATUS]          = CONFIG.AGENDA_STATUS.PLANNED;
   _appendRow(sheet, row);
+  invalidateAgendasCache(periodId);
   return { agenda_id };
 }
 
@@ -738,6 +763,7 @@ function updateAgenda(agendaId, updates) {
   if (updates.agreement_by         !== undefined) _updateCell(sheet, agenda._rowIndex, C.AGREEMENT_BY         + 1, updates.agreement_by);
   if (updates.agreement_at         !== undefined) _updateCell(sheet, agenda._rowIndex, C.AGREEMENT_AT         + 1, updates.agreement_at);
   if (updates.auditee_hadir_names  !== undefined) _updateCell(sheet, agenda._rowIndex, C.AUDITEE_HADIR_NAMES  + 1, updates.auditee_hadir_names);
+  invalidateAgendasCache(agenda.period_id);
   return { success: true };
 }
 
@@ -757,6 +783,7 @@ function deleteAgenda(agendaId, periodId) {
     }
   }
   _getMasterSheet(CONFIG.SHEETS.AUDIT_AGENDA).deleteRow(agenda._rowIndex);
+  invalidateAgendasCache(periodId);
   return { success: true };
 }
 
@@ -786,6 +813,8 @@ function resetAgendaData(spreadsheetId, agendaId) {
   _deleteRowsByColValue(spreadsheetId,
     CONFIG.AUDIT_SHEETS.APPROVAL_LOG,
     CONFIG.AUDIT_COLS.APPROVAL_LOG.AGENDA_ID, agendaId);
+  const agendaForReset = getAgendaById(agendaId);
+  if (agendaForReset) invalidateAgendasCache(agendaForReset.period_id);
   updateAgenda(agendaId, { status: CONFIG.AGENDA_STATUS.PLANNED, started_by: '', started_at: '' });
   return { success: true };
 }
@@ -821,6 +850,7 @@ function archiveAgendaToFile(periodId, spreadsheetId) {
 
   const masterSheet = _getMasterSheet(CONFIG.SHEETS.AUDIT_AGENDA);
   agendas.map(a => a._rowIndex).sort((a, b) => b - a).forEach(r => masterSheet.deleteRow(r));
+  invalidateAgendasCache(periodId);
   return { success: true, count: agendas.length };
 }
 
@@ -1142,6 +1172,7 @@ function startAudit({ agendaId, periodId, areaId, startedBy }) {
     started_at:    now(),
     area_sampling: area ? (area.area_sampling || '') : '',
   });
+  invalidateAgendasCache(periodId);
   try { notifyAuditStarted(getAgendaById(agendaId)); } catch(e) { console.warn('Notif audit started gagal:', e.message); }
   return { agenda_id: agendaId };
 }
@@ -1171,6 +1202,7 @@ function finishAudit(periodId, agendaId, auditorEmail) {
 function submitAgreement(spreadsheetId, agendaId, agreementFotoUrl, agreementBy, ofi, auditeeHadirNames) {
   const agenda = getAgendaById(agendaId);
   if (!agenda) throw new Error('Agenda tidak ditemukan: ' + agendaId);
+  invalidateAgendasCache(agenda.period_id);
   updateAgenda(agendaId, {
     status:              CONFIG.AGENDA_STATUS.DONE,
     agreement_foto_url:  agreementFotoUrl,
