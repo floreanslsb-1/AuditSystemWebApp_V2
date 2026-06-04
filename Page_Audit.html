@@ -1936,14 +1936,22 @@ function _openAgreementModal(agendaId, periodId) {
         '<div class="skeleton" style="height:120px;border-radius:8px;margin-bottom:16px"></div>' +
       '</div>' +
       '<hr style="border:none;border-top:1px solid var(--border);margin:0 0 16px">' +
-      // 2. Nama auditee
+
+      // 2. OFI ← BARU
+      '<div class="form-group">' +
+        '<label class="form-label">OFI (Opportunity for Improvement) <span class="required">*</span></label>' +
+        '<div class="form-hint" style="margin-bottom:8px">Tuliskan peluang perbaikan yang ditemukan. Tulis <strong>"-"</strong> jika tidak ada.</div>' +
+        '<textarea class="form-control" id="agr-ofi" rows="3" placeholder="Contoh: Prosedur sudah berjalan baik, namun pencatatan dapat ditingkatkan dengan..."></textarea>' +
+      '</div>' +
+
+      // 3. Nama auditee
       '<div class="form-group">' +
         '<label class="form-label">Nama Auditee yang Hadir <span class="required">*</span></label>' +
         '<div class="form-hint" style="margin-bottom:8px">Tulis nama lengkap auditee yang hadir. Pisahkan dengan koma.</div>' +
         '<textarea class="form-control" id="agr-auditee-names" rows="2" placeholder="Budi Santoso, Siti Aminah"></textarea>' +
       '</div>' +
       '<hr style="border:none;border-top:1px solid var(--border);margin:0 0 16px">' +
-      // 3. Info + upload foto
+      // 4. Info + upload foto
       '<p style="font-size:13px;color:var(--text-muted);margin-bottom:12px">' +
         'Upload foto bersama auditor dan auditee sebagai bukti bahwa hasil audit telah dikomunikasikan dan disepakati.' +
       '</p>' +
@@ -2058,6 +2066,8 @@ async function _submitAgreementAndFinish(agendaId, periodId) {
   var zone  = document.getElementById('agr-upload-zone');
   var files = zone && zone._getFiles ? zone._getFiles() : [];
   if (!files.length) return toast('Upload foto agreement terlebih dahulu.', 'error');
+  var ofi = (document.getElementById('agr-ofi') || {}).value?.trim();
+  if (!ofi) return toast('Isi kolom OFI terlebih dahulu.', 'error');
   var auditeeNames = (document.getElementById('agr-auditee-names') || {}).value?.trim();
   if (!auditeeNames) return toast('Isi nama auditee yang hadir terlebih dahulu.', 'error');
   var btn = document.getElementById('agr-submit-btn');
@@ -2066,7 +2076,7 @@ async function _submitAgreementAndFinish(agendaId, periodId) {
     var b64 = await filesToBase64([files[0]]);
     var fileUp = b64[0];
     await api('FINISH_AUDIT',     { agenda_id: agendaId, period_id: periodId });
-    await api('SUBMIT_AGREEMENT', { period_id: periodId, agenda_id: agendaId, file_base64: fileUp.base64, file_name: fileUp.name, mime_type: fileUp.mime_type, auditee_hadir_names: auditeeNames });
+    await api('SUBMIT_AGREEMENT', { period_id: periodId, agenda_id: agendaId, file_base64: fileUp.base64, file_name: fileUp.name, mime_type: fileUp.mime_type, ofi: ofi, auditee_hadir_names: auditeeNames });
     clearCache('GET_FINDINGS_BY_AGENDA'); clearCache('GET_ALL_FINDINGS_BY_PERIOD'); clearCache('GET_AGENDAS_BY_PERIOD'); clearCache('GET_DASHBOARD');
     _stopLockPolling();
     _detachAuditUnloadGuard();
