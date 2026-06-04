@@ -1493,7 +1493,10 @@ async function _openEditStatusForm(resultId, gKey, agendaId, periodId, currentSt
   var existing = _draftGetItem(gKey, _esRid) || {};
   if (!existing.deskripsi_temuan && _esCtx2 && _esCtx2.findingMap) {
     var srvFinding = _esRid ? _esCtx2.findingMap[_esRid] : null;
-    if (srvFinding) existing = { deskripsi_temuan: srvFinding.deskripsi_temuan };
+    if (srvFinding) existing = {
+      deskripsi_temuan: srvFinding.deskripsi_temuan,
+      lokasi_temuan:    srvFinding.lokasi_temuan || '',
+    };
   }
 
   if (isCurrentlyComply) {
@@ -1628,16 +1631,23 @@ async function _switchToComply(resultId, gKey, agendaId, periodId) {
   closeModal('edit-finding-modal');
   var _scGrp  = window._auditRenderCtx && window._auditRenderCtx.groups.find(function(g){ return _groupKey(g) === gKey; });
   var _scItem = _scGrp && _scGrp.items.find(function(i){ return i.result_id === resultId; });
-  var dKey    = _draftItemKey(gKey, resultId);
+  var nomor   = _scItem ? Number(_scItem.nomor) : 0;
+
+  // Acquire lock agar group terkunci dan save bar muncul
+  var locked = await _ensureLockForGroup(agendaId, periodId, gKey, nomor);
+  if (!locked) return;
+
+  var dKey = _draftItemKey(gKey, resultId);
   if (window._auditPendingFiles && window._auditPendingFiles[dKey]) delete window._auditPendingFiles[dKey];
   _draftSetItem(gKey, resultId, {
     item_id:           (_scItem && _scItem.item_id) || '',
     result_id:         resultId,
-    nomor_persyaratan: _scItem ? Number(_scItem.nomor) : 0,
+    nomor_persyaratan: nomor,
     check_item_no:     _scItem ? Number(_scItem.check_item_no) : 0,
     status:            'COMPLY',
     deskripsi_temuan:  ''
   });
+  _draftSetActiveGroup(gKey);  // ← wajib agar save bar muncul dan lock aktif
   _repaintCheckItemRow(gKey, resultId, 'COMPLY', true);
   _renderFloatingSaveBar(agendaId, periodId);
 }
@@ -1822,6 +1832,7 @@ async function _saveRequirement(agendaId, periodId, btn) {
           window._auditRenderCtx.findingMap[it.result_id] = {
             result_id:        it.result_id,
             deskripsi_temuan: it.deskripsi_temuan || '',
+            lokasi_temuan:    it.lokasi_temuan    || '',
             foto_urls:        _fotoUrls,
           };
         }
