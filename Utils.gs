@@ -8,8 +8,7 @@
 
 /**
  * Generate unique ID dengan prefix dan timestamp
- * @param {string} prefix  e.g. 'USR', 'AREA', 'FND'
- * @returns {string}       e.g. 'USR_20250701_143022_4f3a'
+ * Dipakai untuk LOG, TPP, dan entitas internal lain
  */
 function generateId(prefix) {
   const now = new Date();
@@ -17,6 +16,52 @@ function generateId(prefix) {
   const randPart = Math.random().toString(36).substring(2, 6);
   return `${prefix}_${datePart}_${randPart}`;
 }
+
+/**
+ * Buat slug dari teks bebas — uppercase, non-alphanumeric jadi _, max N karakter
+ * @param {string} text
+ * @param {number} maxLen  default 30
+ */
+function _slugify(text, maxLen) {
+  maxLen = maxLen || 30;
+  return String(text || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')  // non-alphanumeric → underscore
+    .replace(/^_+|_+$/g, '')       // trim underscore di awal/akhir
+    .substring(0, maxLen);
+}
+
+/**
+ * Generate period_id dari nama periode yang dimasukkan koordinator
+ * Format: PRD_[SLUG_NAMA]
+ * e.g. "Internal Integrasi 2026" → "PRD_INTERNAL_INTEGRASI_2026"
+ */
+function generatePeriodId(namaPeriode) {
+  return 'PRD_' + _slugify(namaPeriode, 40);
+}
+
+/**
+ * Generate agenda_id dari period_id + nama dept area
+ * Format: AGN_[SLUG_PERIOD]_[SLUG_DEPT]
+ * e.g. period="PRD_INTERNAL_INTEGRASI_2026", dept="IMS" → "AGN_INTERNAL_INTEGRASI_2026_IMS"
+ */
+function generateAgendaId(periodId, dept) {
+  const periodSlug = String(periodId || '').replace(/^PRD_/, '');
+  const deptSlug   = _slugify(dept, 20);
+  return 'AGN_' + periodSlug + '_' + deptSlug;
+}
+
+/**
+ * Generate result_id dari nama dept + nomor urut dalam agenda
+ * Format: RES_[SLUG_DEPT]_[NNN]
+ * e.g. dept="IMS", counter=3 → "RES_IMS_003"
+ * Aman karena result hanya ada dalam satu file periode (tidak cross-periode)
+ */
+function generateResultId(dept, counter) {
+  const deptSlug = _slugify(dept, 20);
+  return 'RES_' + deptSlug + '_' + String(counter).padStart(3, '0');
+}
+
 
 /**
  * Generate ID pendek berurutan berdasarkan jumlah data existing
