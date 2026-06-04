@@ -270,6 +270,7 @@ function createArea({ kategori, dept, dept_head_email, dept_head_name = '', area
   if (!isValidEnum(kategori, CONFIG.KATEGORI)) throw new Error('Kategori tidak valid: ' + kategori);
   const area_id = generateSequentialId('AREA', existing.length);
   _appendRow(sheet, [area_id, kategori, dept, dept_head_email, dept_head_name, area_sampling, auditee_emails, auditee_names, true]);
+  invalidateAreasCache(); 
   return { area_id, kategori, dept };
 }
 
@@ -286,6 +287,7 @@ function updateArea(areaId, updates) {
   if (updates.auditee_emails  !== undefined) _updateCell(sheet, area._rowIndex, C.AUDITEE_EMAILS  + 1, updates.auditee_emails);
   if (updates.auditee_names   !== undefined) _updateCell(sheet, area._rowIndex, C.AUDITEE_NAMES   + 1, updates.auditee_names);
   if (updates.aktif           !== undefined) _updateCell(sheet, area._rowIndex, C.AKTIF           + 1, updates.aktif);
+  invalidateAreasCache();
   return { success: true };
 }
 
@@ -519,17 +521,21 @@ function getActivePeriod() {
 }
 
 function createPeriod({ namaPeriode, tanggalMulai, tanggalSelesai, createdBy }) {
-  // Validasi nama tidak boleh sama persis (case-insensitive)
-  const existing = getAllPeriods(true);
+  // Validasi nama tidak boleh kosong
   const namaTrim = (namaPeriode || '').trim();
   if (!namaTrim) throw new Error('Nama periode tidak boleh kosong.');
+
+  // Validasi nama tidak boleh sama persis dengan yang sudah ada (case-insensitive)
+  const existing = getAllPeriods(true);
   const duplikat = existing.find(p =>
     (p.nama_periode || '').trim().toLowerCase() === namaTrim.toLowerCase()
   );
   if (duplikat) throw new Error('Nama periode "' + namaTrim + '" sudah digunakan. Gunakan nama yang berbeda.');
 
+  // Generate ID dari nama periode
   const period_id = generatePeriodId(namaTrim);
-  // Cek period_id juga tidak tabrakan (seharusnya tidak kalau nama sudah unik)
+
+  // Cek ID tidak tabrakan (edge case: nama berbeda tapi slug identik)
   if (existing.find(p => p.period_id === period_id))
     throw new Error('ID periode "' + period_id + '" sudah ada. Coba gunakan nama yang lebih spesifik.');
 
@@ -729,7 +735,7 @@ function getAgendaByAreaAndPeriod(areaId, periodId) {
   return getAllAgendas().find(a => a.area_id === areaId && a.period_id === periodId) || null;
 }
 
-function createAgenda({ periodId, areaId, auditorEmails, leadAuditor, jadwalTanggal, assignedBy }) {
+function createAgenda({ periodId, areaId, auditorEmails, leadAuditor, assignedBy }) {
   const area = getAreaById(areaId);
   if (!area) throw new Error('Area tidak ditemukan: ' + areaId);
   if (getAgendaByAreaAndPeriod(areaId, periodId))
