@@ -58,7 +58,7 @@ function _routeAction(action, payload, profile) {
 
     case 'GET_INIT_DATA': {
       const p       = profile;
-      const periods = getAllPeriods().map(_sanitizeObj);
+      const periods = getCachedPeriods(false).map(_sanitizeObj);
       return {
         profileJson: JSON.stringify({
           email:         p.email,
@@ -82,27 +82,33 @@ function _routeAction(action, payload, profile) {
     // ── User Management ───────────────────────────────────────
     case 'GET_USERS':
       requireAccess(['isKoordinator'], profile);
-      return getAllUsers().map(_sanitizeObj);
+      return getCachedUsers().map(_sanitizeObj);
 
     case 'CREATE_USER':
       requireAccess(['isKoordinator'], profile);
+      invalidateUsersCache();
       return createUser(payload);
 
     case 'UPDATE_USER':
       requireAccess(['isKoordinator'], profile);
       invalidateProfileCache(payload.email);
+      invalidateUsersCache();
       return updateUser(payload.email, payload.updates);
 
     case 'BATCH_CREATE_USERS':
       requireAccess(['isKoordinator'], profile);
+      invalidateUsersCache();
       return batchCreateUsers(payload.items);
 
     case 'DELETE_USER':
       requireAccess(['isKoordinator'], profile);
+      invalidateProfileCache(payload.email);
+      invalidateUsersCache();
       return deleteUser(payload.email);
 
     case 'BATCH_DELETE_USERS':
       requireAccess(['isKoordinator'], profile);
+      invalidateUsersCache();
       return batchDeleteUsers(payload.emails);
 
     case 'GET_UNIQUE_DEPTS':
@@ -171,13 +177,14 @@ function _routeAction(action, payload, profile) {
 
     // ── Audit Periods ─────────────────────────────────────────
     case 'GET_PERIODS':
-      return getAllPeriods().map(_sanitizeObj);
+      return getCachedPeriods(false).map(_sanitizeObj);
 
     case 'GET_ACTIVE_PERIOD':
-      return _sanitizeObj(getActivePeriod());
+      return _sanitizeObj(getCachedPeriods(false).find(p => p.status === CONFIG.PERIOD_STATUS.ACTIVE) || null);
 
     case 'CREATE_PERIOD':
       requireAccess(['isKoordinator'], profile);
+      invalidatePeriodsCache();
       return createPeriod({
         namaPeriode:    payload.nama_periode,
         tanggalMulai:   payload.tanggal_mulai,
@@ -187,15 +194,18 @@ function _routeAction(action, payload, profile) {
 
     case 'UPDATE_PERIOD':
       requireAccess(['isKoordinator'], profile);
+      invalidatePeriodsCache();
       return updatePeriod(payload.period_id, payload.updates);
 
     case 'ACTIVATE_PERIOD':
       requireAccess(['isKoordinator'], profile);
+      invalidatePeriodsCache();
       return activatePeriod(payload.period_id);
 
     // Alias untuk Page_Admin yang masih pakai UPDATE_PERIOD_STATUS
     case 'UPDATE_PERIOD_STATUS':
       requireAccess(['isKoordinator'], profile);
+      invalidatePeriodsCache();
       if (payload.status === CONFIG.PERIOD_STATUS.ACTIVE) {
         return activatePeriod(payload.period_id);
       }
@@ -206,23 +216,27 @@ function _routeAction(action, payload, profile) {
 
     case 'COMPLETE_PERIOD':
       requireAccess(['isKoordinator'], profile);
+      invalidatePeriodsCache();
       return completePeriod(payload.period_id, profile.email, payload.force === true);
 
     case 'DELETE_PERIOD':
       requireAccess(['isKoordinator'], profile);
+      invalidatePeriodsCache();
       return deletePeriod(payload.period_id);
 
     case 'ARCHIVE_PERIOD':
       requireAccess(['isKoordinator'], profile);
+      invalidatePeriodsCache();
       return archivePeriod(payload.period_id);
 
     case 'RESTORE_ARCHIVED_PERIOD':
       requireAccess(['isKoordinator'], profile);
+      invalidatePeriodsCache();
       return restoreArchivedPeriod(payload.period_id);
 
     // ── Audit Agenda ──────────────────────────────────────────
     case 'GET_AGENDAS_BY_PERIOD': {
-      return getAgendasByPeriod(payload.period_id).map(_sanitizeObj);
+      return getCachedAgendasByPeriod(payload.period_id).map(_sanitizeObj);
     }
 
     case 'GET_AGENDA': {
@@ -657,7 +671,7 @@ function _getDashboardData(profile, periodId) {
       };
     }
 
-    const agendas  = getAgendasByPeriod(period.period_id).map(_sanitizeObj);
+    const agendas  = getCachedAgendasByPeriod(period.period_id).map(_sanitizeObj);
     let   findings = getAllFindingsByPeriod(period.spreadsheet_id, period.period_id);
 
     // Filter kalau bukan Koordinator — hanya tampilkan area yang relevan
