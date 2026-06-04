@@ -1004,7 +1004,7 @@ function getAuditResultsByPeriod(spreadsheetId, periodId) {
 // Ambil hanya Non Comply / OFI untuk satu agenda (tampilan verifikasi)
 function getFindingsByAgenda(spreadsheetId, agendaId) {
   return getAuditResultsByAgenda(spreadsheetId, agendaId).filter(r =>
-    r.status === CONFIG.RESULT_STATUS.NON_COMPLY || r.status === CONFIG.RESULT_STATUS.OFI
+    r.status === CONFIG.RESULT_STATUS.NON_COMPLY
   );
 }
 
@@ -1256,7 +1256,7 @@ function submitAgreement(spreadsheetId, agendaId, agreementFotoUrl, agreementBy,
 
 /**
  * updates: Array<{ result_id, final_status, deskripsi_temuan }>
- * final_status: 'Non Comply' | 'OFI' | 'Comply' (hapus temuan → ubah ke Comply)
+ * final_status: 'Non Comply' | 'Comply' (hapus temuan → ubah ke Comply)
  */
 function verifyFindings(spreadsheetId, agendaId, updates, verifiedBy) {
   const sheet   = _getAuditSheet(spreadsheetId, CONFIG.AUDIT_SHEETS.AUDIT_RESULTS);
@@ -1280,9 +1280,8 @@ function verifyFindings(spreadsheetId, agendaId, updates, verifiedBy) {
       _updateCell(sheet, result._rowIndex, C.IS_OVERDUE + 1, '');
       _updateCell(sheet, result._rowIndex, C.CLOSED_AT        + 1, '');
     } else {
-      // Non Comply / OFI tetap → set OPEN
-      _updateCell(sheet, result._rowIndex, C.FINDING_STATUS + 1, CONFIG.FINDING_STATUS.OPEN);
-      if (upd.deskripsi_temuan !== undefined)
+      // Non Comply tetap → set OPEN
+      _updateCell(sheet, result._rowIndex, C.FINDING_STATUS + 1, CONFIG.FINDING_STATUS.OPEN);      if (upd.deskripsi_temuan !== undefined)
         _updateCell(sheet, result._rowIndex, C.DESKRIPSI_TEMUAN + 1, upd.deskripsi_temuan);
       if (upd.final_status && upd.final_status !== result.status)
         _updateCell(sheet, result._rowIndex, C.STATUS + 1, upd.final_status);
