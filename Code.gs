@@ -474,6 +474,7 @@ function _routeAction(action, payload, profile) {
             item_id:          item.item_id,
             status:           item.status,
             deskripsi_temuan: item.deskripsi_temuan || '',
+            lokasi_temuan:    item.lokasi_temuan    || '',
             foto_urls:        allFotoUrls,
             auditor_email:    profile.email,
           });
