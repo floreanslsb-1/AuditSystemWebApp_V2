@@ -605,8 +605,9 @@ function completePeriod(periodId, completedBy, force) {
 const AGENDA_HEADERS = [
   'agenda_id','period_id','area_id','dept','kategori',
   'auditor_emails','lead_auditor','auditee_emails','dept_head_email',
-  'assigned_by','assigned_at','jadwal_tanggal',
+  'assigned_by','assigned_at',
   'status','started_by','started_at','area_sampling',
+  'ofi',
   'agreement_foto_url','agreement_by','agreement_at','auditee_hadir_names'
 ];
 
@@ -651,7 +652,6 @@ function createAgenda({ periodId, areaId, auditorEmails, leadAuditor, jadwalTang
   row[C.DEPT_HEAD_EMAIL] = area.dept_head_email || '';
   row[C.ASSIGNED_BY]     = assignedBy;
   row[C.ASSIGNED_AT]     = now();
-  row[C.JADWAL_TANGGAL]  = jadwalTanggal || '';
   row[C.STATUS]          = CONFIG.AGENDA_STATUS.PLANNED;
   _appendRow(sheet, row);
   return { agenda_id };
@@ -664,11 +664,11 @@ function updateAgenda(agendaId, updates) {
   const C = CONFIG.COLS.AUDIT_AGENDA;
   if (updates.auditor_emails       !== undefined) _updateCell(sheet, agenda._rowIndex, C.AUDITOR_EMAILS       + 1, updates.auditor_emails);
   if (updates.lead_auditor         !== undefined) _updateCell(sheet, agenda._rowIndex, C.LEAD_AUDITOR         + 1, updates.lead_auditor);
-  if (updates.jadwal_tanggal       !== undefined) _updateCell(sheet, agenda._rowIndex, C.JADWAL_TANGGAL       + 1, updates.jadwal_tanggal);
   if (updates.status               !== undefined) _updateCell(sheet, agenda._rowIndex, C.STATUS               + 1, updates.status);
   if (updates.started_by           !== undefined) _updateCell(sheet, agenda._rowIndex, C.STARTED_BY           + 1, updates.started_by);
   if (updates.started_at           !== undefined) _updateCell(sheet, agenda._rowIndex, C.STARTED_AT           + 1, updates.started_at);
   if (updates.area_sampling        !== undefined) _updateCell(sheet, agenda._rowIndex, C.AREA_SAMPLING        + 1, updates.area_sampling);
+  if (updates.ofi                  !== undefined) _updateCell(sheet, agenda._rowIndex, C.OFI                  + 1, updates.ofi);
   if (updates.agreement_foto_url   !== undefined) _updateCell(sheet, agenda._rowIndex, C.AGREEMENT_FOTO_URL   + 1, updates.agreement_foto_url);
   if (updates.agreement_by         !== undefined) _updateCell(sheet, agenda._rowIndex, C.AGREEMENT_BY         + 1, updates.agreement_by);
   if (updates.agreement_at         !== undefined) _updateCell(sheet, agenda._rowIndex, C.AGREEMENT_AT         + 1, updates.agreement_at);
@@ -746,8 +746,9 @@ function archiveAgendaToFile(periodId, spreadsheetId) {
     return [
       a.agenda_id, a.period_id, a.area_id, a.dept, a.kategori,
       a.auditor_emails, a.lead_auditor, a.auditee_emails, a.dept_head_email,
-      a.assigned_by, a.assigned_at, a.jadwal_tanggal,
+      a.assigned_by, a.assigned_at,
       a.status, a.started_by, a.started_at, a.area_sampling,
+      a.ofi || '',
       a.agreement_foto_url, a.agreement_by, a.agreement_at, a.auditee_hadir_names
     ];
   });
@@ -802,8 +803,9 @@ function _setupAuditSheets(ss, periodId, namaPeriode) {
     AGENDA: [
       'agenda_id','period_id','area_id','dept','kategori',
       'auditor_emails','lead_auditor','auditee_emails','dept_head_email',
-      'assigned_by','assigned_at','jadwal_tanggal',
+      'assigned_by','assigned_at',
       'status','started_by','started_at','area_sampling',
+      'ofi',
       'agreement_foto_url','agreement_by','agreement_at','auditee_hadir_names',
     ],
   };
@@ -1101,7 +1103,7 @@ function finishAudit(periodId, agendaId, auditorEmail) {
 /**
  * Auditor upload foto agreement → status agenda DONE, finding_status → PENDING_VERIFICATION.
  */
-function submitAgreement(spreadsheetId, agendaId, agreementFotoUrl, agreementBy, auditeeHadirNames) {
+function submitAgreement(spreadsheetId, agendaId, agreementFotoUrl, agreementBy, ofi, auditeeHadirNames) {
   const agenda = getAgendaById(agendaId);
   if (!agenda) throw new Error('Agenda tidak ditemukan: ' + agendaId);
   updateAgenda(agendaId, {
@@ -1109,6 +1111,7 @@ function submitAgreement(spreadsheetId, agendaId, agreementFotoUrl, agreementBy,
     agreement_foto_url:  agreementFotoUrl,
     agreement_by:        agreementBy,
     agreement_at:        now(),
+    ofi:                 ofi || '',
     auditee_hadir_names: auditeeHadirNames || '',
   });
   const sheet   = _getAuditSheet(spreadsheetId, CONFIG.AUDIT_SHEETS.AUDIT_RESULTS);
