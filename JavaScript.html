@@ -147,6 +147,10 @@ function navigateTo(page, params) {
   document.querySelectorAll('.mob-nav-item').forEach(function(el) {
     el.classList.toggle('active', el.dataset.page === page);
   });
+  // Refresh badge saat kembali ke home atau mytask
+  if (page === 'home' || page === 'mytask') {
+    setTimeout(_fetchAndRenderTaskBadge, 300);
+  }
   var container = document.getElementById('page-content');
   container.innerHTML =
     '<div class="page-loader">' +
@@ -484,6 +488,8 @@ async function initApp() {
     renderUserInfo();
     App.ready = true;
     navigateTo('home');
+    // Background fetch task badge — non-blocking
+    setTimeout(_fetchAndRenderTaskBadge, 500);
 
   } catch(err) {
     App.ready = true;
@@ -539,6 +545,55 @@ function renderSidebar() {
   }
 
   lucide.createIcons();
+}
+
+// ── Background task badge fetch ───────────────────────────────
+async function _fetchAndRenderTaskBadge() {
+  var period = App.activePeriod;
+  if (!period) return;
+  try {
+    var results = await Promise.all([
+      cachedApi('GET_AGENDAS_BY_PERIOD',      { period_id: period.period_id }, 30),
+      cachedApi('GET_ALL_FINDINGS_BY_PERIOD', { period_id: period.period_id }, 15),
+    ]);
+    var agendas  = results[0];
+    var findings = results[1];
+    findings.forEach(function(f) {
+      f._agenda = agendas.find(function(a) { return a.agenda_id === f.agenda_id; });
+    });
+    var tasks = await _buildTaskList(findings, agendas, period);
+    var count = tasks.length;
+    _setNavBadge('mytask', count);
+  } catch(e) {
+    // silent — badge tidak muncul kalau gagal
+  }
+}
+
+function _setNavBadge(page, count) {
+  // Update sidebar desktop
+  var navItem = document.querySelector('.nav-item[data-page="' + page + '"]');
+  if (navItem) {
+    var existing = navItem.querySelector('.nav-badge');
+    if (existing) existing.remove();
+    if (count > 0) {
+      var badge = document.createElement('span');
+      badge.className = 'nav-badge';
+      badge.textContent = count > 99 ? '99+' : count;
+      navItem.appendChild(badge);
+    }
+  }
+  // Update mobile bottom nav
+  var mobItem = document.querySelector('.mob-nav-item[data-page="' + page + '"]');
+  if (mobItem) {
+    var existingMob = mobItem.querySelector('.mob-nav-badge');
+    if (existingMob) existingMob.remove();
+    if (count > 0) {
+      var mobBadge = document.createElement('span');
+      mobBadge.className = 'mob-nav-badge';
+      mobBadge.textContent = count > 99 ? '99+' : count;
+      mobItem.appendChild(mobBadge);
+    }
+  }
 }
 
 function renderUserInfo() {
