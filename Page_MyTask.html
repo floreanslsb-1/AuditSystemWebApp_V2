@@ -193,73 +193,146 @@ function _renderMyTask(container, tasks, period) {
         '<div class="empty-desc">Semua sudah beres. Tidak ada yang perlu ditindaklanjuti saat ini.</div>' +
       '</div></div>';
   } else {
-    // Group by type untuk mass approve
-    var verifikasiTasks = tasks.filter(function(t) { return t.type === 'VERIFIKASI'; });
+    // Group by type
+    var verifikasiTasks  = tasks.filter(function(t) { return t.type === 'VERIFIKASI'; });
+    var isiTppTasks      = tasks.filter(function(t) { return t.type === 'ISI_TPP'; });
+    var uploadImplTasks  = tasks.filter(function(t) { return t.type === 'UPLOAD_IMPL'; });
     var approvalTppTasks = tasks.filter(function(t) { return t.type === 'APPROVAL_TPP'; });
-    var approvalImplTasks = tasks.filter(function(t) { return t.type === 'APPROVAL_IMPL'; });
+    var approvalImplTasks= tasks.filter(function(t) { return t.type === 'APPROVAL_IMPL'; });
 
-    listHtml =
-      '<div class="card">' +
-        // Mass approve bar — hanya kalau ada approval tasks
-        ((approvalTppTasks.length > 1 || approvalImplTasks.length > 1) && App.profile.isKoordinator
-          ? '<div style="padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg);' +
-              'display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
-              '<span style="font-size:12px;color:var(--text-muted)">Mass approve:</span>' +
-              (approvalTppTasks.length > 1
-                ? '<button class="btn btn-outline btn-sm" onclick="_massApproveAll(\'TPP\')">' +
-                    '<i data-lucide="check-circle" style="width:13px;height:13px"></i> ' +
-                    'Approve Semua TPP (' + approvalTppTasks.length + ')' +
-                  '</button>'
-                : '') +
-              (approvalImplTasks.length > 1
-                ? '<button class="btn btn-outline btn-sm" onclick="_massApproveAll(\'IMPL\')">' +
-                    '<i data-lucide="check-circle" style="width:13px;height:13px"></i> ' +
-                    'Approve Semua Implementasi (' + approvalImplTasks.length + ')' +
-                  '</button>'
-                : '') +
-            '</div>'
-          : '') +
+    // Helper: render satu section dengan header + table
+    function _taskSection(sectionTitle, sectionIcon, sectionColor, sectionTasks, massApproveBtn) {
+      if (!sectionTasks.length) return '';
+      return '<div class="card mb-16">' +
+        // Section header
+        '<div style="padding:10px 16px;border-bottom:1px solid var(--border);background:var(--bg);' +
+            'display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">' +
+          '<span style="display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:' + sectionColor + '">' +
+            '<i data-lucide="' + sectionIcon + '" style="width:14px;height:14px"></i>' +
+            sectionTitle +
+            '<span style="font-size:11px;font-weight:600;padding:1px 7px;border-radius:10px;' +
+                'background:' + sectionColor + '18;color:' + sectionColor + '">' +
+              sectionTasks.length +
+            '</span>' +
+          '</span>' +
+          (massApproveBtn || '') +
+        '</div>' +
+        // Table
         '<div class="table-wrap"><table>' +
           '<thead><tr>' +
-            '<th style="width:130px">Tipe</th>' +
-            '<th>Detail</th>' +
-            '<th style="width:140px">Area</th>' +
-            '<th style="width:100px">Role</th>' +
-            '<th style="width:48px"></th>' +
+            (sectionTasks[0] && sectionTasks[0].type === 'VERIFIKASI'
+              ? '<th style="width:40px;text-align:center">No</th>' +
+                '<th>Dept / Bagian</th>' +
+                '<th>Auditor</th>' +
+                '<th style="width:110px;text-align:center">Jml Temuan</th>' +
+                '<th style="width:120px">Waktu Selesai</th>' +
+                '<th style="width:48px"></th>'
+              : '<th>Detail</th>' +
+                '<th style="width:150px">Area</th>' +
+                '<th style="width:48px"></th>'
+            ) +
           '</tr></thead>' +
           '<tbody>' +
-            tasks.map(function(t, idx) {
-              var areaName = t.agenda ? escHtml(t.agenda.dept) : '—';
-              var roleLabel = t.level || (t.type === 'ISI_TPP' || t.type === 'UPLOAD_IMPL' ? 'Auditee' : 'Koordinator');
+            sectionTasks.map(function(t) {
+              var globalIdx = tasks.indexOf(t);
+              var areaName  = t.agenda ? escHtml(t.agenda.dept) : '—';
               var detailHtml = '';
-
               if (t.type === 'VERIFIKASI') {
-                detailHtml = '<strong>' + t.findings.length + ' temuan</strong> menunggu verifikasi';
+                // Tabel verifikasi punya kolom sendiri — render sebagai row khusus
+                var ag         = t.agenda || {};
+                var auditorStr = ag.auditor_emails
+                  ? ag.auditor_emails.split(',').map(function(e) {
+                      return '<span style="display:inline-block;padding:1px 7px;border-radius:10px;' +
+                        'background:var(--bg);border:1px solid var(--border);font-size:11px;margin:1px">' +
+                        escHtml(e.trim().split('@')[0]) + '</span>';
+                    }).join('')
+                  : '—';
+                // Waktu selesai = agreement_at (saat auditor submit agreement)
+                var waktuSelesai = '—';
+                if (ag.agreement_at) {
+                  var _agAt    = new Date(ag.agreement_at);
+                  var _now     = new Date();
+                  var _diffMs  = _now - _agAt;
+                  var _diffMin = Math.floor(_diffMs / 60000);
+                  var _diffH   = Math.floor(_diffMs / 3600000);
+                  var _diffD   = Math.floor(_diffMs / 86400000);
+                  if (_diffMin < 1) {
+                    waktuSelesai = 'Baru saja';
+                  } else if (_diffH < 1) {
+                    waktuSelesai = _diffMin + ' menit lalu';
+                  } else if (_diffH < 24) {
+                    waktuSelesai = _diffH + ' jam lalu';
+                  } else if (_diffD === 1) {
+                    waktuSelesai = 'Kemarin';
+                  } else if (_diffD < 7) {
+                    waktuSelesai = _diffD + ' hari lalu';
+                  } else {
+                    waktuSelesai = formatDate(ag.agreement_at);
+                  }
+                }
+                var verifIdx = sectionTasks.indexOf(t);
+                return '<tr style="cursor:pointer" onclick="_openTaskDetail(' + globalIdx + ')" ' +
+                  'onmouseover="this.style.background=\'var(--bg)\'" ' +
+                  'onmouseout="this.style.background=\'\'">' +
+                  '<td style="text-align:center;font-size:12px;color:var(--text-muted);font-weight:600">' + (verifIdx + 1) + '</td>' +
+                  '<td style="font-size:12px;font-weight:600">' + areaName + '</td>' +
+                  '<td>' + auditorStr + '</td>' +
+                  '<td style="text-align:center">' +
+                    '<span style="display:inline-flex;align-items:center;justify-content:center;' +
+                      'width:26px;height:26px;border-radius:50%;background:var(--rose,#f43f5e)18;' +
+                      'color:var(--rose,#f43f5e);font-size:13px;font-weight:700">' +
+                      t.findings.length +
+                    '</span>' +
+                  '</td>' +
+                  '<td style="font-size:12px;color:var(--text-muted)">' + waktuSelesai + '</td>' +
+                  '<td><i data-lucide="chevron-right" style="width:14px;height:14px;color:var(--text-muted)"></i></td>' +
+                '</tr>';
               } else {
-                detailHtml = '<span class="td-mono" style="font-size:11px">' +
-                  escHtml(t.result_id ? t.result_id.split('_').slice(-2).join('_') : '') +
-                  '</span>' +
+                var shortId = t.result_id ? t.result_id.split('_').slice(-2).join('_') : '';
+                detailHtml =
+                  '<span class="td-mono" style="font-size:11px">' + escHtml(shortId) + '</span>' +
                   (t.finding ? ' · ' + statusBadge(t.finding.status) : '');
+                if (t.finding && t.finding.deskripsi_temuan) {
+                  detailHtml += '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;' +
+                    'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:320px">' +
+                    escHtml(t.finding.deskripsi_temuan) + '</div>';
+                }
+                return '<tr style="cursor:pointer" onclick="_openTaskDetail(' + globalIdx + ')" ' +
+                  'onmouseover="this.style.background=\'var(--bg)\'" ' +
+                  'onmouseout="this.style.background=\'\'">' +
+                  '<td>' + detailHtml + '</td>' +
+                  '<td class="text-sm">' + areaName + '</td>' +
+                  '<td><i data-lucide="chevron-right" style="width:14px;height:14px;color:var(--text-muted)"></i></td>' +
+                '</tr>';
               }
-
-              return '<tr style="cursor:pointer" onclick="_openTaskDetail(' + idx + ')" ' +
-                'onmouseover="this.style.background=\'var(--bg)\'" ' +
-                'onmouseout="this.style.background=\'\'">' +
-                '<td>' +
-                  '<span class="badge ' + t.badge + '" style="display:inline-flex;align-items:center;gap:5px">' +
-                    '<i data-lucide="' + t.icon + '" style="width:11px;height:11px"></i>' +
-                    escHtml(t.label) +
-                  '</span>' +
-                '</td>' +
-                '<td>' + detailHtml + '</td>' +
-                '<td class="text-sm">' + areaName + '</td>' +
-                '<td><span class="badge badge-slate" style="font-size:10px">' + escHtml(roleLabel) + '</span></td>' +
-                '<td><i data-lucide="chevron-right" style="width:14px;height:14px;color:var(--text-muted)"></i></td>' +
-              '</tr>';
             }).join('') +
           '</tbody>' +
         '</table></div>' +
       '</div>';
+    }
+
+    listHtml =
+      _taskSection('Verifikasi Temuan', 'shield-check', 'var(--amber,#f59e0b)', verifikasiTasks) +
+      _taskSection('Isi TPP', 'wrench', 'var(--blue,#3b82f6)', isiTppTasks) +
+      _taskSection('Upload Implementasi', 'camera', 'var(--purple,#8b5cf6)', uploadImplTasks) +
+      _taskSection(
+        'Approval TPP', 'check-circle', 'var(--teal,#14b8a6)', approvalTppTasks,
+        (approvalTppTasks.length > 1 && App.profile.isKoordinator
+          ? '<button class="btn btn-outline btn-sm" onclick="_massApproveAll(\'TPP\')">' +
+              '<i data-lucide="check-circle" style="width:13px;height:13px"></i> ' +
+              'Approve Semua (' + approvalTppTasks.length + ')' +
+            '</button>'
+          : '')
+      ) +
+      _taskSection(
+        'Approval Implementasi', 'upload-cloud', 'var(--emerald,#10b981)', approvalImplTasks,
+        (approvalImplTasks.length > 1 && App.profile.isKoordinator
+          ? '<button class="btn btn-outline btn-sm" onclick="_massApproveAll(\'IMPL\')">' +
+              '<i data-lucide="check-circle" style="width:13px;height:13px"></i> ' +
+              'Approve Semua (' + approvalImplTasks.length + ')' +
+            '</button>'
+          : '')
+      );
   }
 
   container.innerHTML =
