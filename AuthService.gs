@@ -104,6 +104,39 @@ function invalidateProfileCache(email) {
   try { CacheService.getScriptCache().remove(cacheKey); } catch(e) {}
 }
 
+function invalidateAllProfileCaches() {
+  // ScriptCache tidak support wildcard delete — pakai invalidate semua user
+  // yang auditee_emails-nya berubah
+  // Cara paling efektif: hapus semua profile cache dengan iterasi semua users
+  try {
+    const users = getAllUsers();
+    const cache = CacheService.getScriptCache();
+    users.forEach(function(u) {
+      const key = 'PROFILE_' + (u.email || '').toLowerCase().replace(/[^a-z0-9]/gi, '_');
+      cache.remove(key);
+    });
+    // Invalidate juga area-based profiles (auditee & depthead yang tidak di USERS)
+    const areas = getAllAreas();
+    areas.forEach(function(a) {
+      if (a.dept_head_email) {
+        const key = 'PROFILE_' + a.dept_head_email.toLowerCase().replace(/[^a-z0-9]/gi, '_');
+        cache.remove(key);
+      }
+      if (a.auditee_emails) {
+        a.auditee_emails.split(',').forEach(function(email) {
+          email = email.trim();
+          if (email) {
+            const key = 'PROFILE_' + email.toLowerCase().replace(/[^a-z0-9]/gi, '_');
+            cache.remove(key);
+          }
+        });
+      }
+    });
+  } catch(e) {
+    console.warn('invalidateAllProfileCaches failed (non-fatal):', e.message);
+  }
+}
+
 /**
  * Build profile object dengan semua derived fields.
  */
