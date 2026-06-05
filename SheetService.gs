@@ -288,6 +288,30 @@ function updateArea(areaId, updates) {
   if (updates.auditee_names   !== undefined) _updateCell(sheet, area._rowIndex, C.AUDITEE_NAMES   + 1, updates.auditee_names);
   if (updates.aktif           !== undefined) _updateCell(sheet, area._rowIndex, C.AKTIF           + 1, updates.aktif);
   invalidateAreasCache();
+  // Invalidate semua profile cache agar isAuditee / isDeptHead langsung refresh
+  invalidateAllProfileCaches();
+
+  // ── Sync ke agenda aktif yang menggunakan area ini ──────────
+  // Hanya sync kalau ada perubahan di auditee_emails atau dept_head_email
+  if (updates.auditee_emails !== undefined || updates.dept_head_email !== undefined) {
+    // Sync semua agenda non-COMPLETED — termasuk DONE, karena auditee masih perlu isi TPP
+    const activeAgendas = getAllAgendas().filter(function(ag) {
+      return ag.area_id === areaId;
+    });
+    if (activeAgendas.length > 0) {
+      const agendaSheet = _getMasterSheet(CONFIG.SHEETS.AUDIT_AGENDA);
+      const CA          = CONFIG.COLS.AUDIT_AGENDA;
+      activeAgendas.forEach(function(ag) {
+        if (updates.auditee_emails  !== undefined)
+          _updateCell(agendaSheet, ag._rowIndex, CA.AUDITEE_EMAILS  + 1, updates.auditee_emails);
+        if (updates.dept_head_email !== undefined)
+          _updateCell(agendaSheet, ag._rowIndex, CA.DEPT_HEAD_EMAIL + 1, updates.dept_head_email);
+        // Invalidate cache agenda per periode
+        invalidateAgendasCache(ag.period_id);
+      });
+    }
+  }
+
   return { success: true };
 }
 
