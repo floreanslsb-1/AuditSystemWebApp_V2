@@ -477,8 +477,8 @@ function _verifRepaintCard(cardIdx, resultId) {
   // Foto display — rebuild
   var fotoEl = card.querySelector('.verif-foto-display');
   if (fotoEl) {
-    var fotoUrls   = draft ? (draft.foto_urls || '') : (card.dataset.origFotoUrls || '');
-    var deletedUrls = draft ? (draft._deletedFotoUrls || []) : [];
+    var fotoUrls    = draft ? (typeof draft.foto_urls === 'string' ? draft.foto_urls : '') : (card.dataset.origFotoUrls || '');
+    var deletedUrls = draft ? (Array.isArray(draft._deletedFotoUrls) ? draft._deletedFotoUrls : []) : [];
     var activeUrls  = fotoUrls.split(',').filter(function(u) {
       return u && deletedUrls.indexOf(u) === -1;
     });
@@ -715,7 +715,7 @@ async function _verifOpenEditModal(resultId, cardIdx) {
           activeFotoUrls.map(function(url, idx) {
             return '<div style="position:relative;width:72px;height:72px;border-radius:6px;' +
               'overflow:hidden;border:1px solid var(--border);cursor:zoom-in" ' +
-              'onclick="_openLightbox(\'' + escAttr(url) + '\')">' +
+              'onclick="_openFotoLightbox(\'' + escAttr(url) + '\')">' +
               _renderDriveImg(url) +
               '<button title="Hapus foto" ' +
                 'onclick="event.stopPropagation();singleClick(this,function(){ _verifMarkDeleteFoto(\'' + escAttr(url) + '\',' + idx + ') })" ' +
@@ -791,13 +791,8 @@ async function _verifOpenEditModal(resultId, cardIdx) {
     hint.textContent = (files.length + savedCount) > 0 ? '' : '(wajib minimal 1 foto)';
   });
 
-  // Restore pending files ke zone
-  if (pendingFiles.length) {
-    setTimeout(function() {
-      var zoneEl = document.getElementById('vem-upload-zone');
-      if (zoneEl && zoneEl._setFiles) zoneEl._setFiles(pendingFiles);
-    }, 50);
-  }
+  // Tidak restore pending ke zone — sudah ditampilkan sebagai label count di atas zone
+  // Restore menyebabkan duplikasi saat _getFiles() dipanggil di _verifSaveEditModal
 
 }
 
@@ -843,15 +838,23 @@ function _verifSaveEditModal(cardIdx, forceComply) {
     if (!desc)   return toast('Deskripsi temuan wajib diisi.', 'error');
     if (!lokasi) return toast('Lokasi temuan wajib diisi.', 'error');
 
-    var newFiles     = zone && zone._getFiles ? zone._getFiles() : [];
+    var zoneFiles    = zone && zone._getFiles ? zone._getFiles() : [];
     var savedCount   = (window._vfExistingUrls || []).length - (window._vfDeletedUrls || []).length;
     var existPending = (window._verifPendingFiles && window._verifPendingFiles[f.result_id]) || [];
-    if (newFiles.length + savedCount + existPending.length < 1) {
+
+    // Cegah duplikasi: newFiles = hanya file yang BELUM ada di existPending
+    // Identifikasi dengan name+size+lastModified karena File object tidak bisa di-compare by reference setelah _setFiles
+    var existNames = existPending.map(function(f) { return f.name + '_' + f.size + '_' + f.lastModified; });
+    var trulyNewFiles = zoneFiles.filter(function(f) {
+      return existNames.indexOf(f.name + '_' + f.size + '_' + f.lastModified) === -1;
+    });
+
+    if (trulyNewFiles.length + savedCount + existPending.length < 1) {
       return toast('Upload minimal 1 foto bukti temuan.', 'error');
     }
 
-    // Gabungkan pending files: existing + baru
-    var allPending = existPending.concat(newFiles);
+    // Gabungkan: existing pending + benar-benar baru saja
+    var allPending = existPending.concat(trulyNewFiles);
     if (!window._verifPendingFiles) window._verifPendingFiles = {};
     window._verifPendingFiles[f.result_id] = allPending;
 
