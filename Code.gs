@@ -530,7 +530,7 @@ function _routeAction(action, payload, profile) {
       const updates_vf = (payload.updates || []).map(function(upd) {
         if (!upd.new_files || !upd.new_files.length) return upd;
         var uploadedUrls = upd.new_files.map(function(f) {
-          return uploadFileToDrive(f.data, f.name, f.mime_type, folder_vf);
+          return uploadFileToDrive(f.base64, f.name, f.mime_type, folder_vf);
         });
         var existingUrls = (upd.existing_foto_urls || '').split(',').filter(Boolean);
         var allUrls      = existingUrls.concat(uploadedUrls);
