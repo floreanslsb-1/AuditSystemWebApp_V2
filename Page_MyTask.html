@@ -1088,6 +1088,21 @@ async function _verifConfirmSubmit() {
   var agendaId = ctx.task.agenda_id;
   var periodId = ctx.period.period_id;
 
+  // DEBUG — dump semua draft state
+  console.log('[VERIF_CONFIRM] findings count:', findings.length);
+  findings.forEach(function(f) {
+    var d = _verifDraftGet(f.result_id);
+    console.log('[DRAFT]', f.result_id, {
+      hasDraft:         !!d,
+      status:           d && d.status,
+      foto_urls:        d && d.foto_urls,
+      foto_urls_type:   d && typeof d.foto_urls,
+      _deletedFotoUrls: d && d._deletedFotoUrls,
+      _deleted_type:    d && typeof d._deletedFotoUrls,
+      _deleted_isArray: d && Array.isArray(d._deletedFotoUrls),
+    });
+  });
+
   var btn = document.getElementById('verif-confirm-btn');
   if (btn) { btn.disabled = true; btn.innerHTML = '<div class="spinner" style="width:13px;height:13px;border-width:2px"></div> Menyimpan...'; }
 
@@ -1116,7 +1131,10 @@ async function _verifConfirmSubmit() {
       }
       // Non Comply dengan perubahan — encode foto baru
       var newFiles = (window._verifPendingFiles && window._verifPendingFiles[f.result_id]) || [];
+      console.log('[ENCODE] result_id:', f.result_id, 'newFiles type:', typeof newFiles, 'isArray:', Array.isArray(newFiles), 'length:', newFiles && newFiles.length);
+      console.log('[ENCODE] newFiles[0]:', newFiles && newFiles[0] ? { name: newFiles[0].name, type: newFiles[0].type, size: newFiles[0].size } : 'empty');
       var encodedFiles = newFiles.length ? await filesToBase64(newFiles) : [];
+      console.log('[ENCODE_DONE] encodedFiles count:', encodedFiles.length);
 
       // Hapus foto yang di-mark deleted dari Drive (non-fatal)
       var deletedNc = Array.isArray(draft._deletedFotoUrls) ? draft._deletedFotoUrls : [];
