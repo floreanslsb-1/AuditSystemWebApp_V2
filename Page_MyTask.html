@@ -394,63 +394,133 @@ function _subPageHeader(title, subtitle) {
 //  SUB-PAGE: VERIFIKASI TEMUAN (Koordinator)
 // ════════════════════════════════════════════════════════════
 
+// ════════════════════════════════════════════════════════════
+//  VERIF DRAFT — browser-side draft state untuk verifikasi
+//  Mirip _auditDraft tapi lebih sederhana: no lock, no groupKey
+//  Key: result_id
+//  Value: { result_id, deskripsi_temuan, lokasi_temuan,
+//            foto_urls, status,
+//            _deletedFotoUrls: [], _newFiles: [] }
+// ════════════════════════════════════════════════════════════
+
+function _verifDraftInit() {
+  window._verifDraft = {};          // result_id → draft object
+  window._verifPendingFiles = {};   // result_id → File[]
+}
+
+function _verifDraftSet(resultId, fields) {
+  if (!window._verifDraft) window._verifDraft = {};
+  window._verifDraft[resultId] = Object.assign(
+    {}, window._verifDraft[resultId] || {}, fields
+  );
+}
+
+function _verifDraftGet(resultId) {
+  return window._verifDraft && window._verifDraft[resultId] || null;
+}
+
+function _verifDraftClear(resultId) {
+  if (window._verifDraft)      delete window._verifDraft[resultId];
+  if (window._verifPendingFiles) delete window._verifPendingFiles[resultId];
+}
+
+function _verifHasDraft(resultId) {
+  return !!(window._verifDraft && window._verifDraft[resultId]);
+}
+
+// Repaint satu verif-card berdasarkan draft state
+function _verifRepaintCard(cardIdx, resultId) {
+  var card = document.getElementById('verif-card-' + cardIdx);
+  if (!card) return;
+  var draft = _verifDraftGet(resultId);
+
+  // Ambil nilai yang akan ditampilkan (draft > original dari data-* attr)
+  var desc    = draft ? draft.deskripsi_temuan : (card.dataset.origDesc   || '');
+  var lokasi  = draft ? draft.lokasi_temuan    : (card.dataset.origLokasi || '');
+  var status  = draft ? draft.status           : (card.dataset.origStatus || 'Non Comply');
+  var isDraft = !!draft;
+  var isComply = status === 'Comply';
+
+  // Warna background card
+  card.style.background    = isDraft ? 'rgba(245,158,11,.08)' : '';
+  card.style.borderColor   = isDraft ? 'var(--amber,#f59e0b)' : '';
+  card.style.borderWidth   = isDraft ? '1.5px' : '';
+
+  // Update badge status di header
+  var badgeEl = card.querySelector('.verif-status-badge');
+  if (badgeEl) {
+    badgeEl.className   = 'badge verif-status-badge ' + (isComply ? 'badge-emerald' : 'badge-rose');
+    badgeEl.innerHTML   = (isComply
+      ? '<i data-lucide="check" style="width:11px;height:11px"></i> Comply'
+      : '<i data-lucide="x" style="width:11px;height:11px"></i> Non Comply');
+    lucide.createIcons(badgeEl);
+  }
+
+  // Draft dot
+  var draftDot = card.querySelector('.verif-draft-dot');
+  if (draftDot) draftDot.style.display = isDraft ? 'inline-block' : 'none';
+
+  // Deskripsi display
+  var descEl = card.querySelector('.verif-desc-display');
+  if (descEl) descEl.textContent = isComply ? '(Akan diubah ke Comply — temuan ditutup)' : (desc || '—');
+  if (descEl) descEl.style.color = isComply ? 'var(--emerald,#10b981)' : isDraft ? 'var(--amber,#f59e0b)' : '';
+  if (descEl) descEl.style.fontStyle = isComply ? 'italic' : '';
+
+  // Lokasi display
+  var lokasiEl = card.querySelector('.verif-lokasi-display');
+  if (lokasiEl) {
+    lokasiEl.textContent = lokasi || '—';
+    lokasiEl.style.color = isDraft ? 'var(--amber,#f59e0b)' : '';
+  }
+
+  // Foto display — rebuild
+  var fotoEl = card.querySelector('.verif-foto-display');
+  if (fotoEl) {
+    var fotoUrls   = draft ? (draft.foto_urls || '') : (card.dataset.origFotoUrls || '');
+    var deletedUrls = draft ? (draft._deletedFotoUrls || []) : [];
+    var activeUrls  = fotoUrls.split(',').filter(function(u) {
+      return u && deletedUrls.indexOf(u) === -1;
+    });
+    var pendingCount = (window._verifPendingFiles && window._verifPendingFiles[resultId])
+      ? window._verifPendingFiles[resultId].length : 0;
+
+    fotoEl.innerHTML = activeUrls.map(function(url) {
+      return '<a href="' + escHtml(url) + '" target="_blank" class="btn btn-outline btn-sm">' +
+        '<i data-lucide="image" style="width:12px;height:12px"></i> Lihat Foto' +
+      '</a>';
+    }).join('') +
+    (pendingCount > 0
+      ? '<span style="font-size:11px;color:var(--amber,#f59e0b);font-weight:600;margin-left:4px">' +
+          '<i data-lucide="clock" style="width:11px;height:11px;vertical-align:middle"></i> ' +
+          pendingCount + ' foto baru (belum disimpan)' +
+        '</span>'
+      : '');
+    lucide.createIcons(fotoEl);
+  }
+}
+
 async function _renderVerifikasiPage(container, task, period) {
   container.innerHTML =
     '<div class="page-loader"><div class="spinner dark"></div><span>Memuat temuan...</span></div>';
+
+  // Init draft state baru setiap kali halaman di-render
+  _verifDraftInit();
+  // Simpan context untuk dipakai modal
+  window._verifCtx = { task: task, period: period };
 
   try {
     var findings = await api('GET_FINDINGS_BY_AGENDA', {
       period_id: period.period_id,
       agenda_id: task.agenda_id,
     });
-    var pendingFindings = findings.filter(function(f) {
+    // Simpan findings ke window untuk repaint
+    window._verifFindings = findings.filter(function(f) {
       return f.finding_status === 'PENDING_VERIFICATION';
     });
+    var pendingFindings = window._verifFindings;
 
     var cardsHtml = pendingFindings.map(function(f, i) {
-      return '<div class="card mb-12" id="verif-card-' + i + '">' +
-        '<div class="card-body">' +
-          '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">' +
-            statusBadge(f.status) +
-            '<span class="td-mono" style="font-size:11px">#' + f.nomor_persyaratan + '.' + f.check_item_no + '</span>' +
-            '<span style="font-size:12px;color:var(--text-muted);flex:1">' + escHtml(f.result_id) + '</span>' +
-          '</div>' +
-          // Deskripsi temuan (editable)
-          '<div class="form-group">' +
-            '<label class="form-label">Deskripsi Temuan</label>' +
-            '<textarea class="form-control" id="verif-desc-' + i + '" rows="3">' +
-              escHtml(f.deskripsi_temuan) +
-            '</textarea>' +
-          '</div>' +
-          // Status persyaratan (editable, dengan aturan transisi)
-          '<div class="form-group">' +
-            '<label class="form-label">Jenis Temuan</label>' +
-            '<select class="form-control" id="verif-status-' + i + '" style="max-width:200px">' +
-              _buildStatusOptions(f.status) +
-            '</select>' +
-            '<div class="form-hint">Ubah ke Comply = temuan langsung ditutup tanpa TPP.</div>' +
-          '</div>' +
-          // Foto
-          (f.foto_urls
-            ? '<div class="form-group">' +
-                '<label class="form-label">Foto Bukti (existing)</label>' +
-                '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-                  f.foto_urls.split(',').filter(Boolean).map(function(url) {
-                    return '<a href="' + url + '" target="_blank" class="btn btn-outline btn-sm">' +
-                      '<i data-lucide="image" style="width:12px;height:12px"></i> Lihat Foto' +
-                    '</a>';
-                  }).join('') +
-                '</div>' +
-              '</div>'
-            : '') +
-          // Hapus temuan
-          '<button class="btn btn-ghost btn-sm" style="color:var(--rose)" ' +
-            'onclick="_confirmDeleteFinding(\'' + f.result_id + '\',\'' + task.agenda_id + '\',\'' + period.period_id + '\',' + i + ')">' +
-            '<i data-lucide="trash-2" style="width:13px;height:13px"></i> Hapus Temuan Ini' +
-          '</button>' +
-        '</div>' +
-        '<input type="hidden" id="verif-fid-' + i + '" value="' + escHtml(f.result_id) + '">' +
-      '</div>';
+      return _verifRenderCard(f, i);
     }).join('');
 
     container.innerHTML =
@@ -461,21 +531,148 @@ async function _renderVerifikasiPage(container, task, period) {
       (pendingFindings.length === 0
         ? '<div class="card"><div class="card-body empty-state"><div class="empty-desc">Tidak ada temuan yang perlu diverifikasi.</div></div></div>'
         : cardsHtml +
-          '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px">' +
+          '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">' +
             '<button class="btn btn-outline" onclick="_backToMyTask()">Batal</button>' +
             '<button class="btn btn-primary" id="verif-submit-btn" ' +
-              'onclick="singleClick(this,function(){ _submitVerifikasi(' +
-                pendingFindings.length + ',\'' + task.agenda_id + '\',\'' + period.period_id + '\') })">' +
+              'onclick="singleClick(this,function(){ _verifClickVerifikasi() })">' +
               '<i data-lucide="shield-check" style="width:14px;height:14px"></i> Verifikasi Semua' +
             '</button>' +
           '</div>'
       );
     lucide.createIcons();
+    setTimeout(function() { _loadAllDriveImgs(container); }, 200);
   } catch(err) {
     container.innerHTML = _subPageHeader('Verifikasi Temuan', '') +
       '<div class="empty-state"><div class="empty-desc">' + escHtml(err.message) + '</div></div>';
     lucide.createIcons();
   }
+}
+
+// ── Render satu card temuan (dipanggil saat init + setelah edit) ──────────────
+function _verifRenderCard(f, i) {
+  var draft   = _verifDraftGet(f.result_id);
+  var isDraft = !!draft;
+  var isComply = isDraft ? draft.status === 'Comply' : false;
+
+  var dispDesc   = isDraft ? (draft.deskripsi_temuan || '') : (f.deskripsi_temuan || '—');
+  var dispLokasi = isDraft ? (draft.lokasi_temuan    || '') : (f.lokasi_temuan    || '');
+
+  var deletedUrls  = isDraft ? (draft._deletedFotoUrls || []) : [];
+  var baseFotoUrls = isDraft ? (draft.foto_urls || f.foto_urls || '') : (f.foto_urls || '');
+  var activeFotoUrls = baseFotoUrls.split(',').filter(function(u) {
+    return u && deletedUrls.indexOf(u) === -1;
+  });
+  var pendingCount = (window._verifPendingFiles && window._verifPendingFiles[f.result_id])
+    ? window._verifPendingFiles[f.result_id].length : 0;
+
+  var cardBg    = isDraft ? 'rgba(245,158,11,.08)' : '';
+  var cardBorder= isDraft ? '1.5px solid var(--amber,#f59e0b)' : '1px solid var(--border)';
+
+  return '<div class="card mb-12" id="verif-card-' + i + '" ' +
+    'data-result-id="' + escAttr(f.result_id) + '" ' +
+    'data-orig-desc="' + escAttr(f.deskripsi_temuan || '') + '" ' +
+    'data-orig-lokasi="' + escAttr(f.lokasi_temuan || '') + '" ' +
+    'data-orig-status="' + escAttr(f.status || 'Non Comply') + '" ' +
+    'data-orig-foto-urls="' + escAttr(f.foto_urls || '') + '" ' +
+    'style="background:' + cardBg + ';border:' + cardBorder + ';border-radius:10px;overflow:hidden;margin-bottom:12px">' +
+    '<div class="card-body">' +
+
+      // ── Header ─────────────────────────────────────────────
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">' +
+        '<span style="display:inline-flex;align-items:center;justify-content:center;' +
+          'width:26px;height:26px;border-radius:50%;background:var(--rose,#f43f5e)18;' +
+          'color:var(--rose,#f43f5e);font-size:12px;font-weight:700;flex-shrink:0">' + (i + 1) + '</span>' +
+        '<span class="badge verif-status-badge ' + (isComply ? 'badge-emerald' : 'badge-rose') + '" ' +
+          'style="display:inline-flex;align-items:center;gap:4px">' +
+          (isComply
+            ? '<i data-lucide="check" style="width:11px;height:11px"></i> Comply'
+            : '<i data-lucide="x" style="width:11px;height:11px"></i> Non Comply') +
+        '</span>' +
+        '<span class="td-mono" style="font-size:11px;color:var(--text-muted)">' +
+          '#' + f.nomor_persyaratan + '.' + f.check_item_no +
+        '</span>' +
+        // Draft dot
+        '<span class="verif-draft-dot" style="display:' + (isDraft ? 'inline-block' : 'none') + ';' +
+          'width:7px;height:7px;border-radius:50%;background:var(--amber,#f59e0b);flex-shrink:0"></span>' +
+        '<span style="flex:1"></span>' +
+        // Tombol pensil
+        '<button title="Edit temuan" ' +
+          'onclick="_verifOpenEditModal(\'' + escAttr(f.result_id) + '\',' + i + ')" ' +
+          'style="display:inline-flex;align-items:center;padding:4px 8px;border-radius:6px;' +
+            'border:1px solid var(--border);background:transparent;color:var(--text-muted);' +
+            'cursor:pointer;font-size:12px;gap:5px;line-height:1">' +
+          '<i data-lucide="pencil" style="width:12px;height:12px"></i> Edit' +
+        '</button>' +
+      '</div>' +
+
+      // ── Result ID ──────────────────────────────────────────
+      '<div style="margin-bottom:10px">' +
+        '<span style="font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--text-muted)">RESULT ID </span>' +
+        '<span class="td-mono" style="font-size:11px;color:var(--text-muted)">' + escHtml(f.result_id) + '</span>' +
+      '</div>' +
+
+      // ── Konteks checklist ──────────────────────────────────
+      '<details style="margin-bottom:14px;border:1px solid var(--border);border-radius:8px;overflow:hidden">' +
+        '<summary style="padding:9px 14px;font-size:12px;font-weight:600;cursor:pointer;' +
+          'background:var(--bg);list-style:none;display:flex;align-items:center;gap:6px;color:var(--text-muted)">' +
+          '<i data-lucide="book-open" style="width:13px;height:13px"></i>Persyaratan & Check Item' +
+        '</summary>' +
+        '<div style="padding:12px 14px;display:grid;gap:10px">' +
+          (f.persyaratan
+            ? '<div><div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--text-muted);margin-bottom:3px">PERSYARATAN</div>' +
+              '<div style="font-size:13px;line-height:1.5">' + escHtml(f.persyaratan) + '</div></div>' : '') +
+          (f.check_item
+            ? '<div style="padding-top:8px;border-top:1px solid var(--border)">' +
+              '<div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--text-muted);margin-bottom:3px">CHECK ITEM</div>' +
+              '<div style="font-size:13px;line-height:1.5">' + escHtml(f.check_item) + '</div></div>' : '') +
+          (f.standar_check_item
+            ? '<div style="padding-top:8px;border-top:1px solid var(--border)">' +
+              '<div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--text-muted);margin-bottom:3px">STANDAR</div>' +
+              '<div style="font-size:12px;line-height:1.5;color:var(--text-muted)">' + escHtml(f.standar_check_item) + '</div></div>' : '') +
+        '</div>' +
+      '</details>' +
+
+      // ── Deskripsi ──────────────────────────────────────────
+      '<div style="margin-bottom:10px">' +
+        '<div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--text-muted);margin-bottom:4px">DESKRIPSI TEMUAN</div>' +
+        '<div class="verif-desc-display" style="font-size:13px;line-height:1.6;padding:9px 12px;' +
+          'background:var(--bg);border:1px solid var(--border);border-radius:6px;' +
+          (isDraft && !isComply ? 'color:var(--amber,#f59e0b);' : '') +
+          (isComply ? 'color:var(--emerald,#10b981);font-style:italic;' : '') + '">' +
+          (isComply ? '(Akan diubah ke Comply — temuan ditutup)' : escHtml(dispDesc)) +
+        '</div>' +
+      '</div>' +
+
+      // ── Lokasi ─────────────────────────────────────────────
+      '<div style="margin-bottom:10px">' +
+        '<div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--text-muted);margin-bottom:4px">LOKASI TEMUAN</div>' +
+        '<div class="verif-lokasi-display" style="font-size:13px;padding:7px 12px;' +
+          'background:var(--bg);border:1px solid var(--border);border-radius:6px;' +
+          (isDraft && !isComply ? 'color:var(--amber,#f59e0b);' : '') + '">' +
+          escHtml(isComply ? '—' : (dispLokasi || '—')) +
+        '</div>' +
+      '</div>' +
+
+      // ── Foto Bukti ─────────────────────────────────────────
+      '<div>' +
+        '<div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--text-muted);margin-bottom:6px">FOTO BUKTI</div>' +
+        '<div class="verif-foto-display" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">' +
+          activeFotoUrls.map(function(url) {
+            return '<a href="' + escHtml(url) + '" target="_blank" class="btn btn-outline btn-sm" data-drive-url="' + escAttr(url) + '">' +
+              '<i data-lucide="image" style="width:12px;height:12px"></i> Lihat Foto</a>';
+          }).join('') +
+          (pendingCount > 0
+            ? '<span style="font-size:11px;color:var(--amber,#f59e0b);font-weight:600">' +
+                '<i data-lucide="clock" style="width:11px;height:11px;vertical-align:middle"></i> ' +
+                pendingCount + ' foto baru' +
+              '</span>'
+            : '') +
+          (activeFotoUrls.length === 0 && pendingCount === 0 ? '<span style="font-size:12px;color:var(--text-muted)">—</span>' : '') +
+        '</div>' +
+      '</div>' +
+
+    '</div>' +
+  '</div>';
 }
 
 function _buildStatusOptions(current) {
@@ -486,71 +683,434 @@ function _buildStatusOptions(current) {
 }
 
 function _verifDetectChange(idx) {
-  var descEl       = document.getElementById('verif-desc-'         + idx);
-  var statusEl     = document.getElementById('verif-status-'       + idx);
-  var descBadge    = document.getElementById('verif-desc-badge-'   + idx);
-  var statusBadgeEl= document.getElementById('verif-status-badge-' + idx);
-  if (descEl   && descBadge)     descBadgeEl.style.display   = (descEl.value.trim()   !== (descEl.dataset.orig   || '')) ? 'inline-flex' : 'none';
+  var descEl        = document.getElementById('verif-desc-'          + idx);
+  var statusEl      = document.getElementById('verif-status-'        + idx);
+  var descBadgeEl   = document.getElementById('verif-desc-badge-'    + idx);
+  var statusBadgeEl = document.getElementById('verif-status-badge-'  + idx);
+  if (descEl   && descBadgeEl)   descBadgeEl.style.display   = (descEl.value.trim()   !== (descEl.dataset.orig   || '')) ? 'inline-flex' : 'none';
   if (statusEl && statusBadgeEl) statusBadgeEl.style.display = (statusEl.value !== (statusEl.dataset.orig || '')) ? 'inline-flex' : 'none';
 }
 
-async function _confirmDeleteFinding(resultId, agendaId, periodId, cardIdx) {
-  var ok = await showConfirm({
-    title:       'Hapus Temuan',
-    message:     'Hapus temuan ini?',
-    detail:      'Check item akan dikembalikan ke status Comply.',
-    confirmText: 'Hapus',
-    danger:      true,
+async function _verifOpenEditModal(resultId, cardIdx) {
+  var ctx   = window._verifCtx;
+  var f     = window._verifFindings && window._verifFindings[cardIdx];
+  if (!f || !ctx) return;
+
+  // Ambil nilai saat ini: draft lebih prioritas dari server
+  var draft = _verifDraftGet(resultId);
+  var initDesc   = draft ? (draft.deskripsi_temuan || '') : (f.deskripsi_temuan || '');
+  var initLokasi = draft ? (draft.lokasi_temuan    || '') : (f.lokasi_temuan    || '');
+  var initStatus = draft ? draft.status : (f.status || 'Non Comply');
+  var initFotoUrls = draft ? (draft.foto_urls || f.foto_urls || '') : (f.foto_urls || '');
+  var initDeleted  = draft ? (draft._deletedFotoUrls || []) : [];
+  var pendingFiles = (window._verifPendingFiles && window._verifPendingFiles[resultId]) || [];
+
+  // Build foto saved html — reuse _buildSavedFotosHtml dengan prefix 'vf'
+  // tapi tanpa delete ke server, hanya mark deleted
+  var activeFotoUrls = initFotoUrls.split(',').filter(function(u) {
+    return u && initDeleted.indexOf(u) === -1;
   });
-  if (!ok) return;
-  try {
-    await api('VERIFY_FINDINGS', {
-      period_id: periodId,
-      agenda_id: agendaId,
-      updates: [{ result_id: resultId, final_status: 'Comply' }],
-    });
-    var card = document.getElementById('verif-card-' + cardIdx);
-    if (card) card.remove();
-    clearCache('GET_ALL_FINDINGS_BY_PERIOD');
-    clearCache('GET_FINDINGS_BY_AGENDA');
-    toast('Temuan dihapus. Check item dikembalikan ke Comply.', 'success');
-  } catch(err) { toast(err.message, 'error'); }
+  window._vfExistingUrls = activeFotoUrls.slice();
+  window._vfDeletedUrls  = initDeleted.slice();
+
+  var savedFotoHtml = activeFotoUrls.length
+    ? '<div style="margin-bottom:8px">' +
+        '<div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:6px">Foto tersimpan:</div>' +
+        '<div id="vf-saved-files" style="display:flex;flex-wrap:wrap;gap:8px">' +
+          activeFotoUrls.map(function(url, idx) {
+            return '<div style="position:relative;width:72px;height:72px;border-radius:6px;' +
+              'overflow:hidden;border:1px solid var(--border)">' +
+              _renderDriveImg(url) +
+              '<button title="Hapus foto" ' +
+                'onclick="singleClick(this,function(){ _verifMarkDeleteFoto(\'' + escAttr(url) + '\',' + idx + ') })" ' +
+                'style="position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;' +
+                  'background:rgba(0,0,0,.55);border:none;color:#fff;cursor:pointer;' +
+                  'display:flex;align-items:center;justify-content:center;font-size:10px;padding:0">✕</button>' +
+            '</div>';
+          }).join('') +
+        '</div>' +
+      '</div>'
+    : '';
+
+  createModal({
+    id:    'verif-edit-modal',
+    title: 'Edit Temuan — #' + f.nomor_persyaratan + '.' + f.check_item_no,
+    size:  'modal-lg',
+    body:
+      // Result ID
+      '<div style="margin-bottom:14px;padding:8px 12px;background:var(--bg);border-radius:6px;' +
+        'border:1px solid var(--border);font-size:11px;color:var(--text-muted)">' +
+        '<span style="font-weight:700;letter-spacing:.06em">RESULT ID </span>' +
+        '<span class="td-mono">' + escHtml(f.result_id) + '</span>' +
+      '</div>' +
+
+      // Jenis Temuan
+      '<div class="form-group">' +
+        '<label class="form-label">Jenis Temuan</label>' +
+        '<select class="form-control" id="vem-status" style="max-width:220px" ' +
+          'onchange="_verifEditStatusChange()">' +
+          '<option value="Non Comply" ' + (initStatus === 'Non Comply' ? 'selected' : '') + '>Non Comply</option>' +
+          '<option value="Comply"     ' + (initStatus === 'Comply'     ? 'selected' : '') + '>Comply</option>' +
+        '</select>' +
+        '<div class="form-hint">Ubah ke Comply = temuan ditutup langsung tanpa TPP.</div>' +
+      '</div>' +
+
+      // Konten Non Comply (disembunyikan kalau Comply)
+      '<div id="vem-noncomplysection">' +
+        '<div class="form-group">' +
+          '<label class="form-label">Deskripsi Temuan <span class="required">*</span></label>' +
+          '<textarea class="form-control" id="vem-deskripsi" rows="4" ' +
+            'placeholder="Jelaskan kondisi yang ditemukan...">' +
+            escHtml(initDesc) +
+          '</textarea>' +
+        '</div>' +
+        '<div class="form-group">' +
+          '<label class="form-label">Lokasi Temuan <span class="required">*</span></label>' +
+          '<input type="text" class="form-control" id="vem-lokasi" ' +
+            'placeholder="e.g. Gudang B, Lantai 2, Area penyimpanan kimia" ' +
+            'value="' + escHtml(initLokasi) + '">' +
+        '</div>' +
+        '<div class="form-group">' +
+          '<label class="form-label">Foto Bukti <span class="required">*</span>' +
+            '<span id="vem-foto-hint" style="font-size:11px;color:var(--rose,#f43f5e);font-weight:400;margin-left:6px">' +
+              (activeFotoUrls.length + pendingFiles.length > 0 ? '' : '(wajib minimal 1 foto)') +
+            '</span>' +
+          '</label>' +
+          savedFotoHtml +
+          (pendingFiles.length > 0
+            ? '<div style="font-size:11px;color:var(--amber,#f59e0b);font-weight:600;margin-bottom:6px">' +
+                '<i data-lucide="clock" style="width:11px;height:11px;vertical-align:middle"></i> ' +
+                pendingFiles.length + ' foto baru (belum disimpan)' +
+              '</div>'
+            : '') +
+          '<div class="upload-zone" id="vem-upload-zone" style="min-height:72px">' +
+            '<i data-lucide="camera" style="width:22px;height:22px;opacity:.3;margin-bottom:4px"></i>' +
+            '<div class="upload-text" style="font-size:12px">Klik atau drag foto bukti baru</div>' +
+          '</div>' +
+          '<div class="upload-previews" id="vem-upload-preview"></div>' +
+        '</div>' +
+      '</div>',
+
+    footer:
+      '<button class="btn btn-outline" style="margin-right:auto" ' +
+        'onclick="singleClick(this,function(){ _verifSwitchToComply(' + cardIdx + ') })">' +
+        '<i data-lucide="check" style="width:13px;height:13px"></i> Ubah ke Comply' +
+      '</button>' +
+      '<button class="btn btn-outline" onclick="closeModal(\'verif-edit-modal\')">Batal</button>' +
+      '<button class="btn btn-danger" onclick="singleClick(this,function(){ _verifSaveEditModal(' + cardIdx + ') })">' +
+        '<i data-lucide="save" style="width:13px;height:13px"></i> Simpan Temuan' +
+      '</button>',
+  });
+
+  setTimeout(function() { _loadAllDriveImgs(document.getElementById('verif-edit-modal') || document); }, 300);
+  lucide.createIcons();
+
+  // Setup upload zone — reuse setupUploadZone dari form audit
+  setupUploadZone('vem-upload-zone', 'vem-upload-preview', function(files) {
+    var hint = document.getElementById('vem-foto-hint');
+    if (!hint) return;
+    var savedCount = (window._vfExistingUrls || []).length - (window._vfDeletedUrls || []).length;
+    hint.textContent = (files.length + savedCount) > 0 ? '' : '(wajib minimal 1 foto)';
+  });
+
+  // Restore pending files ke zone
+  if (pendingFiles.length) {
+    setTimeout(function() {
+      var zoneEl = document.getElementById('vem-upload-zone');
+      if (zoneEl && zoneEl._setFiles) zoneEl._setFiles(pendingFiles);
+    }, 50);
+  }
+
+  _verifEditStatusChange();
 }
 
-async function _submitVerifikasi(count, agendaId, periodId) {
-  var updates = [];
-  for (var i = 0; i < count; i++) {
-    var fidEl  = document.getElementById('verif-fid-'    + i);
-    var descEl = document.getElementById('verif-desc-'   + i);
-    var statEl = document.getElementById('verif-status-' + i);
-    if (!fidEl) continue; // sudah dihapus
-    updates.push({
-      result_id:          fidEl.value,
-      deskripsi_temuan:   descEl ? descEl.value.trim() : '',
-      final_status:       statEl ? statEl.value : '',
-    });
-  }
-  if (!updates.length) return toast('Tidak ada temuan yang perlu diverifikasi.', 'error');
+function _verifEditStatusChange() {
+  var statusEl  = document.getElementById('vem-status');
+  var sectionEl = document.getElementById('vem-noncomplysection');
+  if (!statusEl || !sectionEl) return;
+  sectionEl.style.display = statusEl.value === 'Comply' ? 'none' : '';
+}
 
-  var btn     = document.getElementById('verif-submit-btn');
-  btn.disabled = true;
-  btn.innerHTML = '<div class="spinner" style="width:13px;height:13px;border-width:2px"></div> Memverifikasi...';
+function _verifMarkDeleteFoto(url, idx) {
+  if (!window._vfDeletedUrls) window._vfDeletedUrls = [];
+  if (window._vfDeletedUrls.indexOf(url) === -1) window._vfDeletedUrls.push(url);
+
+  // Hapus dari DOM
+  var savedContainer = document.getElementById('vf-saved-files');
+  if (savedContainer) {
+    var items = Array.from(savedContainer.querySelectorAll(':scope > div'));
+    if (items[idx]) items[idx].remove();
+  }
+
+  // Update hint
+  var zone = document.getElementById('vem-upload-zone');
+  var hint = document.getElementById('vem-foto-hint');
+  if (hint && zone) {
+    var pending  = zone._getFiles ? zone._getFiles().length : 0;
+    var remaining = (window._vfExistingUrls || []).length - (window._vfDeletedUrls || []).length;
+    hint.textContent = (pending + remaining) > 0 ? '' : '(wajib minimal 1 foto)';
+  }
+}
+
+function _verifSwitchToComply(cardIdx) {
+  var statusEl = document.getElementById('vem-status');
+  if (statusEl) statusEl.value = 'Comply';
+  _verifSaveEditModal(cardIdx);
+}
+
+function _verifSaveEditModal(cardIdx) {
+  var f = window._verifFindings && window._verifFindings[cardIdx];
+  if (!f) return;
+
+  var statusEl = document.getElementById('vem-status');
+  var descEl   = document.getElementById('vem-deskripsi');
+  var lokasiEl = document.getElementById('vem-lokasi');
+  var zone     = document.getElementById('vem-upload-zone');
+  var newStatus = statusEl ? statusEl.value : 'Non Comply';
+
+  if (newStatus === 'Non Comply') {
+    var desc   = descEl   ? descEl.value.trim()   : '';
+    var lokasi = lokasiEl ? lokasiEl.value.trim()  : '';
+    if (!desc)   return toast('Deskripsi temuan wajib diisi.', 'error');
+    if (!lokasi) return toast('Lokasi temuan wajib diisi.', 'error');
+
+    var newFiles     = zone && zone._getFiles ? zone._getFiles() : [];
+    var savedCount   = (window._vfExistingUrls || []).length - (window._vfDeletedUrls || []).length;
+    var existPending = (window._verifPendingFiles && window._verifPendingFiles[f.result_id]) || [];
+    if (newFiles.length + savedCount + existPending.length < 1) {
+      return toast('Upload minimal 1 foto bukti temuan.', 'error');
+    }
+
+    // Gabungkan pending files: existing + baru
+    var allPending = existPending.concat(newFiles);
+    if (!window._verifPendingFiles) window._verifPendingFiles = {};
+    window._verifPendingFiles[f.result_id] = allPending;
+
+    // Hitung foto_urls yang masih aktif (existing minus deleted)
+    var baseUrls    = (f.foto_urls || '').split(',').filter(Boolean);
+    var deleted     = window._vfDeletedUrls || [];
+    var activeUrls  = baseUrls.filter(function(u) { return deleted.indexOf(u) === -1; });
+
+    _verifDraftSet(f.result_id, {
+      status:            'Non Comply',
+      deskripsi_temuan:  desc,
+      lokasi_temuan:     lokasi,
+      foto_urls:         activeUrls.join(','),
+      _deletedFotoUrls:  deleted.slice(),
+    });
+  } else {
+    // Comply — clear semua finding data di draft
+    _verifDraftSet(f.result_id, {
+      status:           'Comply',
+      deskripsi_temuan: '',
+      lokasi_temuan:    '',
+      foto_urls:        '',
+      _deletedFotoUrls: [],
+    });
+    if (window._verifPendingFiles) delete window._verifPendingFiles[f.result_id];
+  }
+
+  closeModal('verif-edit-modal');
+
+  // Repaint card dengan data draft baru
+  var card = document.getElementById('verif-card-' + cardIdx);
+  if (card) {
+    card.outerHTML = _verifRenderCard(f, cardIdx);
+    lucide.createIcons(document.getElementById('verif-card-' + cardIdx));
+    setTimeout(function() {
+      _loadAllDriveImgs(document.getElementById('verif-card-' + cardIdx));
+    }, 100);
+  }
+}
+
+function _verifEditStatusChange() {
+  var statusEl  = document.getElementById('vem-status');
+  var sectionEl = document.getElementById('vem-noncomplysection');
+  if (!statusEl || !sectionEl) return;
+  sectionEl.style.display = statusEl.value === 'Comply' ? 'none' : '';
+}
+
+async function _verifSaveEdit(resultId, agendaId, periodId, cardIdx) {
+  var statusEl  = document.getElementById('vem-status');
+  var descEl    = document.getElementById('vem-deskripsi');
+  var newStatus = statusEl ? statusEl.value : 'Non Comply';
+  var newDesc   = descEl   ? descEl.value.trim() : '';
+
+  if (newStatus === 'Non Comply' && !newDesc) {
+    return toast('Deskripsi temuan wajib diisi.', 'error');
+  }
+
+  // Update hidden fields di card agar _submitVerifikasi pakai nilai baru
+  var descHidden   = document.getElementById('verif-desc-'         + cardIdx);
+  var statusHidden = document.getElementById('verif-status-'       + cardIdx);
+  var displayEl    = document.getElementById('verif-desc-display-' + cardIdx);
+  if (descHidden)   descHidden.value   = newDesc;
+  if (statusHidden) statusHidden.value = newStatus;
+
+  // Update tampilan display di card
+  if (displayEl) displayEl.textContent = newDesc || '—';
+
+  // Update badge status di header card
+  var card = document.getElementById('verif-card-' + cardIdx);
+  if (card) {
+    var badgeEl = card.querySelector('.badge');
+    if (badgeEl) {
+      badgeEl.className = 'badge ' + (newStatus === 'Comply' ? 'badge-emerald' : 'badge-rose');
+      badgeEl.textContent = newStatus;
+    }
+  }
+
+  closeModal('verif-edit-modal');
+  toast('Perubahan akan disimpan saat klik "Verifikasi Semua".', 'info');
+}
+
+// _confirmDeleteFinding dihapus — koordinator cukup ubah Jenis Temuan ke Comply saat verifikasi
+
+function _verifClickVerifikasi() {
+  var ctx = window._verifCtx;
+  if (!ctx) return;
+  var findings = window._verifFindings || [];
+
+  // Pisahkan: yang diubah (ada draft) vs tidak diubah
+  var changedFindings = findings.filter(function(f) { return _verifHasDraft(f.result_id); });
+  var unchangedCount  = findings.length - changedFindings.length;
+
+  // Bangun preview HTML hanya untuk yang berubah
+  var previewHtml = '';
+  if (changedFindings.length === 0) {
+    previewHtml = '<p style="font-size:13px;color:var(--text-muted)">Tidak ada temuan yang diubah. Semua temuan akan diverifikasi dengan data asli dari auditor.</p>';
+  } else {
+    previewHtml = changedFindings.map(function(f) {
+      var draft    = _verifDraftGet(f.result_id);
+      var isComply = draft.status === 'Comply';
+      return '<div style="padding:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:10px">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
+          '<span class="badge ' + (isComply ? 'badge-emerald' : 'badge-amber') + '" ' +
+            'style="display:inline-flex;align-items:center;gap:4px;font-size:11px">' +
+            (isComply ? '✓ Comply' : '✎ Diubah') +
+          '</span>' +
+          '<span style="font-size:12px;font-weight:600">#' + f.nomor_persyaratan + '.' + f.check_item_no + '</span>' +
+          '<span class="td-mono" style="font-size:10px;color:var(--text-muted)">' + escHtml(f.result_id) + '</span>' +
+        '</div>' +
+        (isComply
+          ? '<div style="font-size:12px;color:var(--emerald,#10b981);font-style:italic">Temuan akan ditutup (diubah ke Comply)</div>'
+          : '<div style="display:grid;gap:6px;font-size:12px">' +
+              (draft.deskripsi_temuan !== f.deskripsi_temuan
+                ? '<div><span style="font-weight:600;color:var(--text-muted)">Deskripsi: </span>' +
+                    '<span style="color:var(--amber,#f59e0b)">' + escHtml(draft.deskripsi_temuan) + '</span></div>'
+                : '') +
+              (draft.lokasi_temuan !== f.lokasi_temuan
+                ? '<div><span style="font-weight:600;color:var(--text-muted)">Lokasi: </span>' +
+                    '<span style="color:var(--amber,#f59e0b)">' + escHtml(draft.lokasi_temuan) + '</span></div>'
+                : '') +
+              ((window._verifPendingFiles && window._verifPendingFiles[f.result_id] && window._verifPendingFiles[f.result_id].length)
+                ? '<div><span style="font-weight:600;color:var(--text-muted)">Foto baru: </span>' +
+                    '<span style="color:var(--amber,#f59e0b)">' + window._verifPendingFiles[f.result_id].length + ' foto akan diupload</span></div>'
+                : '') +
+              ((draft._deletedFotoUrls && draft._deletedFotoUrls.length)
+                ? '<div><span style="font-weight:600;color:var(--text-muted)">Foto dihapus: </span>' +
+                    '<span style="color:var(--rose,#f43f5e)">' + draft._deletedFotoUrls.length + ' foto akan dihapus</span></div>'
+                : '') +
+            '</div>') +
+      '</div>';
+    }).join('');
+  }
+
+  if (unchangedCount > 0) {
+    previewHtml += '<div style="font-size:12px;color:var(--text-muted);margin-top:8px;padding:8px 12px;' +
+      'background:var(--bg);border-radius:6px">' +
+      unchangedCount + ' temuan lainnya diverifikasi tanpa perubahan.' +
+    '</div>';
+  }
+
+  createModal({
+    id:    'verif-preview-modal',
+    title: 'Konfirmasi Verifikasi',
+    size:  'modal-lg',
+    body:
+      '<p style="font-size:13px;margin-bottom:16px">Periksa ringkasan perubahan sebelum menyimpan ke sistem:</p>' +
+      previewHtml,
+    footer:
+      '<button class="btn btn-outline" onclick="closeModal(\'verif-preview-modal\')">Kembali</button>' +
+      '<button class="btn btn-primary" id="verif-confirm-btn" ' +
+        'onclick="singleClick(this,function(){ _verifConfirmSubmit() })">' +
+        '<i data-lucide="shield-check" style="width:13px;height:13px"></i> Konfirmasi & Simpan' +
+      '</button>',
+  });
+  lucide.createIcons();
+}
+
+async function _verifConfirmSubmit() {
+  var ctx      = window._verifCtx;
+  var findings = window._verifFindings || [];
+  var agendaId = ctx.task.agenda_id;
+  var periodId = ctx.period.period_id;
+
+  var btn = document.getElementById('verif-confirm-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<div class="spinner" style="width:13px;height:13px;border-width:2px"></div> Menyimpan...'; }
 
   try {
+    // Bangun updates — semua findings (draft + non-draft)
+    var updates = await Promise.all(findings.map(async function(f) {
+      var draft = _verifDraftGet(f.result_id);
+      if (!draft) {
+        // Tidak diubah — kirim data asli
+        return {
+          result_id:    f.result_id,
+          final_status: f.status || 'Non Comply',
+        };
+      }
+      if (draft.status === 'Comply') {
+        // Hapus foto yang di-mark deleted dari Drive (non-fatal)
+        if (draft._deletedFotoUrls && draft._deletedFotoUrls.length) {
+          for (var _di = 0; _di < draft._deletedFotoUrls.length; _di++) {
+            try { await api('DELETE_DRIVE_FILE', { file_url: draft._deletedFotoUrls[_di] }); } catch(e) {}
+          }
+        }
+        return {
+          result_id:    f.result_id,
+          final_status: 'Comply',
+        };
+      }
+      // Non Comply dengan perubahan — encode foto baru
+      var newFiles = (window._verifPendingFiles && window._verifPendingFiles[f.result_id]) || [];
+      var encodedFiles = newFiles.length ? await filesToBase64(newFiles) : [];
+
+      // Hapus foto yang di-mark deleted dari Drive (non-fatal)
+      if (draft._deletedFotoUrls && draft._deletedFotoUrls.length) {
+        for (var _dj = 0; _dj < draft._deletedFotoUrls.length; _dj++) {
+          try { await api('DELETE_DRIVE_FILE', { file_url: draft._deletedFotoUrls[_dj] }); } catch(e) {}
+        }
+      }
+
+      return {
+        result_id:         f.result_id,
+        final_status:      'Non Comply',
+        deskripsi_temuan:  draft.deskripsi_temuan,
+        lokasi_temuan:     draft.lokasi_temuan,
+        existing_foto_urls: draft.foto_urls || '',
+        new_files:         encodedFiles,
+      };
+    }));
+
     await api('VERIFY_FINDINGS', {
       period_id: periodId,
       agenda_id: agendaId,
       updates:   updates,
     });
+
     clearCache('GET_ALL_FINDINGS_BY_PERIOD');
     clearCache('GET_FINDINGS_BY_AGENDA');
-    toast('Verifikasi berhasil. Temuan sekarang bisa ditindaklanjuti auditee.', 'success');
+    closeModal('verif-preview-modal');
+    toast('Verifikasi berhasil. Temuan bisa ditindaklanjuti auditee.', 'success');
     navigateTo('mytask');
   } catch(err) {
     toast(err.message, 'error');
-    btn.disabled = false;
-    btn.innerHTML = '<i data-lucide="shield-check" style="width:14px;height:14px"></i> Verifikasi Semua';
-    lucide.createIcons();
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i data-lucide="shield-check" style="width:13px;height:13px"></i> Konfirmasi & Simpan';
+      lucide.createIcons(btn);
+    }
   }
 }
 
