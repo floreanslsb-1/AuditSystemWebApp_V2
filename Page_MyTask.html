@@ -713,10 +713,11 @@ async function _verifOpenEditModal(resultId, cardIdx) {
         '<div id="vf-saved-files" style="display:flex;flex-wrap:wrap;gap:8px">' +
           activeFotoUrls.map(function(url, idx) {
             return '<div style="position:relative;width:72px;height:72px;border-radius:6px;' +
-              'overflow:hidden;border:1px solid var(--border)">' +
+              'overflow:hidden;border:1px solid var(--border);cursor:zoom-in" ' +
+              'onclick="_openLightbox(\'' + escAttr(url) + '\')">' +
               _renderDriveImg(url) +
               '<button title="Hapus foto" ' +
-                'onclick="singleClick(this,function(){ _verifMarkDeleteFoto(\'' + escAttr(url) + '\',' + idx + ') })" ' +
+                'onclick="event.stopPropagation();singleClick(this,function(){ _verifMarkDeleteFoto(\'' + escAttr(url) + '\',' + idx + ') })" ' +
                 'style="position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;' +
                   'background:rgba(0,0,0,.55);border:none;color:#fff;cursor:pointer;' +
                   'display:flex;align-items:center;justify-content:center;font-size:10px;padding:0">✕</button>' +
@@ -728,7 +729,7 @@ async function _verifOpenEditModal(resultId, cardIdx) {
 
   createModal({
     id:    'verif-edit-modal',
-    title: 'Edit Temuan — #' + f.nomor_persyaratan + '.' + f.check_item_no,
+    title: 'Edit Temuan — ' + escHtml(f.result_id),
     size:  'modal-lg',
     body:
       // Result ID
@@ -978,35 +979,97 @@ function _verifClickVerifikasi() {
     previewHtml = changedFindings.map(function(f) {
       var draft    = _verifDraftGet(f.result_id);
       var isComply = draft.status === 'Comply';
-      return '<div style="padding:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:10px">' +
-        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
+
+      // Foto preview — active urls + pending files
+      var deletedUrls  = draft._deletedFotoUrls || [];
+      var activeFotoUrls = (f.foto_urls || '').split(',').filter(function(u) {
+        return u && deletedUrls.indexOf(u) === -1;
+      });
+      var pendingFiles = (window._verifPendingFiles && window._verifPendingFiles[f.result_id]) || [];
+      var pendingPreviews = pendingFiles.map(function(file) {
+        try { return URL.createObjectURL(file); } catch(e) { return ''; }
+      }).filter(Boolean);
+
+      var allFotoHtml = '';
+      if (!isComply) {
+        var allFotoLinks = activeFotoUrls.map(function(url) {
+          return '<a href="' + escHtml(url) + '" target="_blank" ' +
+            'style="display:inline-flex;align-items:center;justify-content:center;' +
+              'width:56px;height:56px;border-radius:6px;overflow:hidden;' +
+              'border:1px solid var(--border);background:var(--bg);flex-shrink:0" ' +
+            'onclick="event.stopPropagation()">' +
+            '<img data-drive-url="' + escAttr(url) + '" src="" ' +
+              'style="width:100%;height:100%;object-fit:cover" ' +
+              'onerror="this.style.display=\'none\'">' +
+          '</a>';
+        }).join('');
+        var pendingLinks = pendingPreviews.map(function(src) {
+          return '<div style="display:inline-flex;align-items:center;justify-content:center;' +
+            'width:56px;height:56px;border-radius:6px;overflow:hidden;' +
+            'border:1.5px dashed var(--amber,#f59e0b);background:var(--bg);flex-shrink:0">' +
+            '<img src="' + src + '" style="width:100%;height:100%;object-fit:cover">' +
+          '</div>';
+        }).join('');
+        if (allFotoLinks || pendingLinks) {
+          allFotoHtml = '<div style="margin-top:8px">' +
+            '<div style="font-size:10px;font-weight:700;letter-spacing:.05em;color:var(--text-muted);margin-bottom:5px">FOTO BUKTI</div>' +
+            '<div style="display:flex;flex-wrap:wrap;gap:6px">' + allFotoLinks + pendingLinks + '</div>' +
+            (deletedUrls.length
+              ? '<div style="font-size:11px;color:var(--rose,#f43f5e);margin-top:4px">' +
+                  '<i data-lucide="trash-2" style="width:11px;height:11px;vertical-align:middle"></i> ' +
+                  deletedUrls.length + ' foto dihapus' +
+                '</div>'
+              : '') +
+          '</div>';
+        }
+      }
+
+      return '<div style="padding:12px 14px;border:1px solid var(--border);border-radius:8px;margin-bottom:10px">' +
+
+        // ── Header: badge + result ID ──
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">' +
           '<span class="badge ' + (isComply ? 'badge-emerald' : 'badge-amber') + '" ' +
-            'style="display:inline-flex;align-items:center;gap:4px;font-size:11px">' +
+            'style="display:inline-flex;align-items:center;gap:4px;font-size:11px;flex-shrink:0">' +
             (isComply ? '✓ Comply' : '✎ Diubah') +
           '</span>' +
-          '<span style="font-size:12px;font-weight:600">#' + f.nomor_persyaratan + '.' + f.check_item_no + '</span>' +
-          '<span class="td-mono" style="font-size:10px;color:var(--text-muted)">' + escHtml(f.result_id) + '</span>' +
+          '<span class="td-mono" style="font-size:11px;color:var(--text-muted)">' + escHtml(f.result_id) + '</span>' +
         '</div>' +
+
+        // ── Konteks checklist (ringkas, satu baris per field) ──
+        '<div style="padding:8px 10px;background:var(--bg);border-radius:6px;margin-bottom:10px;' +
+          'display:grid;gap:4px;font-size:11px;color:var(--text-muted)">' +
+          (f.persyaratan
+            ? '<div><span style="font-weight:700">Persyaratan: </span>' + escHtml(f.persyaratan.length > 80 ? f.persyaratan.substring(0, 80) + '…' : f.persyaratan) + '</div>'
+            : '') +
+          (f.check_item
+            ? '<div><span style="font-weight:700">Check Item: </span>' + escHtml(f.check_item.length > 80 ? f.check_item.substring(0, 80) + '…' : f.check_item) + '</div>'
+            : '') +
+          (f.standar_check_item
+            ? '<div><span style="font-weight:700">Standar: </span>' + escHtml(f.standar_check_item.length > 80 ? f.standar_check_item.substring(0, 80) + '…' : f.standar_check_item) + '</div>'
+            : '') +
+        '</div>' +
+
+        // ── Isi: comply atau perubahan ──
         (isComply
-          ? '<div style="font-size:12px;color:var(--emerald,#10b981);font-style:italic">Temuan akan ditutup (diubah ke Comply)</div>'
+          ? '<div style="font-size:12px;color:var(--emerald,#10b981);font-style:italic">' +
+              'Temuan akan ditutup (diubah ke Comply)' +
+            '</div>'
           : '<div style="display:grid;gap:6px;font-size:12px">' +
-              (draft.deskripsi_temuan !== f.deskripsi_temuan
-                ? '<div><span style="font-weight:600;color:var(--text-muted)">Deskripsi: </span>' +
-                    '<span style="color:var(--amber,#f59e0b)">' + escHtml(draft.deskripsi_temuan) + '</span></div>'
-                : '') +
-              (draft.lokasi_temuan !== f.lokasi_temuan
-                ? '<div><span style="font-weight:600;color:var(--text-muted)">Lokasi: </span>' +
-                    '<span style="color:var(--amber,#f59e0b)">' + escHtml(draft.lokasi_temuan) + '</span></div>'
-                : '') +
-              ((window._verifPendingFiles && window._verifPendingFiles[f.result_id] && window._verifPendingFiles[f.result_id].length)
-                ? '<div><span style="font-weight:600;color:var(--text-muted)">Foto baru: </span>' +
-                    '<span style="color:var(--amber,#f59e0b)">' + window._verifPendingFiles[f.result_id].length + ' foto akan diupload</span></div>'
-                : '') +
-              ((draft._deletedFotoUrls && draft._deletedFotoUrls.length)
-                ? '<div><span style="font-weight:600;color:var(--text-muted)">Foto dihapus: </span>' +
-                    '<span style="color:var(--rose,#f43f5e)">' + draft._deletedFotoUrls.length + ' foto akan dihapus</span></div>'
-                : '') +
+              '<div>' +
+                '<span style="font-size:10px;font-weight:700;letter-spacing:.05em;color:var(--text-muted)">DESKRIPSI</span>' +
+                '<div style="margin-top:2px;' + (draft.deskripsi_temuan !== f.deskripsi_temuan ? 'color:var(--amber,#f59e0b);' : '') + '">' +
+                  escHtml(draft.deskripsi_temuan || '—') +
+                '</div>' +
+              '</div>' +
+              '<div>' +
+                '<span style="font-size:10px;font-weight:700;letter-spacing:.05em;color:var(--text-muted)">LOKASI</span>' +
+                '<div style="margin-top:2px;' + (draft.lokasi_temuan !== f.lokasi_temuan ? 'color:var(--amber,#f59e0b);' : '') + '">' +
+                  escHtml(draft.lokasi_temuan || '—') +
+                '</div>' +
+              '</div>' +
+              allFotoHtml +
             '</div>') +
+
       '</div>';
     }).join('');
   }
@@ -1033,6 +1096,9 @@ function _verifClickVerifikasi() {
       '</button>',
   });
   lucide.createIcons();
+  setTimeout(function() {
+    _loadAllDriveImgs(document.getElementById('verif-preview-modal') || document);
+  }, 200);
 }
 
 async function _verifConfirmSubmit() {
