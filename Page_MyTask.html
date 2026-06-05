@@ -410,9 +410,10 @@ function _verifDraftInit() {
 
 function _verifDraftSet(resultId, fields) {
   if (!window._verifDraft) window._verifDraft = {};
-  window._verifDraft[resultId] = Object.assign(
-    {}, window._verifDraft[resultId] || {}, fields
-  );
+  var merged = Object.assign({}, window._verifDraft[resultId] || {}, fields);
+  // Pastikan _deletedFotoUrls selalu array
+  if (!Array.isArray(merged._deletedFotoUrls)) merged._deletedFotoUrls = [];
+  window._verifDraft[resultId] = merged;
 }
 
 function _verifDraftGet(resultId) {
@@ -948,8 +949,9 @@ function _verifClickVerifikasi() {
       var isComply = draft.status === 'Comply';
 
       // Foto preview — active urls + pending files
-      var deletedUrls  = draft._deletedFotoUrls || [];
-      var activeFotoUrls = (f.foto_urls || '').split(',').filter(function(u) {
+      var deletedUrls  = Array.isArray(draft._deletedFotoUrls) ? draft._deletedFotoUrls : [];
+      var baseFoto     = typeof draft.foto_urls === 'string' ? draft.foto_urls : (f.foto_urls || '');
+      var activeFotoUrls = baseFoto.split(',').filter(function(u) {
         return u && deletedUrls.indexOf(u) === -1;
       });
       var pendingFiles = (window._verifPendingFiles && window._verifPendingFiles[f.result_id]) || [];
@@ -1105,19 +1107,18 @@ async function _verifConfirmSubmit() {
       var encodedFiles = newFiles.length ? await filesToBase64(newFiles) : [];
 
       // Hapus foto yang di-mark deleted dari Drive (non-fatal)
-      if (draft._deletedFotoUrls && draft._deletedFotoUrls.length) {
-        for (var _dj = 0; _dj < draft._deletedFotoUrls.length; _dj++) {
-          try { await api('DELETE_DRIVE_FILE', { file_url: draft._deletedFotoUrls[_dj] }); } catch(e) {}
-        }
+      var deletedNc = Array.isArray(draft._deletedFotoUrls) ? draft._deletedFotoUrls : [];
+      for (var _dj = 0; _dj < deletedNc.length; _dj++) {
+        try { await api('DELETE_DRIVE_FILE', { file_url: deletedNc[_dj] }); } catch(e) {}
       }
 
       return {
-        result_id:         f.result_id,
-        final_status:      'Non Comply',
-        deskripsi_temuan:  draft.deskripsi_temuan,
-        lokasi_temuan:     draft.lokasi_temuan,
-        existing_foto_urls: draft.foto_urls || '',
-        new_files:         encodedFiles,
+        result_id:          f.result_id,
+        final_status:       'Non Comply',
+        deskripsi_temuan:   draft.deskripsi_temuan  || '',
+        lokasi_temuan:      draft.lokasi_temuan      || '',
+        existing_foto_urls: typeof draft.foto_urls === 'string' ? draft.foto_urls : '',
+        new_files:          encodedFiles,
       };
     }));
 
