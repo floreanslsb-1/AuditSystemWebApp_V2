@@ -954,6 +954,17 @@ function _openFotoLightbox(url) {
     'display:flex;align-items:center;justify-content:center;cursor:zoom-out;padding:16px';
   lb.onclick = function() { lb.remove(); };
 
+  // blob: URL dari pending file — tampilkan langsung tanpa server
+  if (url && url.indexOf('blob:') === 0) {
+    lb.innerHTML =
+      '<div style="position:relative;max-width:90vw;max-height:90vh">' +
+        '<img src="' + escHtml(url) + '" ' +
+          'style="max-width:90vw;max-height:85vh;object-fit:contain;border-radius:8px">' +
+      '</div>';
+    document.body.appendChild(lb);
+    return;
+  }
+
   // Pakai base64 dari cache kalau ada, atau load via server
   var cachedSrc = _driveImgCache[url] || '';
   lb.innerHTML =
@@ -1516,6 +1527,9 @@ async function _openEditStatusForm(resultId, gKey, agendaId, periodId, currentSt
     _openDraftFindingForm(itemId, gKey, nomor, ciNo, resultId, agendaId, periodId);
   } else {
     // Non Comply → open modal to edit finding
+    // Acquire lock sekarang agar _saveEditedFinding punya lock aktif & save bar bisa muncul
+    var lockedEf = await _ensureLockForGroup(agendaId, periodId, gKey, nomor);
+    if (!lockedEf) return;
     var dKeyEf    = _draftItemKey(gKey, resultId);
     var pendingEf = (window._auditPendingFiles && window._auditPendingFiles[dKeyEf]) || [];
     var draftEf   = _draftGetItem(gKey, resultId) || {};
@@ -1639,14 +1653,19 @@ async function _switchToComply(resultId, gKey, agendaId, periodId) {
 
   var dKey = _draftItemKey(gKey, resultId);
   if (window._auditPendingFiles && window._auditPendingFiles[dKey]) delete window._auditPendingFiles[dKey];
-  _draftSetItem(gKey, resultId, {
+  // Reset penuh — jangan pakai _draftSetItem (Object.assign) agar lokasi_temuan & foto_urls ikut terhapus
+  if (!window._auditDraft) window._auditDraft = { agendaId: agendaId, periodId: periodId, activeGroupKey: null, items: {} };
+  window._auditDraft.items[dKey] = {
     item_id:           (_scItem && _scItem.item_id) || '',
     result_id:         resultId,
     nomor_persyaratan: nomor,
     check_item_no:     _scItem ? Number(_scItem.check_item_no) : 0,
     status:            'COMPLY',
-    deskripsi_temuan:  ''
-  });
+    deskripsi_temuan:  '',
+    lokasi_temuan:     '',
+    foto_urls:         '',
+  };
+  _persistAuditDraft();
   _draftSetActiveGroup(gKey);  // ← wajib agar save bar muncul dan lock aktif
   _repaintCheckItemRow(gKey, resultId, 'COMPLY', true);
   _renderFloatingSaveBar(agendaId, periodId);
@@ -1722,7 +1741,10 @@ async function _saveRequirement(agendaId, periodId, btn) {
       var srvFinding = (window._auditRenderCtx && window._auditRenderCtx.findingMap && d.result_id)
         ? window._auditRenderCtx.findingMap[d.result_id]
         : null;
-      var existingFotoUrls = (d.foto_urls) || (srvFinding && srvFinding.foto_urls) || '';
+      // Untuk item Comply, jangan bawa foto lama dari server agar finding benar-benar terhapus
+      var existingFotoUrls = (d.status === 'COMPLY' || d.status === 'Comply')
+        ? ''
+        : (d.foto_urls) || (srvFinding && srvFinding.foto_urls) || '';
       return {
         result_id:          d.result_id || '',
         nomor_persyaratan:  d.nomor_persyaratan,
