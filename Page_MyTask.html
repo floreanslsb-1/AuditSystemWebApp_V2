@@ -732,26 +732,7 @@ async function _verifOpenEditModal(resultId, cardIdx) {
     title: 'Edit Temuan — ' + escHtml(f.result_id),
     size:  'modal-lg',
     body:
-      // Result ID
-      '<div style="margin-bottom:14px;padding:8px 12px;background:var(--bg);border-radius:6px;' +
-        'border:1px solid var(--border);font-size:11px;color:var(--text-muted);' +
-        'display:flex;align-items:center;gap:8px">' +
-        '<span style="font-weight:700;letter-spacing:.06em;flex-shrink:0">Result ID</span>' +
-        '<span class="td-mono" style="word-break:break-all">' + escHtml(f.result_id) + '</span>' +
-      '</div>' +
-
-      // Jenis Temuan
-      '<div class="form-group">' +
-        '<label class="form-label">Jenis Temuan</label>' +
-        '<select class="form-control" id="vem-status" style="max-width:220px" ' +
-          'onchange="_verifEditStatusChange()">' +
-          '<option value="Non Comply" ' + (initStatus === 'Non Comply' ? 'selected' : '') + '>Non Comply</option>' +
-          '<option value="Comply"     ' + (initStatus === 'Comply'     ? 'selected' : '') + '>Comply</option>' +
-        '</select>' +
-        '<div class="form-hint">Ubah ke Comply = temuan ditutup langsung tanpa TPP.</div>' +
-      '</div>' +
-
-      // Konten Non Comply (disembunyikan kalau Comply)
+      // Konten temuan
       '<div id="vem-noncomplysection">' +
         '<div class="form-group">' +
           '<label class="form-label">Deskripsi Temuan <span class="required">*</span></label>' +
@@ -817,15 +798,9 @@ async function _verifOpenEditModal(resultId, cardIdx) {
     }, 50);
   }
 
-  _verifEditStatusChange();
 }
 
-function _verifEditStatusChange() {
-  var statusEl  = document.getElementById('vem-status');
-  var sectionEl = document.getElementById('vem-noncomplysection');
-  if (!statusEl || !sectionEl) return;
-  sectionEl.style.display = statusEl.value === 'Comply' ? 'none' : '';
-}
+function _verifEditStatusChange() {} // dropdown dihapus — no-op
 
 function _verifMarkDeleteFoto(url, idx) {
   if (!window._vfDeletedUrls) window._vfDeletedUrls = [];
@@ -849,20 +824,17 @@ function _verifMarkDeleteFoto(url, idx) {
 }
 
 function _verifSwitchToComply(cardIdx) {
-  var statusEl = document.getElementById('vem-status');
-  if (statusEl) statusEl.value = 'Comply';
-  _verifSaveEditModal(cardIdx);
+  _verifSaveEditModal(cardIdx, true); // true = force Comply
 }
 
-function _verifSaveEditModal(cardIdx) {
+function _verifSaveEditModal(cardIdx, forceComply) {
   var f = window._verifFindings && window._verifFindings[cardIdx];
   if (!f) return;
 
-  var statusEl = document.getElementById('vem-status');
   var descEl   = document.getElementById('vem-deskripsi');
   var lokasiEl = document.getElementById('vem-lokasi');
   var zone     = document.getElementById('vem-upload-zone');
-  var newStatus = statusEl ? statusEl.value : 'Non Comply';
+  var newStatus = forceComply ? 'Comply' : 'Non Comply';
 
   if (newStatus === 'Non Comply') {
     var desc   = descEl   ? descEl.value.trim()   : '';
@@ -919,12 +891,7 @@ function _verifSaveEditModal(cardIdx) {
   }
 }
 
-function _verifEditStatusChange() {
-  var statusEl  = document.getElementById('vem-status');
-  var sectionEl = document.getElementById('vem-noncomplysection');
-  if (!statusEl || !sectionEl) return;
-  sectionEl.style.display = statusEl.value === 'Comply' ? 'none' : '';
-}
+function _verifEditStatusChange() {} // dropdown dihapus — no-op
 
 async function _verifSaveEdit(resultId, agendaId, periodId, cardIdx) {
   var statusEl  = document.getElementById('vem-status');
