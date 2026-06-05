@@ -730,10 +730,10 @@
 
   /* ── Responsive ─────────────────────────────────────────── */
   @media (max-width: 768px) {
+    /* Layout: sidebar disembunyikan, main full width */
     #app { grid-template-columns: 1fr; }
-    #sidebar { position: fixed; left: -100%; top: 0; height: 100vh; transition: left .3s; z-index: 200; }
-    #sidebar.mobile-open { left: 0; }
-    #main { height: 100vh; width: 100%; }
+    #sidebar { display: none !important; }
+    #main { height: 100vh; width: 100%; padding-bottom: 64px; }
     #page-content { padding: 16px; }
     .form-row, .form-row.three { grid-template-columns: 1fr; }
     .stat-grid { grid-template-columns: repeat(2, 1fr); }
@@ -748,7 +748,62 @@
 
     /* Modal footer — cegah tombol overflow di layar sempit */
     .modal-footer { flex-wrap: wrap; gap: 8px; }
-    .modal-footer .btn { flex: 1 1 auto; min-width: 100px; justify-content: center; } /* sembunyikan note di mobile — terlalu padat */
+    .modal-footer .btn { flex: 1 1 auto; min-width: 100px; justify-content: center; }
+  }
+
+  /* ── Mobile Bottom Nav Bar ───────────────────────────────── */
+  #mobile-nav {
+    display: none;
+  }
+  @media (max-width: 768px) {
+    #mobile-nav {
+      display: flex;
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      height: 64px;
+      background: var(--navy);
+      border-top: 1px solid rgba(255,255,255,.1);
+      z-index: 200;
+      align-items: stretch;
+      padding: 0 4px;
+      padding-bottom: env(safe-area-inset-bottom, 0px); /* iPhone notch */
+    }
+    .mob-nav-item {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      color: rgba(255,255,255,.45);
+      font-size: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      border-radius: 10px;
+      margin: 6px 2px;
+      transition: background .15s, color .15s;
+      padding: 0 4px;
+      position: relative;
+    }
+    .mob-nav-item:active { background: rgba(255,255,255,.08); }
+    .mob-nav-item.active {
+      color: #fff;
+      background: rgba(37,99,235,.35);
+    }
+    .mob-nav-item.active::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 50%;
+      transform: translateX(-50%);
+      width: 28px; height: 2px;
+      background: var(--cyan);
+      border-radius: 0 0 3px 3px;
+    }
+    .mob-nav-label {
+      font-size: 10px;
+      line-height: 1;
+      white-space: nowrap;
+    }
   }
 
   /* ── Scrollbar ─────────────────────────────────────────── */
