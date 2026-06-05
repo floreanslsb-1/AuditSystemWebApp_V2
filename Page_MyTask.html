@@ -791,8 +791,17 @@ async function _verifOpenEditModal(resultId, cardIdx) {
     hint.textContent = (files.length + savedCount) > 0 ? '' : '(wajib minimal 1 foto)';
   });
 
-  // Tidak restore pending ke zone — sudah ditampilkan sebagai label count di atas zone
-  // Restore menyebabkan duplikasi saat _getFiles() dipanggil di _verifSaveEditModal
+  // Restore pending files ke zone agar bisa dilihat preview dan dihapus/diganti
+  // Simpan jumlah existing pending ke zone sebagai marker untuk deduplikasi
+  setTimeout(function() {
+    var zoneEl = document.getElementById('vem-upload-zone');
+    if (zoneEl && zoneEl._setFiles) {
+      zoneEl._setFiles(pendingFiles);
+      zoneEl._existingPendingCount = pendingFiles.length; // marker
+    } else if (zoneEl) {
+      zoneEl._existingPendingCount = pendingFiles.length;
+    }
+  }, 50);
 
 }
 
@@ -838,22 +847,22 @@ function _verifSaveEditModal(cardIdx, forceComply) {
     if (!desc)   return toast('Deskripsi temuan wajib diisi.', 'error');
     if (!lokasi) return toast('Lokasi temuan wajib diisi.', 'error');
 
-    var zoneFiles    = zone && zone._getFiles ? zone._getFiles() : [];
+    var allZoneFiles = zone && zone._getFiles ? zone._getFiles() : [];
     var savedCount   = (window._vfExistingUrls || []).length - (window._vfDeletedUrls || []).length;
     var existPending = (window._verifPendingFiles && window._verifPendingFiles[f.result_id]) || [];
 
-    // Cegah duplikasi: newFiles = hanya file yang BELUM ada di existPending
-    // Identifikasi dengan name+size+lastModified karena File object tidak bisa di-compare by reference setelah _setFiles
-    var existNames = existPending.map(function(f) { return f.name + '_' + f.size + '_' + f.lastModified; });
-    var trulyNewFiles = zoneFiles.filter(function(f) {
-      return existNames.indexOf(f.name + '_' + f.size + '_' + f.lastModified) === -1;
-    });
+    // Ambil hanya file BARU: zone berisi [existingPending... + newFiles...]
+    // _existingPendingCount adalah marker jumlah file lama yang di-restore saat modal dibuka
+    var existingCount = (zone && zone._existingPendingCount != null)
+      ? zone._existingPendingCount
+      : existPending.length;
+    var trulyNewFiles = allZoneFiles.slice(existingCount);
 
     if (trulyNewFiles.length + savedCount + existPending.length < 1) {
       return toast('Upload minimal 1 foto bukti temuan.', 'error');
     }
 
-    // Gabungkan: existing pending + benar-benar baru saja
+    // Gabungkan: existing pending + file benar-benar baru
     var allPending = existPending.concat(trulyNewFiles);
     if (!window._verifPendingFiles) window._verifPendingFiles = {};
     window._verifPendingFiles[f.result_id] = allPending;
