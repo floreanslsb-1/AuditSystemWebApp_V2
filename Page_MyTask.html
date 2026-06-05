@@ -227,6 +227,14 @@ function _renderMyTask(container, tasks, period) {
                 '<th style="width:110px;text-align:center">Jml Temuan</th>' +
                 '<th style="width:120px">Waktu Selesai</th>' +
                 '<th style="width:48px"></th>'
+              : sectionTasks[0] && sectionTasks[0].type === 'ISI_TPP'
+              ? '<th style="width:40px;text-align:center">No</th>' +
+                '<th style="width:160px">Result ID</th>' +
+                '<th style="width:130px">Dept / Bagian</th>' +
+                '<th>Deskripsi Temuan</th>' +
+                '<th style="width:130px">Lokasi Temuan</th>' +
+                '<th style="width:90px;text-align:center">Bukti</th>' +
+                '<th style="width:48px"></th>'
               : '<th>Detail</th>' +
                 '<th style="width:150px">Area</th>' +
                 '<th style="width:48px"></th>'
@@ -287,6 +295,35 @@ function _renderMyTask(container, tasks, period) {
                   '<td style="font-size:12px;color:var(--text-muted)">' + waktuSelesai + '</td>' +
                   '<td><i data-lucide="chevron-right" style="width:14px;height:14px;color:var(--text-muted)"></i></td>' +
                 '</tr>';
+              } else if (t.type === 'ISI_TPP') {
+                var tppIdx   = sectionTasks.indexOf(t);
+                var f        = t.finding || {};
+                var fotoUrls = (f.foto_urls || '').split(',').filter(Boolean);
+                var fotoBtnHtml = fotoUrls.length
+                  ? fotoUrls.map(function(url) {
+                      return '<a href="' + escHtml(url) + '" target="_blank" ' +
+                        'onclick="event.stopPropagation()" ' +
+                        'class="btn btn-outline btn-sm" style="font-size:10px;padding:2px 6px">' +
+                        '<i data-lucide="image" style="width:11px;height:11px"></i>' +
+                      '</a>';
+                    }).join('')
+                  : '<span style="font-size:11px;color:var(--text-muted)">—</span>';
+
+                return '<tr style="cursor:pointer" onclick="_openTaskDetail(' + globalIdx + ')" ' +
+                  'onmouseover="this.style.background=\'var(--bg)\'" ' +
+                  'onmouseout="this.style.background=\'\'">' +
+                  '<td style="text-align:center;font-size:12px;color:var(--text-muted);font-weight:600">' + (tppIdx + 1) + '</td>' +
+                  '<td class="td-mono" style="font-size:11px">' + escHtml(t.result_id || '') + '</td>' +
+                  '<td class="text-sm">' + areaName + '</td>' +
+                  '<td style="font-size:12px">' +
+                    '<div style="font-weight:500">' + escHtml(f.deskripsi_temuan || '—') + '</div>' +
+                  '</td>' +
+                  '<td style="font-size:12px;color:var(--text-muted)">' + escHtml(f.lokasi_temuan || '—') + '</td>' +
+                  '<td style="text-align:center" onclick="event.stopPropagation()">' +
+                    '<div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap">' + fotoBtnHtml + '</div>' +
+                  '</td>' +
+                  '<td><i data-lucide="chevron-right" style="width:14px;height:14px;color:var(--text-muted)"></i></td>' +
+                '</tr>';
               } else {
                 var shortId = t.result_id ? t.result_id.split('_').slice(-2).join('_') : '';
                 detailHtml =
@@ -313,7 +350,7 @@ function _renderMyTask(container, tasks, period) {
 
     listHtml =
       _taskSection('Verifikasi Temuan', 'shield-check', 'var(--amber,#f59e0b)', verifikasiTasks) +
-      _taskSection('Isi TPP', 'wrench', 'var(--blue,#3b82f6)', isiTppTasks) +
+      _taskSection('Rencana Tindakan Perbaikan dan Pencegahan (TPP)', 'wrench', 'var(--blue,#3b82f6)', isiTppTasks) +
       _taskSection('Upload Implementasi', 'camera', 'var(--purple,#8b5cf6)', uploadImplTasks) +
       _taskSection(
         'Approval TPP', 'check-circle', 'var(--teal,#14b8a6)', approvalTppTasks,
