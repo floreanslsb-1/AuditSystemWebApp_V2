@@ -485,6 +485,15 @@ function _buildStatusOptions(current) {
   }).join('');
 }
 
+function _verifDetectChange(idx) {
+  var descEl       = document.getElementById('verif-desc-'         + idx);
+  var statusEl     = document.getElementById('verif-status-'       + idx);
+  var descBadge    = document.getElementById('verif-desc-badge-'   + idx);
+  var statusBadgeEl= document.getElementById('verif-status-badge-' + idx);
+  if (descEl   && descBadge)     descBadgeEl.style.display   = (descEl.value.trim()   !== (descEl.dataset.orig   || '')) ? 'inline-flex' : 'none';
+  if (statusEl && statusBadgeEl) statusBadgeEl.style.display = (statusEl.value !== (statusEl.dataset.orig || '')) ? 'inline-flex' : 'none';
+}
+
 async function _confirmDeleteFinding(resultId, agendaId, periodId, cardIdx) {
   var ok = await showConfirm({
     title:       'Hapus Temuan',
