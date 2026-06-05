@@ -151,7 +151,7 @@ function _auditUnloadHandler(e) {
 //  This fixes the cross-group collision bug.
 // ============================================================
 
-var LOCK_POLL_MS = 60000;
+var LOCK_POLL_MS = 5000;
 var _lockPollTimer = null;
 
 // In-memory lock state: { "<groupKey>": { locked_by, status, nomor_persyaratan } }
@@ -170,6 +170,36 @@ function _stopLockPolling() {
 
 async function _refreshLocks(agendaId, periodId) {
   try {
+    // Refresh data audit results hanya kalau tidak sedang ada draft aktif
+    // (agar tidak mengganggu auditor yang sedang mengisi)
+    var draft = window._auditDraft;
+    if (!draft || draft.activeGroupKey === null) {
+      clearCache('GET_AUDIT_RESULTS');
+      clearCache('GET_FINDINGS_BY_AGENDA');
+      // Re-render form untuk update progress auditor lain
+      var ctx = window._auditRenderCtx;
+      if (ctx) {
+        try {
+          var freshResults = await api('GET_AUDIT_RESULTS', {
+            period_id: periodId,
+            agenda_id: agendaId,
+          });
+          // Update resultMap tanpa full re-render
+          ctx.resultMap = {};
+          (freshResults || []).forEach(function(r) {
+            ctx.resultMap[r.result_id] = r;
+          });
+          // Repaint semua group yang tidak di-lock oleh sendiri
+          ctx.groups.forEach(function(g) {
+            var gk = _groupKey(g);
+            var myLock = window._auditLockState[gk];
+            if (!myLock || myLock.locked_by !== App.profile.email) {
+              _repaintGroupItems(gk);
+            }
+          });
+        } catch(e) { /* silent */ }
+      }
+    }
     var locks = await api('GET_LOCKS', { period_id: periodId, agenda_id: agendaId });
 
     // BUG 4 FIX: sebelum rebuild, simpan dulu lock yang sedang dipegang sendiri
@@ -277,24 +307,18 @@ async function _ensureLockForGroup(agendaId, periodId, groupKey, nomor) {
     return false;
   }
 
-  // Optimistically claim the lock locally
+  // Acquire lock ke server DULU — tidak optimistic, tunggu konfirmasi
+  var lockResult = await _acquireLock(agendaId, periodId, nomor);
+  if (!lockResult.ok) {
+    if (lockResult.lockedBy) {
+      toast('Persyaratan ini sedang dikerjakan ' + lockResult.lockedBy.split('@')[0] + '. Coba lagi sebentar.', 'warning', 6000);
+    }
+    return false;
+  }
+
+  // Server konfirmasi lock berhasil — baru claim locally
   _draftSetActiveGroup(groupKey);
   window._auditLockState[groupKey] = { locked_by: App.profile.email, status: 'LOCKED', nomor_persyaratan: nomor };
-
-  // Confirm with server in background
-  _acquireLock(agendaId, periodId, nomor).then(function(result) {
-    if (!result.ok) {
-      if (window._auditDraft && window._auditDraft.activeGroupKey === groupKey) {
-        window._auditDraft.activeGroupKey = null;
-        _persistAuditDraft();
-      }
-      delete window._auditLockState[groupKey];
-      if (result.lockedBy) {
-        toast('Persyaratan ini sedang dikerjakan ' + result.lockedBy.split('@')[0] + '. Isian dibatalkan.', 'warning', 6000);
-      }
-      _repaintGroupItems(groupKey);
-    }
-  });
 
   return true;
 }
