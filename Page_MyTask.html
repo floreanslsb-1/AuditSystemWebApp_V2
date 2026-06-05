@@ -558,8 +558,8 @@ function _verifRenderCard(f, i) {
   var dispDesc   = isDraft ? (draft.deskripsi_temuan || '') : (f.deskripsi_temuan || '—');
   var dispLokasi = isDraft ? (draft.lokasi_temuan    || '') : (f.lokasi_temuan    || '');
 
-  var deletedUrls  = isDraft ? (draft._deletedFotoUrls || []) : [];
-  var baseFotoUrls = isDraft ? (draft.foto_urls || f.foto_urls || '') : (f.foto_urls || '');
+  var deletedUrls  = isDraft ? (Array.isArray(draft._deletedFotoUrls) ? draft._deletedFotoUrls : []) : [];
+  var baseFotoUrls = isDraft ? (typeof draft.foto_urls === 'string' ? draft.foto_urls : (f.foto_urls || '')) : (f.foto_urls || '');
   var activeFotoUrls = baseFotoUrls.split(',').filter(function(u) {
     return u && deletedUrls.indexOf(u) === -1;
   });
@@ -697,7 +697,7 @@ async function _verifOpenEditModal(resultId, cardIdx) {
   var initLokasi = draft ? (draft.lokasi_temuan    || '') : (f.lokasi_temuan    || '');
   var initStatus = draft ? draft.status : (f.status || 'Non Comply');
   var initFotoUrls = draft ? (draft.foto_urls || f.foto_urls || '') : (f.foto_urls || '');
-  var initDeleted  = draft ? (draft._deletedFotoUrls || []) : [];
+  var initDeleted  = draft ? (Array.isArray(draft._deletedFotoUrls) ? draft._deletedFotoUrls : []) : [];
   var pendingFiles = (window._verifPendingFiles && window._verifPendingFiles[resultId]) || [];
 
   // Build foto saved html — reuse _buildSavedFotosHtml dengan prefix 'vf'
