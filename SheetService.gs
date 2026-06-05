@@ -1278,11 +1278,16 @@ function verifyFindings(spreadsheetId, agendaId, updates, verifiedBy) {
       _updateCell(sheet, result._rowIndex, C.IS_OVERDUE + 1, '');
       _updateCell(sheet, result._rowIndex, C.CLOSED_AT        + 1, '');
     } else {
-      // Non Comply tetap → set OPEN
-      _updateCell(sheet, result._rowIndex, C.FINDING_STATUS + 1, CONFIG.FINDING_STATUS.OPEN);      if (upd.deskripsi_temuan !== undefined)
+      // Non Comply tetap → set OPEN, update field yang diubah koordinator
+      _updateCell(sheet, result._rowIndex, C.FINDING_STATUS   + 1, CONFIG.FINDING_STATUS.OPEN);
+      if (upd.deskripsi_temuan !== undefined)
         _updateCell(sheet, result._rowIndex, C.DESKRIPSI_TEMUAN + 1, upd.deskripsi_temuan);
-      if (upd.final_status && upd.final_status !== result.status)
-        _updateCell(sheet, result._rowIndex, C.STATUS + 1, upd.final_status);
+      if (upd.lokasi_temuan !== undefined)
+        _updateCell(sheet, result._rowIndex, C.LOKASI_TEMUAN    + 1, upd.lokasi_temuan);
+      if (upd.foto_urls !== undefined)
+        _updateCell(sheet, result._rowIndex, C.FOTO_URLS        + 1, upd.foto_urls);
+      _updateCell(sheet, result._rowIndex, C.AUDITOR_EMAIL     + 1, verifiedBy);
+      _updateCell(sheet, result._rowIndex, C.SAVED_AT          + 1, now());
     }
   });
   // Kirim notifikasi ke auditee untuk mengisi TPP
