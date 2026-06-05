@@ -522,10 +522,24 @@ function _routeAction(action, payload, profile) {
     case 'VERIFY_FINDINGS': {
       requireAccess(['isKoordinator'], profile);
       const period_vf = getPeriodById(payload.period_id);
+      const folder_vf = getOrCreateFolder(
+        payload.agenda_id,
+        getOrCreateFolder(payload.period_id, getOrCreateFolder(CONFIG.DRIVE_ROOT_FOLDER_NAME))
+      );
+      // Upload foto baru per item (kalau ada), gabungkan dengan existing_foto_urls
+      const updates_vf = (payload.updates || []).map(function(upd) {
+        if (!upd.new_files || !upd.new_files.length) return upd;
+        var uploadedUrls = upd.new_files.map(function(f) {
+          return uploadFileToDrive(f.data, f.name, f.mime_type, folder_vf);
+        });
+        var existingUrls = (upd.existing_foto_urls || '').split(',').filter(Boolean);
+        var allUrls      = existingUrls.concat(uploadedUrls);
+        return Object.assign({}, upd, { foto_urls: allUrls.join(','), new_files: [] });
+      });
       return verifyFindings(
         period_vf.spreadsheet_id,
         payload.agenda_id,
-        payload.updates,   // [{result_id, final_status, deskripsi_temuan}]
+        updates_vf,
         profile.email
       );
     }
