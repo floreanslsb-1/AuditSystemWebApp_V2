@@ -144,6 +144,9 @@ function navigateTo(page, params) {
   document.querySelectorAll('.nav-item').forEach(function(el) {
     el.classList.toggle('active', el.dataset.page === page);
   });
+  document.querySelectorAll('.mob-nav-item').forEach(function(el) {
+    el.classList.toggle('active', el.dataset.page === page);
+  });
   var container = document.getElementById('page-content');
   container.innerHTML =
     '<div class="page-loader">' +
@@ -497,14 +500,16 @@ async function initApp() {
 function renderSidebar() {
   var p = App.profile;
   var navItems = [
-    { page: 'home',      icon: 'home',        label: 'Beranda',           show: true },
-    { page: 'dashboard', icon: 'bar-chart-2', label: 'Dashboard',         show: true },
-    { page: 'mytask',    icon: 'list-checks',   label: 'My Task',   show: true },
+    { page: 'home',      icon: 'home',           label: 'Beranda',      show: true },
+    { page: 'dashboard', icon: 'bar-chart-2',    label: 'Dashboard',    show: true },
+    { page: 'mytask',    icon: 'list-checks',    label: 'My Task',      show: true },
     { divider: 'AUDIT' },
-    { page: 'audit',             icon: 'clipboard-list', label: 'Form Audit',   show: p.isAuditor },
-    { divider: 'ADMIN', show: p.isKoordinator },
-    { page: 'admin',    icon: 'settings',     label: 'Administrasi', show: p.isKoordinator },
+    { page: 'audit',     icon: 'clipboard-list', label: 'Form Audit',   show: p.isAuditor },
+    { divider: 'ADMIN',  show: p.isKoordinator },
+    { page: 'admin',     icon: 'settings',       label: 'Administrasi', show: p.isKoordinator },
   ];
+
+  // ── Desktop sidebar ───────────────────────────────────────
   var nav = document.getElementById('sidebar-nav');
   nav.innerHTML = navItems.map(function(item) {
     if (item.divider) {
@@ -517,6 +522,22 @@ function renderSidebar() {
       '<span class="nav-label">' + item.label + '</span>' +
     '</div>';
   }).join('');
+
+  // ── Mobile bottom nav — hanya page items, max 5 ───────────
+  var mobileItems = navItems.filter(function(item) {
+    return !item.divider && item.show;
+  }).slice(0, 5); // max 5 items agar tidak terlalu sempit
+
+  var mobileNav = document.getElementById('mobile-nav');
+  if (mobileNav) {
+    mobileNav.innerHTML = mobileItems.map(function(item) {
+      return '<div class="mob-nav-item" data-page="' + item.page + '" onclick="navigateTo(\'' + item.page + '\')">' +
+        '<i data-lucide="' + item.icon + '" style="width:20px;height:20px;flex-shrink:0"></i>' +
+        '<span class="mob-nav-label">' + item.label + '</span>' +
+      '</div>';
+    }).join('');
+  }
+
   lucide.createIcons();
 }
 
