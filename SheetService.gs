@@ -478,8 +478,8 @@ function batchCreateChecklistItems(tipe, kategori, items) {
     if (!aspek || !persyaratan || !check_item) {
       skipped.push({ check_item: check_item || '(kosong)', reason: 'Aspek, persyaratan, dan check item wajib diisi.' }); return;
     }
-    if (!['Plan','Do','Check','Action'].includes(aspek)) {
-      skipped.push({ check_item, reason: 'Aspek tidak valid: ' + aspek }); return;
+    if (!aspek) {
+      skipped.push({ check_item: check_item || '(kosong)', reason: 'Aspek wajib diisi.' }); return;
     }
     const item_id = generateChecklistId(tipe, kategori, [...existing, ...rows.map(r => ({ item_id: r[0] }))]);
     rows.push([item_id, tipe, kategori, nextNomor++, aspek, persyaratan, check_item, standar, (item.labels || '').trim(), true]);
@@ -1246,6 +1246,9 @@ function finishAudit(periodId, agendaId, auditorEmail) {
 function submitAgreement(spreadsheetId, agendaId, agreementFotoUrl, agreementBy, ofi, auditeeHadirNames) {
   const agenda = getAgendaById(agendaId);
   if (!agenda) throw new Error('Agenda tidak ditemukan: ' + agendaId);
+  // Guard double submit — kalau sudah DONE, tolak
+  if (agenda.status === CONFIG.AGENDA_STATUS.DONE)
+    throw new Error('Agreement sudah disubmit oleh auditor lain. Audit ini sudah selesai.');
   updateAgenda(agendaId, {
     status:              CONFIG.AGENDA_STATUS.DONE,
     agreement_foto_url:  agreementFotoUrl,
