@@ -390,10 +390,10 @@ const CHECKLIST_MASTER_HEADERS = [
 
 function getAllChecklistMaster() {
   const sheet = _getMasterSheet(CONFIG.SHEETS.CHECKLIST_MASTER);
-  if (sheet.getLastRow() < 4) return [];
-  const data = sheet.getRange(4, 1, sheet.getLastRow() - 3, CHECKLIST_MASTER_HEADERS.length).getValues();
+  if (sheet.getLastRow() < 3) return [];
+  const data = sheet.getRange(3, 1, sheet.getLastRow() - 2, CHECKLIST_MASTER_HEADERS.length).getValues();
   return data.filter(r => r[0] !== '').map((row, i) => {
-    const obj = { _rowIndex: i + 4 };
+    const obj = { _rowIndex: i + 3 };
     CHECKLIST_MASTER_HEADERS.forEach((h, j) => { obj[h] = row[j]; });
     return obj;
   });
@@ -477,9 +477,6 @@ function batchCreateChecklistItems(tipe, kategori, items) {
     const standar     = (item.standar_check_item || '').trim();
     if (!aspek || !persyaratan || !check_item) {
       skipped.push({ check_item: check_item || '(kosong)', reason: 'Aspek, persyaratan, dan check item wajib diisi.' }); return;
-    }
-    if (!aspek) {
-      skipped.push({ check_item: check_item || '(kosong)', reason: 'Aspek wajib diisi.' }); return;
     }
     const item_id = generateChecklistId(tipe, kategori, [...existing, ...rows.map(r => ({ item_id: r[0] }))]);
     rows.push([item_id, tipe, kategori, nextNomor++, aspek, persyaratan, check_item, standar, (item.labels || '').trim(), true]);
