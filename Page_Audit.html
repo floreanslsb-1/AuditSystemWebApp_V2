@@ -184,10 +184,20 @@ async function _refreshLocks(agendaId, periodId) {
             period_id: periodId,
             agenda_id: agendaId,
           });
-          // Update resultMap tanpa full re-render
+          // Update resultMap
           ctx.resultMap = {};
           (freshResults || []).forEach(function(r) {
-            ctx.resultMap[r.result_id] = r;
+            ctx.resultMap[r.result_id] = r.status;
+          });
+          // Update findingMap agar deskripsi + foto Non Comply ikut terupdate
+          ctx.findingMap = ctx.findingMap || {};
+          (freshResults || []).forEach(function(r) {
+            if (r.status === 'Non Comply' || r.status === 'NON_COMPLY') {
+              ctx.findingMap[r.result_id] = r;
+            } else {
+              // Kalau sudah berubah ke Comply, hapus dari findingMap
+              delete ctx.findingMap[r.result_id];
+            }
           });
           // Repaint semua group yang tidak di-lock oleh sendiri
           ctx.groups.forEach(function(g) {
@@ -1047,6 +1057,20 @@ function _repaintGroupItems(gKey) {
   }).join('');
   lucide.createIcons(itemsEl);
   _loadAllDriveImgs(itemsEl);
+
+  // Update group counter (4/5) di header group
+  var countEl = document.getElementById('rg-count-' + safeId);
+  if (countEl) {
+    var done    = g.items.filter(function(i, idx) {
+      return !!_mergedStatus(gKey, i.nomor, idx + 1, ctx.resultMap, i.result_id).status;
+    }).length;
+    var allDone = done === g.items.length;
+    countEl.textContent = done + '/' + g.items.length;
+    countEl.style.color = allDone ? 'var(--emerald,#10b981)' : 'var(--text-muted)';
+  }
+
+  // Update overall progress bar (14/15) di atas
+  _updateProgressBar();
 }
 
 function _repaintCheckItemRow(gKey, resultId, status, fromDraft) {
