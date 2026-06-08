@@ -85,3 +85,11 @@ function _setCacheMetaInvalidated(cacheKey, invalidated) {
     sheet.appendRow([cacheKey, now(), true, '']);
   }
 }
+
+function clearAllCaches() {
+  invalidateUsersCache();
+  invalidateAreasCache();
+  invalidatePeriodsCache();
+  CacheService_invalidateMaster();
+  console.log('Semua cache dikosongkan.');
+}
