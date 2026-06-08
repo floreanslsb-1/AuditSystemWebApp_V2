@@ -1786,6 +1786,11 @@ function _renderStep1AreaList() {
   }).join('');
 }
 
+function _ag1CloseAuditorDD(areaId) {
+  var dd = document.getElementById('ag1-dd-' + areaId);
+  if (dd) dd.style.display = 'none';
+}
+
 function _ag1AuditorDropdownItems(areaId) {
   var state    = window._agendaState;
   var area     = state.areas.find(function(a) { return a.area_id === areaId; });
@@ -1793,18 +1798,39 @@ function _ag1AuditorDropdownItems(areaId) {
   var searchEl = document.getElementById('ag1-search-' + areaId);
   var q        = searchEl ? searchEl.value.toLowerCase() : '';
 
-  return auditors.filter(function(u) {
+  var selectedCount = area ? area.auditorEmails.length : 0;
+
+  var items = auditors.filter(function(u) {
     return !q || u.nama.toLowerCase().includes(q);
   }).map(function(u) {
     var checked = area && area.auditorEmails.includes(u.email);
     return '<div onclick="_ag1ToggleAuditor(\'' + escHtml(areaId) + '\',\'' + escHtml(u.email) + '\')" ' +
       'style="padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:10px;font-size:13px;' +
-        (checked ? 'background:var(--bg)' : '') + '">' +
+        (checked ? 'background:rgba(59,130,246,.06)' : '') + ';' +
+        'transition:background .1s" ' +
+      'onmouseover="if(!this.style.background||this.style.background===\'\')this.style.background=\'var(--bg)\'" ' +
+      'onmouseout="this.style.background=' + "'" + (checked ? 'rgba(59,130,246,.06)' : '') + "'" + '">' +
       '<i data-lucide="' + (checked ? 'check-square' : 'square') + '" ' +
-        'style="width:14px;height:14px;flex-shrink:0;color:' + (checked ? 'var(--blue)' : 'var(--text-muted)') + '"></i>' +
+        'style="width:14px;height:14px;flex-shrink:0;color:' + (checked ? 'var(--blue,#3b82f6)' : 'var(--text-muted)') + '"></i>' +
       '<span>' + escHtml(u.nama) + '</span>' +
     '</div>';
   }).join('') || '<div style="padding:10px 12px;font-size:12px;color:var(--text-muted)">Tidak ada auditor.</div>';
+
+  // Footer tombol Selesai
+  var footer =
+    '<div style="padding:8px 12px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--bg)">' +
+      '<span style="font-size:11px;color:var(--text-muted)">' +
+        (selectedCount > 0 ? selectedCount + ' dipilih' : 'Belum ada dipilih') +
+      '</span>' +
+      '<button onclick="event.stopPropagation();_ag1CloseAuditorDD(\'' + escHtml(areaId) + '\')" ' +
+        'style="font-size:12px;font-weight:600;padding:4px 12px;border-radius:6px;' +
+          'border:1px solid var(--blue,#3b82f6);background:var(--blue,#3b82f6);' +
+          'color:#fff;cursor:pointer;line-height:1.4">' +
+        'Selesai' +
+      '</button>' +
+    '</div>';
+
+  return items + footer;
 }
 
 function _ag1RenderSelectedAuditors(areaId) {
