@@ -19,11 +19,34 @@ Pages['dashboard'] = async function(container) {
   container.innerHTML =
     '<div class="page-loader"><div class="spinner dark"></div><span>Memuat dashboard...</span></div>';
   try {
-    var periodId = App.activePeriod ? App.activePeriod.period_id : null;
-    var raw  = await cachedApi('GET_DASHBOARD', { period_id: periodId }, 20);
+    // Load daftar periode untuk selector (COMPLETED + ACTIVE)
+    var allPeriods = await cachedApi('GET_PERIODS', {}, 60);
+    var viewable   = (allPeriods || []).filter(function(p) {
+      return p.status === 'ACTIVE' || p.status === 'COMPLETED';
+    }).sort(function(a, b) {
+      // ACTIVE di atas, COMPLETED urut terbaru dulu
+      if (a.status === 'ACTIVE') return -1;
+      if (b.status === 'ACTIVE') return 1;
+      return (b.completed_at || b.tanggal_selesai || '') > (a.completed_at || a.tanggal_selesai || '') ? 1 : -1;
+    });
+
+    // Default: periode aktif, atau periode pertama kalau tidak ada yang aktif
+    var defaultId = App.activePeriod
+      ? App.activePeriod.period_id
+      : (viewable[0] ? viewable[0].period_id : null);
+
+    // Gunakan period yang tersimpan di state kalau ada (supaya tidak reset saat re-render)
+    var selectedId = (App.dashboardSelectedPeriodId && viewable.find(function(p) {
+      return p.period_id === App.dashboardSelectedPeriodId;
+    })) ? App.dashboardSelectedPeriodId : defaultId;
+
+    App.dashboardSelectedPeriodId = selectedId;
+    App._dashboardPeriods = viewable;
+
+    var raw  = await cachedApi('GET_DASHBOARD', { period_id: selectedId }, 20);
     var data = typeof raw === 'string' ? JSON.parse(raw) : raw;
     App.dashboardData = data;
-    _renderDashboard(container, data);
+    _renderDashboard(container, data, viewable, selectedId);
   } catch(err) {
     container.innerHTML =
       '<div class="empty-state">' +
@@ -35,18 +58,69 @@ Pages['dashboard'] = async function(container) {
   }
 };
 
+async function _dashboardSwitchPeriod(periodId) {
+  App.dashboardSelectedPeriodId = periodId;
+  var container = document.getElementById('page-content');
+  if (!container) return;
+
+  // Ganti selector UI saja dulu (loading state di section data)
+  var dataSection = document.getElementById('dashboard-data-section');
+  if (dataSection) {
+    dataSection.innerHTML =
+      '<div class="page-loader" style="padding:60px 0"><div class="spinner dark"></div>' +
+      '<span>Memuat data periode...</span></div>';
+  }
+
+  try {
+    // Cache key berbeda per period_id agar tidak tumpang tindih
+    var raw  = await cachedApi('GET_DASHBOARD', { period_id: periodId }, 20);
+    var data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    App.dashboardData = data;
+    var viewable   = App._dashboardPeriods || [];
+    _renderDashboardData(dataSection, data, viewable, periodId);
+    lucide.createIcons();
+  } catch(err) {
+    if (dataSection) dataSection.innerHTML =
+      '<div class="empty-state"><div class="empty-desc">' + escHtml(err.message) + '</div></div>';
+  }
+}
+
 // ════════════════════════════════════════════════════════════
 //  MAIN RENDER
 // ════════════════════════════════════════════════════════════
 
-function _renderDashboard(container, data) {
-  var agendas  = data.agendas  || [];
-  var findings = data.findings || [];
-  var s        = data.summary  || {};
-  var period   = data.period   || null;
+function _renderDashboard(container, data, viewablePeriods, selectedPeriodId) {
+  viewablePeriods = viewablePeriods || [];
+  selectedPeriodId = selectedPeriodId || null;
 
-  // ── No period active ──────────────────────────────────────
-  if (!period) {
+  // ── Period selector HTML ──────────────────────────────────
+  var selectorHtml = '';
+  if (viewablePeriods.length >= 1) {
+    selectorHtml =
+      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px">' +
+        '<span style="font-size:12px;font-weight:600;color:var(--text-muted);flex-shrink:0">Lihat periode:</span>' +
+        '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+          viewablePeriods.map(function(p) {
+            var isSelected = p.period_id === selectedPeriodId;
+            var isActive   = p.status === 'ACTIVE';
+            return '<button onclick="singleClick(this,function(){ _dashboardSwitchPeriod(\'' + escAttr(p.period_id) + '\') })" ' +
+              'style="padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;' +
+                'border:1.5px solid ' + (isSelected ? 'var(--blue,#3b82f6)' : 'var(--border)') + ';' +
+                'background:' + (isSelected ? 'rgba(59,130,246,.1)' : 'transparent') + ';' +
+                'color:' + (isSelected ? 'var(--blue,#3b82f6)' : 'var(--text-muted)') + ';' +
+                'display:inline-flex;align-items:center;gap:5px">' +
+              (isActive
+                ? '<span style="width:6px;height:6px;border-radius:50%;background:var(--emerald,#10b981);flex-shrink:0"></span>'
+                : '') +
+              escHtml(p.nama_periode) +
+            '</button>';
+          }).join('') +
+        '</div>' +
+      '</div>';
+  }
+
+  // ── No period ─────────────────────────────────────────────
+  if (!data.period && viewablePeriods.length === 0) {
     container.innerHTML =
       '<div class="empty-state" style="padding:80px 40px">' +
         '<i data-lucide="calendar-off" style="width:48px;height:48px;opacity:.25;margin-bottom:16px"></i>' +
@@ -59,6 +133,27 @@ function _renderDashboard(container, data) {
           : '') +
       '</div>';
     lucide.createIcons();
+    return;
+  }
+
+  // Render selector + wrapper untuk data section
+  container.innerHTML = selectorHtml + '<div id="dashboard-data-section"></div>';
+  var dataSection = document.getElementById('dashboard-data-section');
+  _renderDashboardData(dataSection, data, viewablePeriods, selectedPeriodId);
+  lucide.createIcons();
+}
+
+function _renderDashboardData(container, data, viewablePeriods, selectedPeriodId) {
+  var agendas  = data.agendas  || [];
+  var findings = data.findings || [];
+  var s        = data.summary  || {};
+  var period   = data.period   || null;
+
+  if (!period) {
+    container.innerHTML =
+      '<div class="empty-state" style="padding:60px 0">' +
+        '<div class="empty-title" style="font-size:14px">Tidak ada data untuk periode ini.</div>' +
+      '</div>';
     return;
   }
 
@@ -122,8 +217,8 @@ function _dbStyles() {
     '}' +
     '.db-tbl tr:last-child td{border-bottom:none}' +
     '.db-tbl td:last-child,.db-tbl th:last-child{border-right:none}' +
-    '.db-col-area{text-align:left!important;font-weight:600;background:var(--surface);min-width:140px;position:sticky;left:0;z-index:1}' +
-    '.db-total-row td{background:var(--surface2)!important;font-weight:700;border-top:2px solid var(--border)}' +
+    '<th rowspan="2" class="db-col-area" style="vertical-align:middle;text-align:center!important;z-index:2;border-bottom:1px solid var(--border)">Area</th>' +
+    '.db-total-row td{background:var(--surface2)!important;font-weight:700;border-top:none!important;border-bottom:none!important}' +
     '.db-total-row .db-col-area{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--text-muted)}' +
 
     /* Cell values */
@@ -585,7 +680,7 @@ function _dbApprovalSection(agendas, findings, s) {
 
   // ── Header row 1 (group labels) ──────────────────────────
   var gh = '<tr>' +
-    '<th rowspan="2" class="db-col-area" style="vertical-align:middle;text-align:left!important;z-index:2;border-bottom:1px solid var(--border)">Area</th>' +
+    '<th rowspan="2" class="db-col-area" style="vertical-align:middle;text-align:center!important;z-index:2;border-bottom:1px solid var(--border)">Area</th>' +
     '<th rowspan="2" class="db-gh-open" style="vertical-align:middle;color:var(--rose,#f43f5e);border-bottom:2px solid var(--rose,#f43f5e)">OPEN</th>' +
     '<th colspan="3" class="db-gh-tpp" style="color:var(--amber,#f59e0b);border-bottom:2px solid var(--amber,#f59e0b)">On Review TPP</th>' +
     '<th rowspan="2" class="db-gh-impl-open" style="vertical-align:middle;color:var(--blue,#3b82f6);border-bottom:2px solid var(--blue,#3b82f6)">Open<br>Implementasi</th>' +
@@ -616,7 +711,7 @@ function _dbApprovalSection(agendas, findings, s) {
 
     return '<tr' + (!hasAny ? ' style="opacity:.5"' : '') + '>' +
       '<td class="db-col-area">' +
-        '<div style="display:flex;align-items:center;gap:12px">' +
+        '<div style="display:flex;align-items:center;gap:16px">' +
           '<span style="font-size:11px;font-weight:700;color:var(--text-muted);' +
             'min-width:18px;text-align:right;flex-shrink:0">' + (idx + 1) + '</span>' +
           '<div>' +
@@ -645,7 +740,7 @@ function _dbApprovalSection(agendas, findings, s) {
   var totalRow = '<tr class="db-total-row">' +
     '<td class="db-col-area">' +
       '<div>Total</div>' +
-      '<div style="font-size:10px;font-weight:400;color:var(--text-muted)">' + tableData.length + ' area · ' + s.total + ' temuan</div>' +
+      '<div style="font-size:10px;font-weight:400;color:var(--text-muted)">' + tableData.length + ' area</div>' +
     '</td>' +
     _dbTd(totals.n_open,     'db-g-open', true) +
     _dbTd(totals.n_tpp_dh,   'db-g-tpp', true) +
@@ -741,9 +836,9 @@ function _dbTdTotal(n, isTotalRow) {
     'text-align:center;' +
     'vertical-align:middle;' +
     'background:var(--surface2);' +
-    'border-bottom:1px solid var(--border);' +
+    'border-top:none;' +
+    'border-bottom:none;' +
     'border-right:none;' +
-    (isTotalRow ? 'border-top:2px solid var(--border);' : '') +
   '">' + (n > 0 ? n : '—') + '</td>';
 }
 
