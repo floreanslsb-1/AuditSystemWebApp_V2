@@ -40,15 +40,18 @@ function _findingInfo(result, agenda) {
 function notifyAuditStarted(agenda) {
   const auditees = parseCSV(agenda.auditee_emails);
   if (!auditees.length) return;
+  const period     = getPeriodById(agenda.period_id);
+  const namaPeriode = period ? period.nama_periode : 'IMS';
   const body = `
-    <p>Pelaksanaan audit IMS untuk area <strong>${escapeHtml(agenda.dept)}</strong>
-    telah resmi dimulai dengan detail sebagai berikut:</p>
+    <p>Pelaksanaan audit <strong>${escapeHtml(namaPeriode)}</strong> untuk area
+    <strong>${escapeHtml(agenda.dept)}</strong> telah resmi dimulai dengan detail
+    sebagai berikut:</p>
     <table style="border-collapse:collapse;width:100%;font-size:13px;margin:16px 0;">
       <tr><td style="padding:6px;color:#666;width:160px;">Area</td>
           <td style="padding:6px;font-weight:bold;">${escapeHtml(agenda.dept)}</td></tr>
       <tr style="background:#f9f9f9;">
           <td style="padding:6px;color:#666;">Tanggal Mulai</td>
-          <td style="padding:6px;">${agenda.started_at}</td></tr>
+          <td style="padding:6px;">${formatDatetimeWIB(agenda.started_at)}</td></tr>
       <tr><td style="padding:6px;color:#666;">Tim Auditor</td>
           <td style="padding:6px;">${escapeHtml(agenda.auditor_emails)}</td></tr>
       <tr style="background:#f9f9f9;">
@@ -59,8 +62,7 @@ function notifyAuditStarted(agenda) {
     pendampingan kepada tim auditor selama proses berlangsung.</p>`;
   sendEmail(auditees,
     `AUDIT DIMULAI — ${agenda.dept}`,
-    emailTemplate(`Audit Dimulai: ${agenda.dept}`, body,
-      'Lihat Form Audit', _appLink('form-audit', { agenda_id: agenda.agenda_id })));
+    emailTemplate(`Audit Dimulai: ${agenda.dept}`, body));
 }
 
 function notifyAuditCompletedAuditor(agenda, findingCount) {
@@ -74,7 +76,7 @@ function notifyAuditCompletedAuditor(agenda, findingCount) {
           <td style="padding:6px;font-weight:bold;">${escapeHtml(agenda.dept)}</td></tr>
       <tr style="background:#f9f9f9;">
           <td style="padding:6px;color:#666;">Tanggal Selesai</td>
-          <td style="padding:6px;">${agenda.agreement_at || now()}</td></tr>
+          <td style="padding:6px;">${formatDatetimeWIB(agenda.agreement_at || now())}</td></tr>
       <tr><td style="padding:6px;color:#666;">Diselesaikan oleh</td>
           <td style="padding:6px;">${escapeHtml(agenda.agreement_by || '')}</td></tr>
       <tr style="background:#f9f9f9;">
@@ -103,7 +105,7 @@ function notifyAuditCompletedKoordinator(agenda, findingCount) {
           <td style="padding:6px;font-weight:bold;">${escapeHtml(agenda.dept)}</td></tr>
       <tr style="background:#f9f9f9;">
           <td style="padding:6px;color:#666;">Tanggal Selesai</td>
-          <td style="padding:6px;">${agenda.agreement_at || now()}</td></tr>
+          <td style="padding:6px;">${formatDatetimeWIB(agenda.agreement_at || now())}</td></tr>
       <tr><td style="padding:6px;color:#666;">Diselesaikan oleh</td>
           <td style="padding:6px;">${escapeHtml(agenda.agreement_by || '')}</td></tr>
       <tr style="background:#f9f9f9;">
@@ -175,7 +177,7 @@ function notifyTPPSubmitted(agenda, result) {
     ${_findingInfo(result, agenda)}
     <table style="border-collapse:collapse;width:100%;font-size:13px;">
       <tr><td style="padding:6px;color:#666;width:160px;">Target Penyelesaian</td>
-          <td style="padding:6px;">${result.target_date || '-'}</td></tr>
+          <td style="padding:6px;">${formatDateOnlyWIB(result.target_date)}</td></tr>
     </table>
     <p style="margin-top:16px;">Silakan tinjau dan berikan persetujuan atau
     penolakan beserta komentar pada sistem.</p>`;
@@ -194,7 +196,7 @@ function notifyTPPToAuditors(agenda, result) {
     ${_findingInfo(result, agenda)}
     <table style="border-collapse:collapse;width:100%;font-size:13px;">
       <tr><td style="padding:6px;color:#666;width:160px;">Target Penyelesaian</td>
-          <td style="padding:6px;">${result.target_date || '-'}</td></tr>
+          <td style="padding:6px;">${formatDateOnlyWIB(result.target_date)}</td></tr>
     </table>
     <p style="margin-top:16px;">Cukup satu Auditor dari tim yang memberikan persetujuan.
     Auditor lain akan menerima notifikasi informasi secara otomatis.</p>`;
@@ -227,7 +229,7 @@ function notifyTPPApprovedByAuditor(agenda, result, approverEmail) {
     ${_findingInfo(result, agenda)}
     <table style="border-collapse:collapse;width:100%;font-size:13px;">
       <tr><td style="padding:6px;color:#666;width:160px;">Target Penyelesaian</td>
-          <td style="padding:6px;">${result.target_date || '-'}</td></tr>
+          <td style="padding:6px;">${formatDateOnlyWIB(result.target_date)}</td></tr>
       <tr style="background:#f9f9f9;">
           <td style="padding:6px;color:#666;">Disetujui Dept Head</td>
           <td style="padding:6px;">Ya</td></tr>
@@ -249,7 +251,7 @@ function notifyTPPFullyApproved(agenda, result) {
     ${_findingInfo(result, agenda)}
     <table style="border-collapse:collapse;width:100%;font-size:13px;">
       <tr><td style="padding:6px;color:#666;width:160px;">Target Penyelesaian</td>
-          <td style="padding:6px;">${result.target_date || '-'}</td></tr>
+          <td style="padding:6px;">${formatDateOnlyWIB(result.target_date)}</td></tr>
     </table>
     <p style="margin-top:16px;">Laksanakan tindakan perbaikan sesuai rencana yang telah
     disetujui, kemudian upload bukti implementasi pada sistem sebelum tanggal target.</p>`;
@@ -338,7 +340,7 @@ function notifyFindingClosed(agenda, result) {
     ${_findingInfo(result, agenda)}
     <table style="border-collapse:collapse;width:100%;font-size:13px;">
       <tr><td style="padding:6px;color:#666;width:160px;">Ditutup pada</td>
-          <td style="padding:6px;">${now()}</td></tr>
+          <td style="padding:6px;">${formatDatetimeWIB(now())}</td></tr>
     </table>
     <p style="margin-top:16px;">Terima kasih atas kerja sama semua pihak dalam
     menyelesaikan tindak lanjut temuan audit ini.</p>`;
