@@ -98,6 +98,51 @@ function formatDate(date) {
 }
 
 /**
+ * Format ISO timestamp ke "Senin, 08 Juni 2026 13.10 WIB"
+ * Dipakai di email untuk semua field datetime
+ * @param {string|Date} ts  ISO string atau Date object
+ * @returns {string}
+ */
+function formatDatetimeWIB(ts) {
+  if (!ts) return '-';
+  const d = (ts instanceof Date) ? ts : new Date(ts);
+  if (isNaN(d.getTime())) return String(ts);
+  const HARI = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+  const BULAN = ['Januari','Februari','Maret','April','Mei','Juni',
+                 'Juli','Agustus','September','Oktober','November','Desember'];
+  // Konversi ke WIB (UTC+7)
+  const wib   = new Date(d.getTime() + 7 * 60 * 60 * 1000);
+  const hari  = HARI[wib.getUTCDay()];
+  const tgl   = String(wib.getUTCDate()).padStart(2, '0');
+  const bln   = BULAN[wib.getUTCMonth()];
+  const thn   = wib.getUTCFullYear();
+  const jam   = String(wib.getUTCHours()).padStart(2, '0');
+  const mnt   = String(wib.getUTCMinutes()).padStart(2, '0');
+  return `${hari}, ${tgl} ${bln} ${thn} ${jam}.${mnt} WIB`;
+}
+
+/**
+ * Format ISO date / yyyy-MM-dd ke "Senin, 08 Juni 2026" (tanpa jam)
+ * Dipakai di email untuk field target_date
+ * @param {string|Date} ts
+ * @returns {string}
+ */
+function formatDateOnlyWIB(ts) {
+  if (!ts) return '-';
+  const d = (ts instanceof Date) ? ts : new Date(ts);
+  if (isNaN(d.getTime())) return String(ts);
+  const HARI = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+  const BULAN = ['Januari','Februari','Maret','April','Mei','Juni',
+                 'Juli','Agustus','September','Oktober','November','Desember'];
+  const wib  = new Date(d.getTime() + 7 * 60 * 60 * 1000);
+  const hari = HARI[wib.getUTCDay()];
+  const tgl  = String(wib.getUTCDate()).padStart(2, '0');
+  const bln  = BULAN[wib.getUTCMonth()];
+  const thn  = wib.getUTCFullYear();
+  return `${hari}, ${tgl} ${bln} ${thn}`;
+}
+
+/**
  * Cek apakah sebuah lock sudah timeout
  * @param {string} lockedAt  timestamp string
  * @returns {boolean}
@@ -214,12 +259,43 @@ function sendEmail(to, subject, htmlBody) {
     console.log('[Notif DISABLED] To:', Array.isArray(to) ? to.join(',') : to, '| Subject:', subject);
     return;
   }
+
+  const originalRecipients = Array.isArray(to) ? to.join(', ') : to;
+
+  // ── TEST MODE: semua email diarahkan ke satu alamat ──────────
+  // Selama CONFIG.TEST_MODE_EMAIL terisi, tidak ada satupun email
+  // yang dikirim ke penerima asli — semua masuk ke alamat testing.
+  if (CONFIG.TEST_MODE_EMAIL) {
+    try {
+      GmailApp.sendEmail(
+        CONFIG.TEST_MODE_EMAIL,
+        '[TEST] ' + subject,
+        '',
+        {
+          htmlBody:
+            '<div style="font-family:Arial,sans-serif;background:#fff3cd;border:2px solid #ffc107;' +
+            'padding:12px 16px;border-radius:6px;margin-bottom:24px;font-size:12px;line-height:1.6">' +
+            '<strong>⚠ TEST MODE AKTIF</strong><br>' +
+            'Email ini seharusnya dikirim ke: <strong>' + originalRecipients + '</strong><br>' +
+            'Selama TEST_MODE_EMAIL terisi di Config.gs, semua notifikasi akan diarahkan ke alamat ini.' +
+            '</div>' + htmlBody,
+          name: 'Audit System - Integrated Management System',
+        }
+      );
+      console.log('[TEST MODE] Email dikirim ke ' + CONFIG.TEST_MODE_EMAIL + ' (asli: ' + originalRecipients + ') | Subject: ' + subject);
+    } catch (e) {
+      console.error('sendEmail TEST MODE error:', e.message);
+    }
+    return; // ← hard stop: tidak ada jalur lain ke GmailApp setelah ini
+  }
+
+  // ── PRODUCTION: kirim ke penerima asli ───────────────────────
   try {
-    const recipients = Array.isArray(to) ? to.join(',') : to;
-    GmailApp.sendEmail(recipients, subject, '', {
+    GmailApp.sendEmail(originalRecipients, subject, '', {
       htmlBody,
       name: 'Audit System - Integrated Management System',
     });
+    console.log('[Notif SENT] To:', originalRecipients, '| Subject:', subject);
   } catch (e) {
     console.error('sendEmail error:', e.message);
   }
@@ -243,8 +319,8 @@ function emailTemplate(title, body, ctaLabel = '', ctaUrl = '') {
   return `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#333;">
       <div style="background:#1F3864;padding:18px 24px;">
-        <div style="color:rgba(255,255,255,.7);font-size:12px;margin-bottom:4px;">Audit System</div>
-        <div style="color:#fff;font-size:16px;font-weight:bold;">Integrated Management System</div>
+        <div style="color:#fff;font-size:16px;font-weight:bold;margin-bottom:4px;">Audit System</div>
+        <div style="color:rgba(255,255,255,.65);font-size:12px;">Integrated Management System</div>
       </div>
       <div style="padding:24px;border:1px solid #e0e0e0;border-top:none;">
         <h3 style="color:#1F3864;margin-top:0;">${title}</h3>
