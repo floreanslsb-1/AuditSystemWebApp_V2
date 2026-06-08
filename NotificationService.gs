@@ -65,12 +65,18 @@ function notifyAuditStarted(agenda) {
     emailTemplate(`Audit Dimulai: ${agenda.dept}`, body));
 }
 
-function notifyAuditCompletedAuditor(agenda, findingCount) {
-  const auditors = parseCSV(agenda.auditor_emails);
-  if (!auditors.length) return;
+function notifyAuditCompletedAuditor(agenda, complyCount, nonComplyCount) {
+  const recipients = [
+    ...parseCSV(agenda.auditor_emails),
+    ...parseCSV(agenda.auditee_emails),
+  ].filter(function(v, i, a) { return v && a.indexOf(v) === i; });
+  if (!recipients.length) return;
+  const period      = getPeriodById(agenda.period_id);
+  const namaPeriode = period ? period.nama_periode : 'IMS';
   const body = `
-    <p>Audit IMS untuk area <strong>${escapeHtml(agenda.dept)}</strong>
-    telah selesai dilaksanakan. Berikut ringkasan pelaksanaan:</p>
+    <p>Pelaksanaan audit <strong>${escapeHtml(namaPeriode)}</strong> untuk area
+    <strong>${escapeHtml(agenda.dept)}</strong> telah selesai dilaksanakan.
+    Berikut ringkasan pelaksanaan:</p>
     <table style="border-collapse:collapse;width:100%;font-size:13px;margin:16px 0;">
       <tr><td style="padding:6px;color:#666;width:160px;">Area</td>
           <td style="padding:6px;font-weight:bold;">${escapeHtml(agenda.dept)}</td></tr>
@@ -82,24 +88,30 @@ function notifyAuditCompletedAuditor(agenda, findingCount) {
       <tr style="background:#f9f9f9;">
           <td style="padding:6px;color:#666;">Auditee yang Hadir</td>
           <td style="padding:6px;">${escapeHtml(agenda.auditee_hadir_names || '-')}</td></tr>
-      <tr><td style="padding:6px;color:#666;">Total Temuan Non Comply</td>
-          <td style="padding:6px;">${findingCount} temuan</td></tr>
+      <tr><td style="padding:6px;color:#666;">Temuan Comply</td>
+          <td style="padding:6px;">${complyCount} temuan</td></tr>
+      <tr style="background:#f9f9f9;">
+          <td style="padding:6px;color:#666;">Temuan Non Comply</td>
+          <td style="padding:6px;font-weight:bold;">${nonComplyCount} temuan</td></tr>
     </table>
-    <p>Foto persetujuan bersama auditee telah diupload.
-    Proses selanjutnya berada di tahap verifikasi oleh Koordinator.</p>`;
-  sendEmail(auditors,
+    <p>Temuan Non Comply akan diverifikasi terlebih dahulu oleh Koordinator sebelum
+    dapat ditindaklanjuti. Anda akan mendapat notifikasi kembali setelah verifikasi
+    selesai.</p>`;
+  sendEmail(recipients,
     `AUDIT SELESAI — ${agenda.dept}`,
-    emailTemplate(`Audit Selesai: ${agenda.dept}`, body,
-      'Lihat Dashboard', _appLink('dashboard')));
+    emailTemplate(`Audit Selesai: ${agenda.dept}`, body));
 }
 
-function notifyAuditCompletedKoordinator(agenda, findingCount) {
+function notifyAuditCompletedKoordinator(agenda, complyCount, nonComplyCount) {
   const koordinators = getAllKoordinators();
   if (!koordinators.length) return;
+  const period      = getPeriodById(agenda.period_id);
+  const namaPeriode = period ? period.nama_periode : 'IMS';
   const body = `
-    <p>Audit IMS untuk area <strong>${escapeHtml(agenda.dept)}</strong>
-    telah selesai dan foto persetujuan telah diupload. Terdapat
-    <strong>${findingCount} temuan Non Comply</strong> yang menunggu verifikasi Anda.</p>
+    <p>Pelaksanaan audit <strong>${escapeHtml(namaPeriode)}</strong> untuk area
+    <strong>${escapeHtml(agenda.dept)}</strong> telah selesai dan foto persetujuan
+    telah diupload. Terdapat <strong>${nonComplyCount} temuan Non Comply</strong>
+    yang menunggu verifikasi Anda.</p>
     <table style="border-collapse:collapse;width:100%;font-size:13px;margin:16px 0;">
       <tr><td style="padding:6px;color:#666;width:160px;">Area</td>
           <td style="padding:6px;font-weight:bold;">${escapeHtml(agenda.dept)}</td></tr>
@@ -111,12 +123,14 @@ function notifyAuditCompletedKoordinator(agenda, findingCount) {
       <tr style="background:#f9f9f9;">
           <td style="padding:6px;color:#666;">Auditee yang Hadir</td>
           <td style="padding:6px;">${escapeHtml(agenda.auditee_hadir_names || '-')}</td></tr>
-      <tr><td style="padding:6px;color:#666;">Total Temuan Non Comply</td>
-          <td style="padding:6px;font-weight:bold;">${findingCount} temuan</td></tr>
+      <tr><td style="padding:6px;color:#666;">Temuan Comply</td>
+          <td style="padding:6px;">${complyCount} temuan</td></tr>
+      <tr style="background:#f9f9f9;">
+          <td style="padding:6px;color:#666;">Temuan Non Comply</td>
+          <td style="padding:6px;font-weight:bold;">${nonComplyCount} temuan</td></tr>
     </table>
-    <p>Silakan lakukan verifikasi pada setiap temuan sebelum diteruskan kepada
-    auditee untuk tindak lanjut. Anda dapat menyesuaikan deskripsi temuan
-    atau mengubah status temuan jika diperlukan.</p>`;
+    <p>Silakan verifikasi setiap temuan Non Comply. Anda dapat menyesuaikan deskripsi
+    atau mengubah status temuan jika diperlukan sebelum diteruskan ke auditee.</p>`;
   sendEmail(koordinators.map(u => u.email),
     `VERIFIKASI TEMUAN DIPERLUKAN — AUDIT SELESAI | ${agenda.dept}`,
     emailTemplate(`Verifikasi Temuan Diperlukan: ${agenda.dept}`, body,
