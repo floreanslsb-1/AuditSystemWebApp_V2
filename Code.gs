@@ -687,6 +687,14 @@ function _getDashboardData(profile, periodId) {
     const agendas  = getCachedAgendasByPeriod(period.period_id).map(_sanitizeObj);
     let   findings = getAllFindingsByPeriod(period.spreadsheet_id, period.period_id);
 
+    // Filter: hanya masukkan findings dari agenda yang sudah DONE
+    const doneAgendaIds = new Set(
+      agendas
+        .filter(a => a.status === CONFIG.AGENDA_STATUS.DONE)
+        .map(a => a.agenda_id)
+    );
+    findings = findings.filter(f => doneAgendaIds.has(f.agenda_id));
+
     // Filter kalau bukan Koordinator — hanya tampilkan area yang relevan
     if (!profile.isKoordinator && profile.relevantAreas && profile.relevantAreas.length > 0) {
       const myAreaIds  = profile.relevantAreas;
