@@ -1263,10 +1263,11 @@ function submitAgreement(spreadsheetId, agendaId, agreementFotoUrl, agreementBy,
     }
   });
   try {
-    const findings      = results.filter(r => r.status === CONFIG.RESULT_STATUS.NON_COMPLY);
-    const updatedAgenda = getAgendaById(agendaId);
-    notifyAuditCompletedAuditor(updatedAgenda, findings.length);
-    notifyAuditCompletedKoordinator(updatedAgenda, findings.length);
+    const nonComplyCount = results.filter(r => r.status === CONFIG.RESULT_STATUS.NON_COMPLY).length;
+    const complyCount    = results.filter(r => r.status === CONFIG.RESULT_STATUS.COMPLY).length;
+    const updatedAgenda  = getAgendaById(agendaId);
+    notifyAuditCompletedAuditor(updatedAgenda, complyCount, nonComplyCount);
+    notifyAuditCompletedKoordinator(updatedAgenda, complyCount, nonComplyCount);
   } catch(e) { console.warn('Notifikasi agreement gagal (non-fatal):', e.message); }
   return { success: true };
 }
