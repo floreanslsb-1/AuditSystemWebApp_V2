@@ -140,6 +140,8 @@ function notifyAuditCompletedKoordinator(agenda, complyCount, nonComplyCount) {
 function notifyFindingsVerified(agenda, findings) {
   const auditees = parseCSV(agenda.auditee_emails);
   if (!auditees.length || !findings.length) return;
+  const period      = getPeriodById(agenda.period_id);
+  const namaPeriode = period ? period.nama_periode : 'IMS';
   const rows = findings.map(function(f) {
     return `<tr>
       <td style="padding:6px;border-bottom:1px solid #eee;white-space:nowrap;">
@@ -149,10 +151,10 @@ function notifyFindingsVerified(agenda, findings) {
     </tr>`;
   }).join('');
   const body = `
-    <p>Hasil audit IMS untuk area <strong>${escapeHtml(agenda.dept)}</strong>
-    telah diverifikasi oleh Koordinator. Terdapat
-    <strong>${findings.length} temuan Non Comply</strong> yang memerlukan tindak lanjut
-    berupa pengisian Tindakan Perbaikan dan Pencegahan (TPP).</p>
+    <p>Hasil audit <strong>${escapeHtml(namaPeriode)}</strong> untuk area
+    <strong>${escapeHtml(agenda.dept)}</strong> telah diverifikasi oleh Koordinator.
+    Terdapat <strong>${findings.length} temuan Non Comply</strong> yang memerlukan
+    tindak lanjut berupa pengisian Tindakan Perbaikan dan Pencegahan (TPP).</p>
     <p>Untuk setiap temuan, Anda wajib mengisi:</p>
     <ul style="font-size:13px;line-height:1.9;padding-left:20px;">
       <li><strong>Tindakan Perbaikan</strong> — tindakan segera untuk mengatasi temuan</li>
