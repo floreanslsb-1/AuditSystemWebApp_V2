@@ -1321,7 +1321,7 @@ function verifyFindings(spreadsheetId, agendaId, updates, verifiedBy) {
         .filter(function(r) { return r.finding_status === CONFIG.FINDING_STATUS.OPEN; });
       if (openFindings.length > 0) {
         const ag = getAgendaById(agendaId);
-        if (ag) notifyRequestTPP(ag, openFindings);
+        if (ag) notifyFindingsVerified(ag, openFindings);
       }
     } catch(e) { console.warn('Notif requestTPP gagal:', e.message); }
 
