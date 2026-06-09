@@ -259,7 +259,7 @@ function createModal(opts) {
       '<div class="modal-body">' + body + '</div>' +
       (footer ? '<div class="modal-footer">' + footer + '</div>' : '') +
     '</div>';
-  el.addEventListener('click', function(e) { if (e.target === el) closeModal(id); });
+  el.addEventListener('click', function(e) { if (e.target === el && !el._noClose) closeModal(id); });
   document.body.appendChild(el);
   requestAnimationFrame(function() { el.classList.add('open'); });
   return el;
@@ -487,7 +487,13 @@ async function initApp() {
     renderSidebar();
     renderUserInfo();
     App.ready = true;
-    navigateTo('home');
+    // Kalau dibuka dari link email (ada ?page=...), langsung ke halaman tersebut
+    var _startPage   = (typeof _initPage  !== 'undefined' && _initPage)  ? _initPage  : 'home';
+    var _startParams = {};
+    if (typeof _initKey !== 'undefined' && _initKey && typeof _initParam !== 'undefined' && _initParam) {
+      _startParams[_initKey] = _initParam;
+    }
+    navigateTo(_startPage, _startParams);
     // Background fetch task badge — non-blocking
     setTimeout(_fetchAndRenderTaskBadge, 500);
 
