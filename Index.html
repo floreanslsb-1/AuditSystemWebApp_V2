@@ -19,7 +19,7 @@
         <i data-lucide="shield-check" style="width:18px;height:18px;color:#fff"></i>
       </div>
       <div class="logo-text-wrap">
-        <div class="logo-text">Audit System</div>
+        <div class="logo-text">Testing Audit System</div>
         <div class="logo-sub">IMS - PT Sayap Mas Utama</div>
       </div>
       <button class="sidebar-toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar">
@@ -60,6 +60,11 @@
 <?!= include('Page_Audit'); ?>
 <?!= include('Page_MyTask'); ?>
 
+<script>
+  var _initPage  = '<?= initPage ?>';
+  var _initKey   = '<?= initKey ?>';
+  var _initParam = '<?= initParam ?>';
+</script>
 <script>
   document.addEventListener('DOMContentLoaded', function() {
     lucide.createIcons();
