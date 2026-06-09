@@ -1240,13 +1240,34 @@ function _updateProgressBar() {
 // ============================================================
 
 async function submitCheckItem(resultId, gKey, status, agendaId, periodId, btn) {
-  var _srCtx = window._auditRenderCtx;
-  var _srGrp = _srCtx && _srCtx.groups.find(function(g) { return _groupKey(g) === gKey; });
+  var ctx   = window._auditRenderCtx;
+  var _srGrp = ctx && ctx.groups.find(function(g) { return _groupKey(g) === gKey; });
   var _srItm = _srGrp && _srGrp.items.find(function(i) { return i.result_id === resultId; });
   if (!_srItm) return toast('Item tidak ditemukan.', 'error');
 
-  var locked = await _ensureLockForGroup(agendaId, periodId, gKey, Number(_srItm.nomor));
-  if (!locked) return;
+  // Guard: blok kalau sedang ada lock request yang berjalan
+  if (window._auditLockPending) {
+    toast('Sedang memproses, tunggu sebentar.', 'warning');
+    return;
+  }
+
+  // Guard: blok kalau group lain sudah aktif
+  var _draft = window._auditDraft;
+  if (_draft && _draft.activeGroupKey !== null && _draft.activeGroupKey !== gKey) {
+    var _ag = ctx && ctx.groups.find(function(g) { return _groupKey(g) === _draft.activeGroupKey; });
+    var _al = _ag ? escHtml(_ag.persyaratan.substring(0, 40)) : _draft.activeGroupKey;
+    toast('Selesaikan "' + _al + '..." dulu (Save atau Buang) sebelum mengerjakan persyaratan lain.', 'warning', 6000);
+    return;
+  }
+
+  // Set flag pending SEBELUM await — blok semua klik lain selama proses
+  window._auditLockPending = true;
+  try {
+    var locked = await _ensureLockForGroup(agendaId, periodId, gKey, Number(_srItm.nomor));
+    if (!locked) return;
+  } finally {
+    window._auditLockPending = false;
+  }
 
   _draftSetItem(gKey, resultId, {
     item_id:           _srItm.item_id,
