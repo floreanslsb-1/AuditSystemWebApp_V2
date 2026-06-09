@@ -14,9 +14,9 @@
 
 const CONFIG = {
 
-  MASTER_SPREADSHEET_ID: '1l2U7tp04J5zx8oDCPnLie8a3g-FOQzeS9hppPBTgkAU',
+  MASTER_SPREADSHEET_ID: '1cwbsU1TqOq-Ec-cSxxdMepk_Rp6BYvwkTP1ADs-tVeY',
   ALLOWED_DOMAIN:        'wingscorp.com',
-  DRIVE_ROOT_FOLDER_NAME:'AUDIT_SYSTEM',
+  DRIVE_ROOT_FOLDER_NAME:'TESTING_AUDIT_SYSTEM',
 
   // ── Sheet names di Master Spreadsheet ───────────────────────
   SHEETS: {
@@ -94,7 +94,8 @@ const CONFIG = {
 
   IS_OVERDUE: false, // disabled — akan diaktifkan saat logic overdue diimplementasi
 
-  NOTIFICATIONS_ENABLED: false,  // ← set true untuk re-enable setelah trial selesai
+  NOTIFICATIONS_ENABLED: true,   // ← set false untuk disable semua notifikasi
+  TEST_MODE_EMAIL: 'floreansalsabila.irdana@wingscorp.com', // ← kosongkan ('') untuk production
 
   LOCK_TIMEOUT_MINUTES: 60,
   CACHE_TTL_SECONDS:    21600,
