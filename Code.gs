@@ -28,7 +28,8 @@ function doGet(e) {
   }
   const params  = (e && e.parameter) ? e.parameter : {};
   const tmpl    = HtmlService.createTemplateFromFile('Index');
-  tmpl.initPage  = params.page      || '';
+  var _rawPage   = params.page || '';
+  tmpl.initPage  = _rawPage === 'my-task' ? 'mytask' : _rawPage;
   tmpl.initParam = params.result_id || params.agenda_id || '';
   tmpl.initKey   = params.result_id ? 'result_id' : (params.agenda_id ? 'agenda_id' : '');
   return tmpl
