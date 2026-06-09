@@ -134,7 +134,7 @@ function notifyAuditCompletedKoordinator(agenda, complyCount, nonComplyCount) {
   sendEmail(koordinators.map(u => u.email),
     `VERIFIKASI TEMUAN DIPERLUKAN — AUDIT SELESAI | ${agenda.dept}`,
     emailTemplate(`Verifikasi Temuan Diperlukan: ${agenda.dept}`, body,
-      'Verifikasi Temuan di My Task', _appLink('my-task')));
+      'Verifikasi Temuan di My Task', _appLink('mytask')));
 }
 
 function notifyFindingsVerified(agenda, findings) {
@@ -174,7 +174,7 @@ function notifyFindingsVerified(agenda, findings) {
   sendEmail(auditees,
     `TINDAK LANJUT DIPERLUKAN — HASIL AUDIT ${agenda.dept}`,
     emailTemplate(`Tindak Lanjut Diperlukan: ${agenda.dept}`, body,
-      'Isi TPP di My Task', _appLink('my-task')));
+      'Isi TPP di My Task', _appLink('mytask')));
 }
 
 
@@ -198,7 +198,7 @@ function notifyTPPSubmitted(agenda, result) {
   sendEmail(agenda.dept_head_email,
     `PERSETUJUAN DIPERLUKAN — TPP ${agenda.dept} | Temuan #${result.nomor_persyaratan}.${result.check_item_no}`,
     emailTemplate('Persetujuan TPP Diperlukan', body,
-      'Tinjau & Setujui di My Task', _appLink('my-task', { result_id: result.result_id })));
+      'Tinjau & Setujui di My Task', _appLink('mytask', { result_id: result.result_id })));
 }
 
 function notifyTPPToAuditors(agenda, result) {
@@ -217,7 +217,7 @@ function notifyTPPToAuditors(agenda, result) {
   sendEmail(auditors,
     `PERSETUJUAN DIPERLUKAN — TPP (AUDITOR) ${agenda.dept} | Temuan #${result.nomor_persyaratan}.${result.check_item_no}`,
     emailTemplate('Persetujuan TPP oleh Auditor Diperlukan', body,
-      'Tinjau & Setujui di My Task', _appLink('my-task', { result_id: result.result_id })));
+      'Tinjau & Setujui di My Task', _appLink('mytask', { result_id: result.result_id })));
 }
 
 function notifyTPPApprovedByAuditor(agenda, result, approverEmail) {
@@ -253,7 +253,7 @@ function notifyTPPApprovedByAuditor(agenda, result, approverEmail) {
   sendEmail(koordinators.map(u => u.email),
     `PERSETUJUAN FINAL DIPERLUKAN — TPP ${agenda.dept} | Temuan #${result.nomor_persyaratan}.${result.check_item_no}`,
     emailTemplate('Persetujuan Final TPP oleh Koordinator', body,
-      'Tinjau & Setujui di My Task', _appLink('my-task', { result_id: result.result_id })));
+      'Tinjau & Setujui di My Task', _appLink('mytask', { result_id: result.result_id })));
 }
 
 function notifyTPPFullyApproved(agenda, result) {
@@ -272,7 +272,7 @@ function notifyTPPFullyApproved(agenda, result) {
   sendEmail(auditees,
     `TPP DISETUJUI — LANJUTKAN KE IMPLEMENTASI | Temuan #${result.nomor_persyaratan}.${result.check_item_no}`,
     emailTemplate('TPP Disetujui: Lanjutkan ke Implementasi', body,
-      'Upload Bukti Implementasi di My Task', _appLink('my-task', { result_id: result.result_id })));
+      'Upload Bukti Implementasi di My Task', _appLink('mytask', { result_id: result.result_id })));
 }
 
 
@@ -291,7 +291,7 @@ function notifyImplSubmitted(agenda, result) {
   sendEmail(agenda.dept_head_email,
     `PERSETUJUAN DIPERLUKAN — IMPLEMENTASI ${agenda.dept} | Temuan #${result.nomor_persyaratan}.${result.check_item_no}`,
     emailTemplate('Persetujuan Implementasi Diperlukan', body,
-      'Tinjau Bukti & Setujui di My Task', _appLink('my-task', { result_id: result.result_id })));
+      'Tinjau Bukti & Setujui di My Task', _appLink('mytask', { result_id: result.result_id })));
 }
 
 function notifyImplToAuditors(agenda, result) {
@@ -306,7 +306,7 @@ function notifyImplToAuditors(agenda, result) {
   sendEmail(auditors,
     `PERSETUJUAN DIPERLUKAN — IMPLEMENTASI (AUDITOR) ${agenda.dept} | Temuan #${result.nomor_persyaratan}.${result.check_item_no}`,
     emailTemplate('Persetujuan Implementasi oleh Auditor Diperlukan', body,
-      'Tinjau Bukti & Setujui di My Task', _appLink('my-task', { result_id: result.result_id })));
+      'Tinjau Bukti & Setujui di My Task', _appLink('mytask', { result_id: result.result_id })));
 }
 
 function notifyImplApprovedByAuditor(agenda, result, approverEmail) {
@@ -338,7 +338,7 @@ function notifyImplApprovedByAuditor(agenda, result, approverEmail) {
   sendEmail(koordinators.map(u => u.email),
     `PERSETUJUAN FINAL DIPERLUKAN — PENUTUPAN TEMUAN ${agenda.dept} | Temuan #${result.nomor_persyaratan}.${result.check_item_no}`,
     emailTemplate('Persetujuan Final: Penutupan Temuan', body,
-      'Tinjau & Tutup Temuan di My Task', _appLink('my-task', { result_id: result.result_id })));
+      'Tinjau & Tutup Temuan di My Task', _appLink('mytask', { result_id: result.result_id })));
 }
 
 function notifyFindingClosed(agenda, result) {
@@ -388,5 +388,5 @@ function notifyRejected(agenda, result, stage, rejecterEmail, komentar) {
   sendEmail(allParties,
     `DITOLAK — ${stageSubject} ${agenda.dept} | Temuan #${result.nomor_persyaratan}.${result.check_item_no}`,
     emailTemplate(`${stageLabel} Ditolak`, body,
-      'Perbaiki & Ajukan Ulang di My Task', _appLink('my-task', { result_id: result.result_id })));
+      'Perbaiki & Ajukan Ulang di My Task', _appLink('mytask', { result_id: result.result_id })));
 }
