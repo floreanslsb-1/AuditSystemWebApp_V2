@@ -2172,8 +2172,13 @@ async function _submitAgreementAndFinish(agendaId, periodId) {
   if (!ofi) return toast('Isi kolom OFI terlebih dahulu.', 'error');
   var auditeeNames = (document.getElementById('agr-auditee-names') || {}).value?.trim();
   if (!auditeeNames) return toast('Isi nama auditee yang hadir terlebih dahulu.', 'error');
-  var btn = document.getElementById('agr-submit-btn');
-  var restore = btnLoading(btn, 'Memproses...');
+  var btn     = document.getElementById('agr-submit-btn');
+  var restore = btnLoading(btn, 'Memproses...', 'agreement-modal');
+  // Lock modal — disable tombol ✕ dan klik luar selama proses
+  var modalEl  = document.getElementById('agreement-modal');
+  var closeBtn = modalEl && modalEl.querySelector('.btn-ghost.btn-icon');
+  if (closeBtn) closeBtn.disabled = true;
+  if (modalEl)  modalEl._noClose  = true;
   try {
     var b64 = await filesToBase64([files[0]]);
     var fileUp = b64[0];
@@ -2194,10 +2199,15 @@ async function _submitAgreementAndFinish(agendaId, periodId) {
 
     toast('Audit selesai. Agreement berhasil disubmit.', 'success');
     closeModal('agreement-modal');
-
-    // Re-render halaman Form Audit dari awal — cache sudah cleared, badge akan tampil "Done"
-    navigateTo(App.currentPage, App.currentParams);
-  } catch(err) { toast(err.message, 'error'); restore(); }
+  } catch(err) {
+    toast(err.message, 'error');
+    restore();
+    // Unlock modal saat error — user boleh Batal
+    var _m = document.getElementById('agreement-modal');
+    var _c = _m && _m.querySelector('.btn-ghost.btn-icon');
+    if (_c) _c.disabled = false;
+    if (_m) _m._noClose = false;
+  }
 }
 
 // ============================================================
