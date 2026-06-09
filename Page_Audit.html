@@ -1596,9 +1596,8 @@ async function _openEditStatusForm(resultId, gKey, agendaId, periodId, currentSt
     _openDraftFindingForm(itemId, gKey, nomor, ciNo, resultId, agendaId, periodId);
   } else {
     // Non Comply → open modal to edit finding
-    // Acquire lock sekarang agar _saveEditedFinding punya lock aktif & save bar bisa muncul
-    var lockedEf = await _ensureLockForGroup(agendaId, periodId, gKey, nomor);
-    if (!lockedEf) return;
+    // Lock TIDAK di-acquire di sini — akan di-acquire di _saveEditedFinding saat user klik Simpan.
+    // Ini menghindari lock menggantung kalau user klik Batal tanpa simpan.
     var dKeyEf    = _draftItemKey(gKey, resultId);
     var pendingEf = (window._auditPendingFiles && window._auditPendingFiles[dKeyEf]) || [];
     var draftEf   = _draftGetItem(gKey, resultId) || {};
@@ -1663,7 +1662,7 @@ async function _openEditStatusForm(resultId, gKey, agendaId, periodId, currentSt
           'onclick="singleClick(this,function(){ _switchToComply(\'' + escAttr(resultId) + '\',\'' + escAttr(gKey) + '\',\'' + agendaId + '\',\'' + periodId + '\') })">' +
           '<i data-lucide="check" style="width:13px;height:13px"></i> Ubah ke Comply' +
         '</button>' +
-        '<button class="btn btn-outline" onclick="closeModal(\'edit-finding-modal\')">Batal</button>' +
+        '<button class="btn btn-outline" onclick="_cancelEditFinding(\'' + escAttr(gKey) + '\',\'' + agendaId + '\',\'' + periodId + '\',\'' + nomor + '\')">Batal</button>' +
         '<button class="btn btn-danger" onclick="singleClick(this,function(){ _saveEditedFinding(\'' + escAttr(gKey) + '\',\'' + escAttr(resultId) + '\') })">' +
           '<i data-lucide="save" style="width:13px;height:13px"></i> Simpan Temuan' +
         '</button>',
@@ -1789,6 +1788,28 @@ async function _saveEditedFinding(gKey, resultId) {
   window._efExistingSavedUrls = null;
   _repaintCheckItemRow(gKey, resultId, 'NON_COMPLY', true);
   _renderFloatingSaveBar(agendaId, periodId);
+}
+
+async function _cancelEditFinding(gKey, agendaId, periodId, nomor) {
+  closeModal('edit-finding-modal');
+  // Kalau group ini sedang punya lock aktif (misal dari path draft),
+  // dan tidak ada draft item → release lock dan bersihkan activeGroupKey
+  var draft = window._auditDraft;
+  if (draft && draft.activeGroupKey === gKey) {
+    var prefix    = gKey + ':';
+    var hasDraft  = Object.keys(draft.items).some(function(k) { return k.indexOf(prefix) === 0; });
+    if (!hasDraft) {
+      // Tidak ada draft → lock tidak diperlukan, release
+      draft.activeGroupKey = null;
+      _persistAuditDraft();
+      delete window._auditLockState[gKey];
+      _renderFloatingSaveBar(agendaId, periodId);
+      _patchLockBadgesInDOM();
+      try {
+        if (nomor) await api('RELEASE_LOCK', { period_id: periodId, agenda_id: agendaId, nomor_persyaratan: Number(nomor) });
+      } catch(e) { console.warn('Release lock on cancel gagal (non-fatal):', e.message); }
+    }
+  }
 }
 
 // ============================================================
