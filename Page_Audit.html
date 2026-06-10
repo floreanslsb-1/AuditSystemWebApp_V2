@@ -154,6 +154,10 @@ function _auditUnloadHandler(e) {
 var LOCK_POLL_MS = 5000;
 var _lockPollTimer = null;
 
+// Card grid polling — cek status agenda tiap 30 detik saat card grid visible
+var CARD_POLL_MS   = 30000;
+var _cardPollTimer = null;
+
 // In-memory lock state: { "<groupKey>": { locked_by, status, nomor_persyaratan } }
 window._auditLockState = window._auditLockState || {};
 
@@ -166,6 +170,34 @@ function _startLockPolling(agendaId, periodId) {
 }
 function _stopLockPolling() {
   if (_lockPollTimer) { clearInterval(_lockPollTimer); _lockPollTimer = null; }
+}
+
+// ── Card grid polling ─────────────────────────────────────────
+function _startCardPolling(periodId) {
+  _stopCardPolling();
+  _cardPollTimer = setInterval(function() {
+    // Hanya jalan kalau: tab visible, card grid visible (bukan di dalam checklist)
+    if (document.visibilityState === 'hidden') return;
+    var grid = document.getElementById('audit-card-grid');
+    if (!grid || grid.style.display === 'none') return;
+    _refreshCardGrid(periodId);
+  }, CARD_POLL_MS);
+}
+function _stopCardPolling() {
+  if (_cardPollTimer) { clearInterval(_cardPollTimer); _cardPollTimer = null; }
+}
+
+async function _refreshCardGrid(periodId) {
+  var grid = document.getElementById('audit-card-grid');
+  if (!grid || grid.style.display === 'none') return;
+  try {
+    clearCache('GET_AGENDAS_BY_PERIOD');
+    var areas   = await cachedApi('GET_AREAS', {}, 60);
+    var agendas = await cachedApi('GET_AGENDAS_BY_PERIOD', { period_id: periodId }, 30);
+    var myAgendas = agendas.filter(function(a) { return _emailInCsv(a.auditor_emails, App.profile.email); });
+    grid.innerHTML = _buildCardsHtml(myAgendas, areas, { period_id: periodId });
+    lucide.createIcons();
+  } catch(e) { /* silent — jangan ganggu user */ }
 }
 
 async function _refreshLocks(agendaId, periodId) {
@@ -365,19 +397,47 @@ Pages['audit'] = async function(container, params) {
     lucide.createIcons(); return;
   }
 
-  var cardsHtml = myAgendas.map(function(ag) {
+  // Simpan period_id di state supaya _backToAuditAreas bisa refresh
+  window._auditCurrentPeriodId = period.period_id;
+
+  container.innerHTML =
+    '<div class="page-hero mb-24">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">' +
+        '<div><h1 style="display:flex;align-items:center;gap:10px;margin:0 0 6px">' +
+          '<i data-lucide="clipboard-list" style="width:24px;height:24px"></i> Form Audit</h1>' +
+          '<p style="margin:0;font-size:13px;color:rgba(255,255,255,.65)">Periode: <strong style="color:#fff">' + escHtml(period.nama_periode) + '</strong> · ' + myAgendas.length + ' area ditugaskan</p>' +
+        '</div>' +
+        '<button id="audit-grid-refresh-btn" class="btn btn-outline btn-sm" style="color:#fff;border-color:rgba(255,255,255,.3);background:rgba(255,255,255,.08)" ' +
+          'onclick="singleClick(this, function(btn){ _manualRefreshCardGrid(btn) })">' +
+          '<i data-lucide="refresh-cw" style="width:13px;height:13px"></i> Refresh' +
+        '</button>' +
+      '</div>' +
+    '</div>' +
+    '<div id="audit-card-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px">' +
+      _buildCardsHtml(myAgendas, areas, period) +
+    '</div>' +
+    '<div id="audit-checklist-panel"></div>';
+  lucide.createIcons();
+
+  // Mulai card grid polling
+  _startCardPolling(period.period_id);
+};
+
+// ── Helper: build cards HTML (reusable) ──────────────────────
+function _buildCardsHtml(myAgendas, areas, period) {
+  return myAgendas.map(function(ag) {
     var area    = areas.find(function(a) { return a.area_id === ag.area_id; });
     var dept    = escHtml(area ? area.dept : ag.area_id);
     var kat     = escHtml(area ? area.kategori : '');
     var statusInfo, actionLabel, actionIcon;
     if (ag.status === 'PLANNED') {
-      statusInfo = '<span class="badge badge-slate">Belum dimulai</span>';
+      statusInfo  = '<span class="badge badge-slate">Belum dimulai</span>';
       actionLabel = 'Mulai Audit'; actionIcon = 'play';
     } else if (ag.status === 'STARTED') {
-      statusInfo = statusBadge(ag.status);
+      statusInfo  = statusBadge(ag.status);
       actionLabel = 'Lanjutkan Audit'; actionIcon = 'arrow-right';
     } else {
-      statusInfo = statusBadge(ag.status);
+      statusInfo  = statusBadge(ag.status);
       actionLabel = 'Lihat Hasil'; actionIcon = 'eye';
     }
     var auditorChips = (ag.auditor_emails || '').split(',').map(function(e) { return e.trim(); }).filter(Boolean)
@@ -403,15 +463,19 @@ Pages['audit'] = async function(container, params) {
         '<i data-lucide="' + actionIcon + '" style="width:14px;height:14px"></i> ' + actionLabel +
       '</button></div></div>';
   }).join('');
+}
 
-  container.innerHTML =
-    '<div class="page-hero mb-24"><h1 style="display:flex;align-items:center;gap:10px">' +
-      '<i data-lucide="clipboard-list" style="width:24px;height:24px"></i> Form Audit</h1>' +
-      '<p>Periode: <strong style="color:#fff">' + escHtml(period.nama_periode) + '</strong> · ' + myAgendas.length + ' area ditugaskan</p></div>' +
-    '<div id="audit-card-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px">' + cardsHtml + '</div>' +
-    '<div id="audit-checklist-panel"></div>';
-  lucide.createIcons();
-};
+// ── Manual refresh (tombol Refresh) ──────────────────────────
+async function _manualRefreshCardGrid(btn) {
+  var periodId = window._auditCurrentPeriodId;
+  if (!periodId) return;
+  var restore = btnLoading(btn, 'Refresh');
+  try {
+    await _refreshCardGrid(periodId);
+  } finally {
+    restore();
+  }
+}
 
 function _emptyState(icon, title, desc) {
   return '<div class="empty-state"><i data-lucide="' + icon + '" style="width:48px;height:48px;opacity:.3;margin-bottom:16px"></i>' +
@@ -440,6 +504,9 @@ async function selectAuditArea(areaId, periodId) {
 
     // BUG 5 FIX: Reset lock state saat pindah area.
     window._auditLockState = {};
+
+    // Stop card polling saat masuk checklist — lock polling yang akan jalan
+    _stopCardPolling();
 
     await renderAuditChecklist(panel, agenda, areaId, periodId);
     _startLockPolling(agenda.agenda_id, periodId);
@@ -489,10 +556,19 @@ function _backToAuditAreas() {
   window._auditDraft       = { activeGroupKey: null, items: {} };
   window._auditPendingFiles = {};
 
-  var grid = document.getElementById('audit-card-grid');
-  if (grid) grid.style.display = 'grid';
+  var grid  = document.getElementById('audit-card-grid');
   var panel = document.getElementById('audit-checklist-panel');
   if (panel) panel.innerHTML = '';
+
+  // Refresh card grid dengan data fresh (fix bug: card masih tampil status lama)
+  var periodId = window._auditCurrentPeriodId;
+  if (grid && periodId) {
+    grid.style.display = 'grid';
+    _refreshCardGrid(periodId);    // async, silent on error
+    _startCardPolling(periodId);   // resume polling setelah kembali ke grid
+  } else if (grid) {
+    grid.style.display = 'grid';
+  }
 }
 
 async function _confirmStartAudit(areaId, periodId, dept) {
