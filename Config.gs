@@ -30,8 +30,7 @@ const CONFIG = {
 
   // ── Sheet names di file audit per-periode ───────────────────
   AUDIT_SHEETS: {
-    AUDIT_RESULTS:     'AUDIT_RESULTS',     // satu-satunya sheet data audit utama
-    TPP_ITEMS:         'TPP_ITEMS',         // tindak lanjut per temuan
+    AUDIT_RESULTS:     'AUDIT_RESULTS',     // sheet data audit utama + TPP + implementasi
     REQUIREMENT_LOCKS: 'REQUIREMENT_LOCKS', // locking saat audit berlangsung
     APPROVAL_LOG:      'APPROVAL_LOG',      // log approval chain
     AGENDA:            'AGENDA',            // arsip AUDIT_AGENDA saat periode selesai
@@ -92,8 +91,6 @@ const CONFIG = {
     CORRECTIVE_ACTION: 'CORRECTIVE_ACTION',
   },
 
-  IS_OVERDUE: false, // disabled — akan diaktifkan saat logic overdue diimplementasi
-
   NOTIFICATIONS_ENABLED: true,   // ← set false untuk disable semua notifikasi
   TEST_MODE_EMAIL: 'floreansalsabila.irdana@wingscorp.com', // ← kosongkan ('') untuk production
 
@@ -124,6 +121,7 @@ const CONFIG = {
       TANGGAL_MULAI: 4, TANGGAL_SELESAI: 5, STATUS: 6,
       CREATED_BY: 7, CREATED_AT: 8,
       ARCHIVED: 9, ARCHIVED_AT: 10, COMPLETED_AT: 11,
+      TPP_PLAN_DUE_DATE: 12,
     },
 
     // AUDIT_AGENDA — diperluas, menggantikan SESSIONS
@@ -198,23 +196,27 @@ const CONFIG = {
 
       // Grup 4 — tindak lanjut temuan (hanya terisi untuk Non Comply)
       FINDING_STATUS: 18,
-      TARGET_DATE:    19,
-      IS_OVERDUE:     20,
-      CLOSED_AT:      21,
-    },
 
-    // TPP_ITEMS — result_id menggantikan finding_id
-    TPP_ITEMS: {
-      TPP_ITEM_ID:      0,
-      RESULT_ID:        1,  // FK ke AUDIT_RESULTS (sebelumnya finding_id)
-      TIPE:             2,  // CORRECTION / CORRECTIVE_ACTION
-      DESKRIPSI:        3,
-      SUBMITTED_BY:     4,
-      SUBMITTED_AT:     5,
-      IMPL_FOTO_URLS:   6,
-      IMPL_KETERANGAN:  7,
-      IMPL_SUBMITTED_AT: 8,
-      IMPL_SUBMITTED_BY: 9,
+      // Grup 5 — rencana TPP (diisi auditee saat status OPEN)
+      TPP_SUBMITTED_AT:           19,
+      TPP_SUBMITTED_BY:           20,
+      CORRECTION:                 21,
+      DUE_DATE_CORRECTION:        22,
+      CORRECTIVE_ACTION:          23,
+      DUE_DATE_CORRECTIVE_ACTION: 24,
+
+      // Grup 6 — implementasi correction (dicatat, tidak trigger approval)
+      IMPL_CORRECTION_FOTO_URLS:    25,
+      IMPL_CORRECTION_SUBMITTED_AT: 26,
+      IMPL_CORRECTION_SUBMITTED_BY: 27,
+
+      // Grup 7 — implementasi corrective action (trigger approval chain)
+      IMPL_CORRECTIVE_ACTION_FOTO_URLS: 28,
+      IMPL_SUBMITTED_AT:                29,
+      IMPL_SUBMITTED_BY:                30,
+
+      // Grup 8 — penutupan
+      CLOSED_AT: 31,
     },
 
     // REQUIREMENT_LOCKS — agenda_id menggantikan session_id
