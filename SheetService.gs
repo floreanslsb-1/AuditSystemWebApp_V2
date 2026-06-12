@@ -917,12 +917,13 @@ function _setupAuditSheets(ss, periodId, namaPeriode) {
       'item_id','tipe','kategori','nomor_persyaratan','check_item_no',
       'aspek','persyaratan','check_item','standar_check_item',
       'status','deskripsi_temuan','lokasi_temuan','foto_urls','auditor_email','saved_at',
-      'finding_status','target_date','is_overdue','closed_at',
-    ],
-    TPP_ITEMS: [
-      'tpp_item_id','result_id','tipe',
-      'deskripsi','submitted_by','submitted_at',
-      'impl_foto_urls','impl_keterangan','impl_submitted_at','impl_submitted_by',
+      'finding_status',
+      'tpp_submitted_at','tpp_submitted_by',
+      'correction','due_date_correction',
+      'corrective_action','due_date_corrective_action',
+      'impl_correction_foto_urls','impl_correction_submitted_at','impl_correction_submitted_by',
+      'impl_corrective_action_foto_urls','impl_submitted_at','impl_submitted_by',
+      'closed_at',
     ],
     REQUIREMENT_LOCKS: [
       'lock_id','agenda_id','nomor_persyaratan','locked_by','locked_at','status',
@@ -941,7 +942,7 @@ function _setupAuditSheets(ss, periodId, namaPeriode) {
     ],
   };
   const COLORS = {
-    AUDIT_RESULTS: '375623', TPP_ITEMS: 'E06C4B',
+    AUDIT_RESULTS: '375623',
     REQUIREMENT_LOCKS: '7030A0', APPROVAL_LOG: '404040', AGENDA: '2E75B6',
   };
   const defaultSheet = ss.getSheets()[0];
@@ -984,7 +985,13 @@ const AUDIT_RESULT_HEADERS = [
   'item_id','tipe','kategori','nomor_persyaratan','check_item_no',
   'aspek','persyaratan','check_item','standar_check_item',
   'status','deskripsi_temuan','lokasi_temuan','foto_urls','auditor_email','saved_at',
-  'finding_status','target_date','is_overdue','closed_at',
+  'finding_status',
+  'tpp_submitted_at','tpp_submitted_by',
+  'correction','due_date_correction',
+  'corrective_action','due_date_corrective_action',
+  'impl_correction_foto_urls','impl_correction_submitted_at','impl_correction_submitted_by',
+  'impl_corrective_action_foto_urls','impl_submitted_at','impl_submitted_by',
+  'closed_at',
 ];
 
 function getAuditResultsByAgenda(spreadsheetId, agendaId) {
@@ -1025,34 +1032,7 @@ function getFindingsByAgenda(spreadsheetId, agendaId) {
   );
 }
 
-// Tandai temuan yang sudah melewati target_date sebagai OVERDUE
-function markOverdueFindings(spreadsheetId, periodId) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const overdueStatuses = [
-    // Disabled — overdue logic akan diimplementasi nanti
-    // CONFIG.FINDING_STATUS.OPEN,
-    // CONFIG.FINDING_STATUS.TPP_OR_DEPT_HEAD,
-    // CONFIG.FINDING_STATUS.TPP_OR_AUDITOR,
-    // CONFIG.FINDING_STATUS.TPP_OR_KOORDINATOR,
-    // CONFIG.FINDING_STATUS.OPEN_IMPL,
-    // CONFIG.FINDING_STATUS.APP_DEPT_HEAD,
-    // CONFIG.FINDING_STATUS.APP_AUDITOR,
-    // CONFIG.FINDING_STATUS.APP_KOORDINATOR,
-  ];
-  const sheet   = _getAuditSheet(spreadsheetId, CONFIG.AUDIT_SHEETS.AUDIT_RESULTS);
-  const results = getAuditResultsByPeriod(spreadsheetId, periodId);
-  const C       = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
-  results.forEach(function(r) {
-    if (!overdueStatuses.includes(r.finding_status)) return;
-    if (!r.target_date) return;
-    var td = new Date(r.target_date);
-    td.setHours(0, 0, 0, 0);
-    if (td < today) {
-      _updateCell(sheet, r._rowIndex, C.FINDING_STATUS + 1, CONFIG.FINDING_STATUS.OVERDUE);
-    }
-  });
-}
+// markOverdueFindings dihapus — overdue logic dipindah ke dashboard (tidak mengubah finding_status)
 
 // Ambil semua Non Comply lintas agenda untuk satu periode (dashboard)
 function getAllFindingsByPeriod(spreadsheetId, periodId) {
@@ -1389,87 +1369,78 @@ function releaseLock(spreadsheetId, agendaId, nomorPersyaratan, auditorEmail) {
 
 
 // ════════════════════════════════════════════════════════════
-//  FILE AUDIT — TPP_ITEMS
+//  TPP & IMPLEMENTASI — tulis langsung ke AUDIT_RESULTS
 // ════════════════════════════════════════════════════════════
 
-const TPP_ITEM_HEADERS = [
-  'tpp_item_id','result_id','tipe',
-  'deskripsi','submitted_by','submitted_at',
-  'impl_foto_urls','impl_keterangan','impl_submitted_at','impl_submitted_by',
-];
-
-function getTppItemsByResult(spreadsheetId, resultId) {
-  const sheet = _getAuditSheet(spreadsheetId, CONFIG.AUDIT_SHEETS.TPP_ITEMS);
-  if (sheet.getLastRow() < 3) return [];
-  const data = sheet.getRange(3, 1, sheet.getLastRow() - 2, TPP_ITEM_HEADERS.length).getValues();
-  return data
-    .filter(r => r[0] !== '' && String(r[1]) === String(resultId))
-    .map(row => {
-      const obj = { _rowIndex: data.indexOf(row) + 3 };
-      TPP_ITEM_HEADERS.forEach((h, j) => { obj[h] = row[j]; });
-      return obj;
-    });
-}
-
-function getTppItemsByAgenda(spreadsheetId, agendaId) {
-  const findings = getFindingsByAgenda(spreadsheetId, agendaId);
-  const result   = [];
-  findings.forEach(function(f) {
-    getTppItemsByResult(spreadsheetId, f.result_id)
-      .forEach(function(i) { i._result = f; result.push(i); });
-  });
-  return result;
-}
-
-function submitTpp(spreadsheetId, resultId, agendaId, items, targetDate, submittedBy) {
-  const sheet = _getAuditSheet(spreadsheetId, CONFIG.AUDIT_SHEETS.TPP_ITEMS);
-  _deleteRowsByColValue(spreadsheetId,
-    CONFIG.AUDIT_SHEETS.TPP_ITEMS,
-    CONFIG.AUDIT_COLS.TPP_ITEMS.RESULT_ID, resultId);
-  const rows = items.map(function(item) {
-    return [generateId('TPP'), resultId, item.tipe, item.deskripsi, submittedBy, now(), '', '', '', ''];
-  });
-  if (rows.length > 0)
-    sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+/**
+ * Submit rencana TPP (Correction + Corrective Action + due dates).
+ * Menulis langsung ke kolom AUDIT_RESULTS, lalu set finding_status → TPP_OR_DEPT_HEAD.
+ */
+function submitTpp(spreadsheetId, resultId, agendaId, tppData, submittedBy) {
   const C = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
-  updateResultField(spreadsheetId, resultId, C.TARGET_DATE,    targetDate);
-  updateResultField(spreadsheetId, resultId, C.FINDING_STATUS, CONFIG.FINDING_STATUS.TPP_OR_DEPT_HEAD);
-  // is_overdue: tidak diset saat ini — disabled
+  updateResultField(spreadsheetId, resultId, C.TPP_SUBMITTED_AT,           now());
+  updateResultField(spreadsheetId, resultId, C.TPP_SUBMITTED_BY,           submittedBy);
+  updateResultField(spreadsheetId, resultId, C.CORRECTION,                 tppData.correction || '');
+  updateResultField(spreadsheetId, resultId, C.DUE_DATE_CORRECTION,        tppData.due_date_correction || '');
+  updateResultField(spreadsheetId, resultId, C.CORRECTIVE_ACTION,          tppData.corrective_action || '');
+  updateResultField(spreadsheetId, resultId, C.DUE_DATE_CORRECTIVE_ACTION, tppData.due_date_corrective_action || '');
+  updateResultField(spreadsheetId, resultId, C.FINDING_STATUS,             CONFIG.FINDING_STATUS.TPP_OR_DEPT_HEAD);
   appendApprovalLog(spreadsheetId, {
     result_id: resultId, agenda_id: agendaId,
     stage: 'TPP', level: 'AUDITEE', action: 'SUBMITTED',
     by_email: submittedBy, skipped: false, skip_reason: '',
   });
-  // Kirim notifikasi ke DeptHead
   try {
     const ag  = getAgendaById(agendaId);
-    const res = getAuditResultsByAgenda(spreadsheetId, agendaId).find(r => r.result_id === resultId)
-      || { result_id: resultId, nomor_persyaratan: '-', check_item_no: '-', target_date: targetDate };
-    if (ag) notifyTPPSubmitted(ag, res);
+    const res = getAuditResultsByAgenda(spreadsheetId, agendaId).find(function(r) { return r.result_id === resultId; });
+    if (ag && res) notifyTPPSubmitted(ag, res);
   } catch(e) { console.warn('Notifikasi TPP submitted gagal:', e.message); }
-
-  return { success: true, tpp_item_count: rows.length };
-}
-
-function submitTppItemImpl(spreadsheetId, tppItemId, implFotoUrls, implKeterangan, submittedBy) {
-  const sheet = _getAuditSheet(spreadsheetId, CONFIG.AUDIT_SHEETS.TPP_ITEMS);
-  if (sheet.getLastRow() < 3) throw new Error('TPP item tidak ditemukan.');
-  const data = sheet.getRange(3, 1, sheet.getLastRow() - 2, TPP_ITEM_HEADERS.length).getValues();
-  let rowIndex = -1;
-  data.forEach((row, i) => { if (row[0] === tppItemId) rowIndex = i + 3; });
-  if (rowIndex < 0) throw new Error('TPP item tidak ditemukan: ' + tppItemId);
-  const C = CONFIG.AUDIT_COLS.TPP_ITEMS;
-  _updateCell(sheet, rowIndex, C.IMPL_FOTO_URLS    + 1, toCSV(implFotoUrls));
-  _updateCell(sheet, rowIndex, C.IMPL_KETERANGAN   + 1, implKeterangan || '');
-  _updateCell(sheet, rowIndex, C.IMPL_SUBMITTED_AT + 1, now());
-  _updateCell(sheet, rowIndex, C.IMPL_SUBMITTED_BY + 1, submittedBy);
   return { success: true };
 }
 
-function allTppItemsImplSubmitted(spreadsheetId, resultId) {
-  const items = getTppItemsByResult(spreadsheetId, resultId);
-  if (!items.length) return false;
-  return items.every(i => !!i.impl_submitted_at);
+/**
+ * Submit bukti Correction — hanya dicatat, tidak trigger approval.
+ * Correction masih bisa di-resubmit sampai Corrective Action disubmit.
+ */
+function submitCorrectionImpl(spreadsheetId, resultId, agendaId, fotoUrls, submittedBy) {
+  const C = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
+  updateResultField(spreadsheetId, resultId, C.IMPL_CORRECTION_FOTO_URLS,    toCSV(fotoUrls));
+  updateResultField(spreadsheetId, resultId, C.IMPL_CORRECTION_SUBMITTED_AT, now());
+  updateResultField(spreadsheetId, resultId, C.IMPL_CORRECTION_SUBMITTED_BY, submittedBy);
+  appendApprovalLog(spreadsheetId, {
+    result_id: resultId, agenda_id: agendaId,
+    stage: 'CORRECTION', level: 'AUDITEE', action: 'SUBMITTED',
+    by_email: submittedBy, skipped: false, skip_reason: '',
+  });
+  try {
+    const ag  = getAgendaById(agendaId);
+    const res = getAuditResultsByAgenda(spreadsheetId, agendaId).find(function(r) { return r.result_id === resultId; });
+    if (ag && res) notifyCorrectionSubmitted(ag, res);
+  } catch(e) { console.warn('Notifikasi correction submitted gagal:', e.message); }
+  return { success: true };
+}
+
+/**
+ * Submit bukti Corrective Action — trigger approval chain.
+ * Set finding_status → APP_DEPT_HEAD.
+ */
+function submitCorrectiveActionImpl(spreadsheetId, resultId, agendaId, fotoUrls, submittedBy) {
+  const C = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
+  updateResultField(spreadsheetId, resultId, C.IMPL_CORRECTIVE_ACTION_FOTO_URLS, toCSV(fotoUrls));
+  updateResultField(spreadsheetId, resultId, C.IMPL_SUBMITTED_AT,                now());
+  updateResultField(spreadsheetId, resultId, C.IMPL_SUBMITTED_BY,                submittedBy);
+  updateResultField(spreadsheetId, resultId, C.FINDING_STATUS,                   CONFIG.FINDING_STATUS.APP_DEPT_HEAD);
+  appendApprovalLog(spreadsheetId, {
+    result_id: resultId, agenda_id: agendaId,
+    stage: 'IMPL', level: 'AUDITEE', action: 'SUBMITTED',
+    by_email: submittedBy, skipped: false, skip_reason: '',
+  });
+  try {
+    const ag  = getAgendaById(agendaId);
+    const res = getAuditResultsByAgenda(spreadsheetId, agendaId).find(function(r) { return r.result_id === resultId; });
+    if (ag && res) notifyImplSubmitted(ag, res);
+  } catch(e) { console.warn('Notifikasi impl submitted gagal:', e.message); }
+  return { success: true };
 }
 
 
