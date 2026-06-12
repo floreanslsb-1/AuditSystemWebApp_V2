@@ -555,17 +555,24 @@ function _routeAction(action, payload, profile) {
       const period_tpp = getPeriodById(payload.period_id);
       return submitTpp(
         period_tpp.spreadsheet_id,
-        payload.result_id,   // sebelumnya finding_id
-        payload.agenda_id,   // sebelumnya session_id
-        payload.items,
-        payload.target_date,
+        payload.result_id,
+        payload.agenda_id,
+        {
+          correction:                 payload.correction,
+          due_date_correction:        payload.due_date_correction,
+          corrective_action:          payload.corrective_action,
+          due_date_corrective_action: payload.due_date_corrective_action,
+        },
         profile.email
       );
     }
 
     case 'GET_TPP_ITEMS': {
+      // TPP_ITEMS sheet sudah tidak ada — ambil langsung dari AUDIT_RESULTS
       const period_gti = getPeriodById(payload.period_id);
-      return getTppItemsByResult(period_gti.spreadsheet_id, payload.result_id).map(_sanitizeObj);
+      const result_gti = getAuditResultsByAgenda(period_gti.spreadsheet_id, payload.agenda_id)
+        .find(function(r) { return r.result_id === payload.result_id; });
+      return result_gti ? [_sanitizeObj(result_gti)] : [];
     }
 
     // ── Approval ──────────────────────────────────────────────
@@ -602,49 +609,66 @@ function _routeAction(action, payload, profile) {
     }
 
     // ── Implementasi ──────────────────────────────────────────
-    case 'SUBMIT_IMPLEMENTATION': {
+    case 'SUBMIT_CORRECTION_IMPL': {
       requireAccess(['isAuditee', 'isDeptHead'], profile);
-      const period_si = getPeriodById(payload.period_id);
+      const period_sci = getPeriodById(payload.period_id);
 
-      // Folder: ROOT / period_id / agenda_id / result_id
-      const folder_si = getOrCreateFolder(
-        'implementation',
+      // Folder: ROOT / period_id / agenda_id / result_id / correction
+      const folder_sci = getOrCreateFolder(
+        'correction',
         getOrCreateFolder(
           payload.result_id,
           getOrCreateFolder(
             payload.agenda_id,
-            getOrCreateFolder(payload.period_id, getOrCreateFolder(CONFIG.DRIVE_ROOT_FOLDER_NAME))
+            getOrCreateFolder(
+              payload.period_id, getOrCreateFolder(CONFIG.DRIVE_ROOT_FOLDER_NAME))
           )
         )
       );
-      const urls_si = (payload.files || []).map(function(f) {
-        return uploadFileToDrive(f.base64, f.name, f.mime_type, folder_si);
+      const urls_sci = (payload.files || []).map(function(f) {
+        return uploadFileToDrive(f.base64, f.name, f.mime_type, folder_sci);
       });
 
-      submitTppItemImpl(
-        period_si.spreadsheet_id,
-        payload.tpp_item_id,
-        urls_si,
-        payload.keterangan || '',
+      submitCorrectionImpl(
+        period_sci.spreadsheet_id,
+        payload.result_id,
+        payload.agenda_id,
+        urls_sci,
         profile.email
       );
 
-      // Cek apakah semua TPP items sudah submit impl → update finding_status
-      if (allTppItemsImplSubmitted(period_si.spreadsheet_id, payload.result_id)) {
-        updateResultField(
-          period_si.spreadsheet_id,
+      return { success: true, urls: urls_sci };
+    }
+
+    case 'SUBMIT_CORRECTIVE_ACTION_IMPL': {
+      requireAccess(['isAuditee', 'isDeptHead'], profile);
+      const period_scai = getPeriodById(payload.period_id);
+
+      // Folder: ROOT / period_id / agenda_id / result_id / corrective_action
+      const folder_scai = getOrCreateFolder(
+        'corrective_action',
+        getOrCreateFolder(
           payload.result_id,
-          CONFIG.AUDIT_COLS.AUDIT_RESULTS.FINDING_STATUS,
-          CONFIG.FINDING_STATUS.APP_DEPT_HEAD
-        );
-        appendApprovalLog(period_si.spreadsheet_id, {
-          result_id: payload.result_id,
-          agenda_id: payload.agenda_id,
-          stage: 'IMPL', level: 'AUDITEE', action: 'SUBMITTED',
-          by_email: profile.email, skipped: false, skip_reason: '',
-        });
-      }
-      return { success: true, urls: urls_si };
+          getOrCreateFolder(
+            payload.agenda_id,
+            getOrCreateFolder(
+              payload.period_id, getOrCreateFolder(CONFIG.DRIVE_ROOT_FOLDER_NAME))
+          )
+        )
+      );
+      const urls_scai = (payload.files || []).map(function(f) {
+        return uploadFileToDrive(f.base64, f.name, f.mime_type, folder_scai);
+      });
+
+      submitCorrectiveActionImpl(
+        period_scai.spreadsheet_id,
+        payload.result_id,
+        payload.agenda_id,
+        urls_scai,
+        profile.email
+      );
+
+      return { success: true, urls: urls_scai };
     }
 
     // ── File Management ───────────────────────────────────────
