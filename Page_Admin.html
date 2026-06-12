@@ -980,6 +980,9 @@ async function loadAdminPeriods(container) {
               (p.status === 'ACTIVE'
                 ? '<button class="btn btn-outline btn-sm" onclick="singleClick(this,function(btn){ setPeriodStatus(\'' + escHtml(p.period_id) + '\',\'COMPLETED\', btn) })">' +
                     '<i data-lucide="check-circle" style="width:12px;height:12px"></i> Selesai' +
+                  '</button>' +
+                  '<button class="btn btn-outline btn-sm" onclick="singleClick(this,function(){ openTppDueDateModal(\'' + escHtml(p.period_id) + '\',\'' + escHtml(p.tpp_plan_due_date || '') + '\') })" title="Set Due Date TPP">' +
+                    '<i data-lucide="calendar-clock" style="width:12px;height:12px"></i> Due Date TPP' +
                   '</button>'
                 : '') +
             '</div>' +
@@ -1044,6 +1047,51 @@ async function savePeriod() {
     clearCache('GET_PERIODS');
     toast('Periode "' + nama + '" berhasil dibuat.', 'success');
     closeModal('period-modal');
+    adminTab('periods', document.querySelector('.tab-btn.active'));
+  } catch(err) { toast(err.message, 'error'); restore(); }
+}
+
+function openTppDueDateModal(periodId, currentDueDate) {
+  createModal({
+    id: 'tpp-due-date-modal',
+    title: 'Set Due Date Rencana TPP',
+    body:
+      '<div style="font-size:13px;color:var(--text-muted);margin-bottom:16px">' +
+        'Batas waktu auditee wajib mengisi rencana TPP (Correction & Corrective Action). ' +
+        'Jika dilewati, temuan akan dicatat sebagai <strong>Rencana TPP Overdue</strong> di dashboard.' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label class="form-label">Due Date Rencana TPP <span class="required">*</span></label>' +
+        '<input class="form-control" type="date" id="tdd-due-date" style="max-width:200px" ' +
+          'value="' + escHtml(currentDueDate) + '">' +
+        '<div style="font-size:11px;color:var(--text-muted);margin-top:6px">' +
+          'Bisa diubah kapan saja selama periode masih aktif.' +
+        '</div>' +
+      '</div>',
+    footer:
+      '<button class="btn btn-outline" onclick="closeModal(\'tpp-due-date-modal\')">Batal</button>' +
+      '<button class="btn btn-primary" id="tdd-save-btn" ' +
+        'onclick="singleClick(this,function(){ saveTppDueDate(\'' + escHtml(periodId) + '\') })">' +
+        '<i data-lucide="save" style="width:13px;height:13px"></i> Simpan' +
+      '</button>',
+  });
+  lucide.createIcons();
+}
+
+async function saveTppDueDate(periodId) {
+  var btn      = document.getElementById('tdd-save-btn');
+  var restore  = btnLoading(btn, 'Menyimpan...', 'tpp-due-date-modal');
+  var dueDate  = document.getElementById('tdd-due-date') ?
+    document.getElementById('tdd-due-date').value : '';
+  if (!dueDate) { restore(); return toast('Due date wajib diisi.', 'error'); }
+  try {
+    await api('UPDATE_PERIOD', {
+      period_id: periodId,
+      updates:   { tpp_plan_due_date: dueDate },
+    });
+    clearCache('GET_PERIODS');
+    toast('Due date TPP berhasil disimpan.', 'success');
+    closeModal('tpp-due-date-modal');
     adminTab('periods', document.querySelector('.tab-btn.active'));
   } catch(err) { toast(err.message, 'error'); restore(); }
 }
