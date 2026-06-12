@@ -1219,10 +1219,11 @@ async function _renderIsiTppPage(container, task, period) {
     '<div class="page-loader"><div class="spinner dark"></div><span>Memuat...</span></div>';
 
   try {
-    // Cek apakah sudah ada TPP sebelumnya (resubmit setelah reject)
-    var existingItems = await api('GET_TPP_ITEMS', {
+    // Ambil data TPP existing (resubmit setelah reject) dan approval log
+    var tppData = await api('GET_TPP_ITEMS', {
       period_id: period.period_id,
       result_id: task.result_id,
+      agenda_id: task.agenda_id,
     });
     var log = await api('GET_APPROVAL_LOG', {
       period_id: period.period_id,
@@ -1230,9 +1231,22 @@ async function _renderIsiTppPage(container, task, period) {
     });
 
     var f          = task.finding;
-    var isResubmit = existingItems.length > 0;
+    var existing   = (tppData && tppData[0]) ? tppData[0] : null; // AUDIT_RESULTS row
+    var isResubmit = !!(existing && existing.correction);
 
-    // Render history reject kalau ada
+    // Hitung batas maksimal due date dari tanggal_selesai periode
+    var maxDateCorr = '';
+    var maxDateCA   = '';
+    if (period.tanggal_selesai) {
+      var endDate = new Date(period.tanggal_selesai);
+      var maxCorr = new Date(endDate);
+      maxCorr.setMonth(maxCorr.getMonth() + 3);
+      var maxCA   = new Date(endDate);
+      maxCA.setFullYear(maxCA.getFullYear() + 1);
+      maxDateCorr = maxCorr.toISOString().split('T')[0];
+      maxDateCA   = maxCA.toISOString().split('T')[0];
+    }
+
     var historyHtml = _renderApprovalHistory(log, 'TPP');
 
     container.innerHTML =
@@ -1271,36 +1285,66 @@ async function _renderIsiTppPage(container, task, period) {
 
       // Form TPP
       '<div class="card mb-16"><div class="card-body">' +
-        '<div style="font-size:13px;font-weight:600;margin-bottom:14px">Tindakan Perbaikan & Pencegahan</div>' +
-
-        // Target date (satu per finding)
-        '<div class="form-group">' +
-          '<label class="form-label">Target Penyelesaian <span class="required">*</span></label>' +
-          '<input class="form-control" type="date" id="tpp-target-date" ' +
-            'value="' + (f && f.target_date ? f.target_date : '') + '" style="max-width:200px">' +
+        '<div style="font-size:13px;font-weight:600;margin-bottom:4px">Tindakan Perbaikan & Pencegahan</div>' +
+        '<div style="font-size:11px;color:var(--text-muted);margin-bottom:16px">' +
+          'Isi correction dan corrective action beserta due date masing-masing.' +
         '</div>' +
 
-        // Corrections
-        '<div style="font-size:12px;font-weight:700;color:var(--text-muted);letter-spacing:.06em;margin-bottom:8px">CORRECTION (Tindakan Segera)</div>' +
-        '<div id="tpp-corrections">' +
-          _renderTppItemInputs('CORRECTION', isResubmit
-            ? existingItems.filter(function(i) { return i.tipe === 'CORRECTION'; })
-            : [{ deskripsi: '' }]) +
+        // ── Correction ──────────────────────────────────────
+        '<div style="background:var(--surface-2,#f8f9fa);border:1px solid var(--border);' +
+            'border-radius:8px;padding:14px 16px;margin-bottom:16px">' +
+          '<div style="font-size:12px;font-weight:700;color:var(--blue,#3b82f6);' +
+              'letter-spacing:.06em;margin-bottom:12px">' +
+            '<i data-lucide="zap" style="width:12px;height:12px;vertical-align:middle;margin-right:4px"></i>' +
+            'CORRECTION — Tindakan Segera' +
+          '</div>' +
+          '<div class="form-group">' +
+            '<label class="form-label">Tindakan Correction <span class="required">*</span></label>' +
+            '<textarea class="form-control" id="tpp-correction" rows="3" ' +
+              'placeholder="Tindakan perbaikan segera untuk mengatasi temuan...">' +
+              escHtml(existing && existing.correction ? existing.correction : '') +
+            '</textarea>' +
+          '</div>' +
+          '<div class="form-group">' +
+            '<label class="form-label">Due Date Correction <span class="required">*</span>' +
+              '<span style="font-size:11px;font-weight:400;color:var(--text-muted);margin-left:6px">' +
+                '(maks. ' + (maxDateCorr ? formatDate(maxDateCorr) : '3 bulan dari selesai periode') + ')' +
+              '</span>' +
+            '</label>' +
+            '<input class="form-control" type="date" id="tpp-due-date-correction" ' +
+              'style="max-width:200px" ' +
+              (maxDateCorr ? 'max="' + maxDateCorr + '" ' : '') +
+              'value="' + (existing && existing.due_date_correction ? existing.due_date_correction : '') + '">' +
+          '</div>' +
         '</div>' +
-        '<button class="btn btn-ghost btn-sm" onclick="_addTppItem(\'CORRECTION\')" style="margin-bottom:16px">' +
-          '<i data-lucide="plus" style="width:13px;height:13px"></i> Tambah Koreksi' +
-        '</button>' +
 
-        // Corrective Actions
-        '<div style="font-size:12px;font-weight:700;color:var(--text-muted);letter-spacing:.06em;margin-bottom:8px">CORRECTIVE ACTION (Jangka Panjang)</div>' +
-        '<div id="tpp-ca">' +
-          _renderTppItemInputs('CORRECTIVE_ACTION', isResubmit
-            ? existingItems.filter(function(i) { return i.tipe === 'CORRECTIVE_ACTION'; })
-            : [{ deskripsi: '' }]) +
+        // ── Corrective Action ────────────────────────────────
+        '<div style="background:var(--surface-2,#f8f9fa);border:1px solid var(--border);' +
+            'border-radius:8px;padding:14px 16px;margin-bottom:16px">' +
+          '<div style="font-size:12px;font-weight:700;color:var(--purple,#8b5cf6);' +
+              'letter-spacing:.06em;margin-bottom:12px">' +
+            '<i data-lucide="shield" style="width:12px;height:12px;vertical-align:middle;margin-right:4px"></i>' +
+            'CORRECTIVE ACTION — Tindakan Jangka Panjang' +
+          '</div>' +
+          '<div class="form-group">' +
+            '<label class="form-label">Tindakan Corrective Action <span class="required">*</span></label>' +
+            '<textarea class="form-control" id="tpp-corrective-action" rows="3" ' +
+              'placeholder="Rencana tindakan korektif jangka panjang agar temuan tidak berulang...">' +
+              escHtml(existing && existing.corrective_action ? existing.corrective_action : '') +
+            '</textarea>' +
+          '</div>' +
+          '<div class="form-group">' +
+            '<label class="form-label">Due Date Corrective Action <span class="required">*</span>' +
+              '<span style="font-size:11px;font-weight:400;color:var(--text-muted);margin-left:6px">' +
+                '(maks. ' + (maxDateCA ? formatDate(maxDateCA) : '1 tahun dari selesai periode') + ')' +
+              '</span>' +
+            '</label>' +
+            '<input class="form-control" type="date" id="tpp-due-date-corrective-action" ' +
+              'style="max-width:200px" ' +
+              (maxDateCA ? 'max="' + maxDateCA + '" ' : '') +
+              'value="' + (existing && existing.due_date_corrective_action ? existing.due_date_corrective_action : '') + '">' +
+          '</div>' +
         '</div>' +
-        '<button class="btn btn-ghost btn-sm" onclick="_addTppItem(\'CORRECTIVE_ACTION\')" style="margin-bottom:16px">' +
-          '<i data-lucide="plus" style="width:13px;height:13px"></i> Tambah Tindakan Pencegahan' +
-        '</button>' +
 
       '</div></div>' +
 
@@ -1321,56 +1365,16 @@ async function _renderIsiTppPage(container, task, period) {
   }
 }
 
-function _renderTppItemInputs(tipe, items) {
-  return items.map(function(item, i) {
-    return '<div class="form-group" style="display:flex;gap:8px;align-items:flex-start" id="tpp-item-' + tipe + '-' + i + '">' +
-      '<textarea class="form-control" id="tpp-input-' + tipe + '-' + i + '" rows="2" ' +
-        'placeholder="' + (tipe === 'CORRECTION' ? 'Tindakan perbaikan segera...' : 'Rencana tindakan korektif jangka panjang...') + '">' +
-        escHtml(item.deskripsi || '') +
-      '</textarea>' +
-      (i > 0
-        ? '<button class="btn btn-ghost btn-icon" style="flex-shrink:0;margin-top:4px" ' +
-            'onclick="document.getElementById(\'tpp-item-' + tipe + '-' + i + '\').remove()">' +
-            '<i data-lucide="x" style="width:13px;height:13px;color:var(--text-muted)"></i>' +
-          '</button>'
-        : '<div style="width:32px"></div>') +
-    '</div>';
-  }).join('');
-}
-
-function _addTppItem(tipe) {
-  var container = document.getElementById('tpp-' + (tipe === 'CORRECTION' ? 'corrections' : 'ca'));
-  if (!container) return;
-  var existing = container.querySelectorAll('[id^="tpp-item-' + tipe + '-"]');
-  var nextIdx  = existing.length;
-  var div = document.createElement('div');
-  div.innerHTML = _renderTppItemInputs(tipe, [{ deskripsi: '' }]);
-  // Re-index
-  div.querySelectorAll('[id]').forEach(function(el) {
-    el.id = el.id.replace(tipe + '-0', tipe + '-' + nextIdx);
-  });
-  container.appendChild(div.firstElementChild);
-  lucide.createIcons();
-}
-
 async function _submitTpp(resultId, agendaId, periodId) {
-  var targetDate = document.getElementById('tpp-target-date') ?
-    document.getElementById('tpp-target-date').value : '';
-  if (!targetDate) return toast('Target penyelesaian wajib diisi.', 'error');
+  var correction       = (document.getElementById('tpp-correction') || {}).value?.trim();
+  var dueDateCorr      = (document.getElementById('tpp-due-date-correction') || {}).value;
+  var correctiveAction = (document.getElementById('tpp-corrective-action') || {}).value?.trim();
+  var dueDateCA        = (document.getElementById('tpp-due-date-corrective-action') || {}).value;
 
-  var items = [];
-  // Kumpulkan corrections
-  document.querySelectorAll('[id^="tpp-input-CORRECTION-"]').forEach(function(el) {
-    var val = el.value.trim();
-    if (val) items.push({ tipe: 'CORRECTION', deskripsi: val });
-  });
-  // Kumpulkan corrective actions
-  document.querySelectorAll('[id^="tpp-input-CORRECTIVE_ACTION-"]').forEach(function(el) {
-    var val = el.value.trim();
-    if (val) items.push({ tipe: 'CORRECTIVE_ACTION', deskripsi: val });
-  });
-
-  if (!items.length) return toast('Isi minimal satu correction atau corrective action.', 'error');
+  if (!correction)       return toast('Correction wajib diisi.', 'error');
+  if (!dueDateCorr)      return toast('Due date correction wajib diisi.', 'error');
+  if (!correctiveAction) return toast('Corrective Action wajib diisi.', 'error');
+  if (!dueDateCA)        return toast('Due date corrective action wajib diisi.', 'error');
 
   var btn      = document.getElementById('tpp-submit-btn');
   btn.disabled = true;
@@ -1378,15 +1382,16 @@ async function _submitTpp(resultId, agendaId, periodId) {
 
   try {
     await api('SUBMIT_TPP', {
-      period_id:   periodId,
-      result_id:   resultId,
-      agenda_id:   agendaId,
-      items:       items,
-      target_date: targetDate,
+      period_id:                  periodId,
+      result_id:                  resultId,
+      agenda_id:                  agendaId,
+      correction:                 correction,
+      due_date_correction:        dueDateCorr,
+      corrective_action:          correctiveAction,
+      due_date_corrective_action: dueDateCA,
     });
     clearCache('GET_ALL_FINDINGS_BY_PERIOD');
     clearCache('GET_APPROVAL_LOG');
-    clearCache('GET_TPP_ITEMS');
     toast('TPP berhasil disubmit. Menunggu approval Dept Head.', 'success');
     navigateTo('mytask');
   } catch(err) {
@@ -1406,92 +1411,125 @@ async function _renderUploadImplPage(container, task, period) {
     '<div class="page-loader"><div class="spinner dark"></div><span>Memuat...</span></div>';
 
   try {
-    var tppItems = await api('GET_TPP_ITEMS', {
+    var tppData = await api('GET_TPP_ITEMS', {
       period_id: period.period_id,
       result_id: task.result_id,
+      agenda_id: task.agenda_id,
     });
     var log = await api('GET_APPROVAL_LOG', {
       period_id: period.period_id,
       result_id: task.result_id,
     });
-    var f = task.finding;
+    var f   = task.finding;
+    var res = (tppData && tppData[0]) ? tppData[0] : {};
 
     var historyHtml = _renderApprovalHistory(log, 'IMPL');
 
-    var itemsHtml = tppItems.map(function(item, i) {
-      // Selalu tampilkan upload zone di OPEN_IMPL — auditee bisa upload / re-upload
-      // Data sebelumnya ditampilkan sebagai referensi di atas upload zone
-      var hadPreviousSubmit = !!item.impl_submitted_at;
-      var alreadySubmitted  = false; // OPEN_IMPL = selalu perlu (re)submit
+    // ── Correction section ───────────────────────────────────
+    var hasCorrSubmitted  = !!res.impl_correction_submitted_at;
+    var corrDueDate       = res.due_date_correction || '';
+    var corrDueDateLabel  = corrDueDate ? ' · Due: ' + formatDate(corrDueDate) : '';
 
-      return '<div class="card mb-12">' +
-        '<div class="card-body">' +
-          '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">' +
-            '<span class="badge ' + (item.tipe === 'CORRECTION' ? 'badge-blue' : 'badge-purple') + '" style="font-size:10px">' +
-              (item.tipe === 'CORRECTION' ? 'Koreksi' : 'Tindakan Pencegahan') +
-            '</span>' +
-            (alreadySubmitted ? '<span class="badge badge-emerald" style="font-size:10px">✓ Sudah disubmit</span>' : '') +
-          '</div>' +
-          '<div style="font-size:13px;margin-bottom:12px">' + escHtml(item.deskripsi) + '</div>' +
-
-          // Tampilkan bukti sebelumnya jika ada (referensi — tidak dihapus saat reject)
-          (hadPreviousSubmit && item.impl_foto_urls
-            ? '<div class="card mb-8" style="background:var(--bg);border:1px solid var(--border)">' +
-                '<div class="card-body" style="padding:10px 12px">' +
-                  '<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;display:flex;align-items:center;gap:4px">' +
-                    '<i data-lucide="history" style="width:11px;height:11px"></i> ' +
-                    'Bukti sebelumnya:' +
-                  '</div>' +
-                  '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
-                    item.impl_foto_urls.split(',').filter(Boolean).map(function(url) {
-                      return '<a href="' + url + '" target="_blank" class="btn btn-outline btn-sm">' +
-                        '<i data-lucide="image" style="width:12px;height:12px"></i> Lihat</a>';
-                    }).join('') +
-                  '</div>' +
-                  (item.impl_keterangan
-                    ? '<div style="font-size:11px;color:var(--text-muted);margin-top:6px">' +
-                        escHtml(item.impl_keterangan) +
-                      '</div>'
-                    : '') +
-                '</div>' +
-              '</div>'
-            : '') +
-          // Upload zone — selalu tampil agar auditee bisa upload / re-upload
-          '<div class="upload-zone" id="impl-zone-' + item.tpp_item_id + '">' +
-            '<i data-lucide="camera" style="width:24px;height:24px;opacity:.3;margin-bottom:6px"></i>' +
-            '<div class="upload-text">' + (hadPreviousSubmit ? 'Upload ulang bukti' : 'Upload foto/dokumen bukti') + '</div>' +
-          '</div>' +
-          '<div class="upload-previews" id="impl-preview-' + item.tpp_item_id + '"></div>' +
-          '<div class="form-group" style="margin-top:10px">' +
-            '<label class="form-label" style="font-size:12px">Keterangan (opsional)</label>' +
-            '<textarea class="form-control" id="impl-ket-' + item.tpp_item_id + '" rows="2" ' +
-              'placeholder="Jelaskan apa yang sudah dilakukan...">' +
-              escHtml(item.impl_keterangan || '') +
-            '</textarea>' +
-          '</div>' +
-          '<button class="btn btn-primary btn-sm" id="impl-btn-' + item.tpp_item_id + '" ' +
-            'onclick="singleClick(this,function(){ _submitImplItem(\'' +
-              item.tpp_item_id + '\',\'' + task.result_id + '\',\'' +
-              task.agenda_id + '\',\'' + period.period_id + '\') })">' +
-            '<i data-lucide="upload" style="width:13px;height:13px"></i> ' + (hadPreviousSubmit ? 'Upload Ulang' : 'Submit Bukti') +
-          '</button>' +
+    var correctionHtml =
+      '<div style="background:var(--surface-2,#f8f9fa);border:1px solid var(--border);' +
+          'border-radius:8px;padding:14px 16px;margin-bottom:16px">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">' +
+          '<span class="badge badge-blue" style="font-size:10px">Correction</span>' +
+          (hasCorrSubmitted ? '<span class="badge badge-emerald" style="font-size:10px">✓ Sudah disubmit</span>' : '') +
+          '<span style="font-size:11px;color:var(--text-muted)">' + corrDueDateLabel + '</span>' +
         '</div>' +
+        '<div style="font-size:13px;margin-bottom:12px">' + escHtml(res.correction || '-') + '</div>' +
+
+        // Bukti sebelumnya
+        (hasCorrSubmitted && res.impl_correction_foto_urls
+          ? '<div class="card mb-8" style="background:var(--bg);border:1px solid var(--border)">' +
+              '<div class="card-body" style="padding:10px 12px">' +
+                '<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;display:flex;align-items:center;gap:4px">' +
+                  '<i data-lucide="history" style="width:11px;height:11px"></i> Bukti sebelumnya:' +
+                '</div>' +
+                '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+                  res.impl_correction_foto_urls.split(',').filter(Boolean).map(function(url) {
+                    return '<a href="' + url + '" target="_blank" class="btn btn-outline btn-sm">' +
+                      '<i data-lucide="image" style="width:12px;height:12px"></i> Lihat</a>';
+                  }).join('') +
+                '</div>' +
+              '</div>' +
+            '</div>'
+          : '') +
+
+        '<div class="upload-zone" id="impl-correction-zone">' +
+          '<i data-lucide="camera" style="width:24px;height:24px;opacity:.3;margin-bottom:6px"></i>' +
+          '<div class="upload-text">' + (hasCorrSubmitted ? 'Upload ulang bukti correction' : 'Upload foto/dokumen bukti correction') + '</div>' +
+        '</div>' +
+        '<div class="upload-previews" id="impl-correction-preview"></div>' +
+        '<button class="btn btn-primary btn-sm" id="impl-correction-btn" style="margin-top:10px" ' +
+          'onclick="singleClick(this,function(){ _submitCorrectionImpl(\'' +
+            task.result_id + '\',\'' + task.agenda_id + '\',\'' + period.period_id + '\') })">' +
+          '<i data-lucide="upload" style="width:13px;height:13px"></i> ' +
+          (hasCorrSubmitted ? 'Upload Ulang Correction' : 'Submit Correction') +
+        '</button>' +
       '</div>';
-    }).join('');
+
+    // ── Corrective Action section ────────────────────────────
+    var hasCASubmitted  = !!res.impl_submitted_at;
+    var caDueDate       = res.due_date_corrective_action || '';
+    var caDueDateLabel  = caDueDate ? ' · Due: ' + formatDate(caDueDate) : '';
+
+    var correctiveActionHtml =
+      '<div style="background:var(--surface-2,#f8f9fa);border:1px solid var(--border);' +
+          'border-radius:8px;padding:14px 16px;margin-bottom:16px">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">' +
+          '<span class="badge badge-purple" style="font-size:10px">Corrective Action</span>' +
+          (hasCASubmitted ? '<span class="badge badge-emerald" style="font-size:10px">✓ Sudah disubmit</span>' : '') +
+          '<span style="font-size:11px;color:var(--text-muted)">' + caDueDateLabel + '</span>' +
+        '</div>' +
+        '<div style="font-size:13px;margin-bottom:12px">' + escHtml(res.corrective_action || '-') + '</div>' +
+
+        // Bukti sebelumnya
+        (hasCASubmitted && res.impl_corrective_action_foto_urls
+          ? '<div class="card mb-8" style="background:var(--bg);border:1px solid var(--border)">' +
+              '<div class="card-body" style="padding:10px 12px">' +
+                '<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;display:flex;align-items:center;gap:4px">' +
+                  '<i data-lucide="history" style="width:11px;height:11px"></i> Bukti sebelumnya:' +
+                '</div>' +
+                '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+                  res.impl_corrective_action_foto_urls.split(',').filter(Boolean).map(function(url) {
+                    return '<a href="' + url + '" target="_blank" class="btn btn-outline btn-sm">' +
+                      '<i data-lucide="image" style="width:12px;height:12px"></i> Lihat</a>';
+                  }).join('') +
+                '</div>' +
+              '</div>' +
+            '</div>'
+          : '') +
+
+        '<div class="upload-zone" id="impl-ca-zone">' +
+          '<i data-lucide="camera" style="width:24px;height:24px;opacity:.3;margin-bottom:6px"></i>' +
+          '<div class="upload-text">' + (hasCASubmitted ? 'Upload ulang bukti corrective action' : 'Upload foto/dokumen bukti corrective action') + '</div>' +
+        '</div>' +
+        '<div class="upload-previews" id="impl-ca-preview"></div>' +
+        '<div style="font-size:11px;color:var(--text-muted);margin-top:8px;margin-bottom:6px">' +
+          '<i data-lucide="info" style="width:11px;height:11px;vertical-align:middle"></i> ' +
+          'Submit corrective action akan memulai proses approval.' +
+        '</div>' +
+        '<button class="btn btn-primary btn-sm" id="impl-ca-btn" ' +
+          'onclick="singleClick(this,function(){ _submitCorrectiveActionImpl(\'' +
+            task.result_id + '\',\'' + task.agenda_id + '\',\'' + period.period_id + '\') })">' +
+          '<i data-lucide="upload" style="width:13px;height:13px"></i> ' +
+          (hasCASubmitted ? 'Upload Ulang & Submit Ulang' : 'Submit Corrective Action') +
+        '</button>' +
+      '</div>';
 
     container.innerHTML =
       _subPageHeader(
         'Upload Implementasi — ' + escHtml(task.agenda ? task.agenda.dept : ''),
-        '#' + (f ? f.nomor_persyaratan + '.' + f.check_item_no : '') +
-        ' · Target: ' + formatDate(f ? f.target_date : '')
+        '#' + (f ? f.nomor_persyaratan + '.' + f.check_item_no : '')
       ) +
       historyHtml +
-      itemsHtml;
+      correctionHtml +
+      correctiveActionHtml;
 
-    // Setup upload zones — selalu untuk semua item di OPEN_IMPL
-    tppItems.forEach(function(item) {
-      setupUploadZone('impl-zone-' + item.tpp_item_id, 'impl-preview-' + item.tpp_item_id);
-    });
+    setupUploadZone('impl-correction-zone', 'impl-correction-preview');
+    setupUploadZone('impl-ca-zone', 'impl-ca-preview');
 
     lucide.createIcons();
   } catch(err) {
@@ -1501,39 +1539,59 @@ async function _renderUploadImplPage(container, task, period) {
   }
 }
 
-async function _submitImplItem(tppItemId, resultId, agendaId, periodId) {
-  var zone  = document.getElementById('impl-zone-' + tppItemId);
+async function _submitCorrectionImpl(resultId, agendaId, periodId) {
+  var zone = document.getElementById('impl-correction-zone');
   var files = zone && zone._getFiles ? zone._getFiles() : [];
-  if (!files.length) return toast('Upload minimal 1 file bukti.', 'error');
+  if (!files.length) return toast('Upload minimal 1 foto bukti correction.', 'error');
 
-  var ket    = document.getElementById('impl-ket-' + tppItemId);
-  var btn    = document.getElementById('impl-btn-' + tppItemId);
+  var btn = document.getElementById('impl-correction-btn');
   btn.disabled = true;
   btn.innerHTML = '<div class="spinner" style="width:12px;height:12px;border-width:2px"></div> Mengirim...';
 
   try {
     var b64files = await filesToBase64(files);
-    var period   = window._myTaskPeriod;
-
-    await api('SUBMIT_IMPLEMENTATION', {
-      period_id:   periodId,
-      result_id:   resultId,
-      agenda_id:   agendaId,
-      tpp_item_id: tppItemId,
-      files:       b64files,
-      keterangan:  ket ? ket.value.trim() : '',
+    await api('SUBMIT_CORRECTION_IMPL', {
+      period_id: periodId,
+      result_id: resultId,
+      agenda_id: agendaId,
+      files:     b64files,
     });
-
     clearCache('GET_ALL_FINDINGS_BY_PERIOD');
-    toast('Bukti implementasi berhasil dikirim.', 'success');
-
-    // Re-render halaman
+    toast('Bukti correction berhasil dikirim.', 'success');
     var task = window._myTaskList[window._myTaskReturnIdx];
-    if (task) _renderUploadImplPage(document.getElementById('page-content'), task, period);
+    if (task) _renderUploadImplPage(document.getElementById('page-content'), task, window._myTaskPeriod);
   } catch(err) {
     toast(err.message, 'error');
     btn.disabled = false;
-    btn.innerHTML = '<i data-lucide="upload" style="width:13px;height:13px"></i> Submit Bukti';
+    btn.innerHTML = '<i data-lucide="upload" style="width:13px;height:13px"></i> Submit Correction';
+    lucide.createIcons();
+  }
+}
+
+async function _submitCorrectiveActionImpl(resultId, agendaId, periodId) {
+  var zone = document.getElementById('impl-ca-zone');
+  var files = zone && zone._getFiles ? zone._getFiles() : [];
+  if (!files.length) return toast('Upload minimal 1 foto bukti corrective action.', 'error');
+
+  var btn = document.getElementById('impl-ca-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner" style="width:12px;height:12px;border-width:2px"></div> Mengirim...';
+
+  try {
+    var b64files = await filesToBase64(files);
+    await api('SUBMIT_CORRECTIVE_ACTION_IMPL', {
+      period_id: periodId,
+      result_id: resultId,
+      agenda_id: agendaId,
+      files:     b64files,
+    });
+    clearCache('GET_ALL_FINDINGS_BY_PERIOD');
+    toast('Bukti corrective action berhasil dikirim. Menunggu approval Dept Head.', 'success');
+    navigateTo('mytask');
+  } catch(err) {
+    toast(err.message, 'error');
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="upload" style="width:13px;height:13px"></i> Submit Corrective Action';
     lucide.createIcons();
   }
 }
@@ -1547,81 +1605,109 @@ async function _renderApprovalPage(container, task, period) {
     '<div class="page-loader"><div class="spinner dark"></div><span>Memuat...</span></div>';
 
   try {
-    var tppItems = await api('GET_TPP_ITEMS', {
+    var tppData = await api('GET_TPP_ITEMS', {
       period_id: period.period_id,
       result_id: task.result_id,
+      agenda_id: task.agenda_id,
     });
     var log = await api('GET_APPROVAL_LOG', {
       period_id: period.period_id,
       result_id: task.result_id,
     });
-    var f = task.finding;
-    var stage   = task.type === 'APPROVAL_TPP' ? 'TPP' : 'IMPL';
-    var isTPP   = stage === 'TPP';
-    var isKoord = App.profile.isKoordinator;
+    var f     = task.finding;
+    var res   = (tppData && tppData[0]) ? tppData[0] : {};
+    var stage = task.type === 'APPROVAL_TPP' ? 'TPP' : 'IMPL';
+    var isTPP = stage === 'TPP';
 
     var historyHtml = _renderApprovalHistory(log, stage);
 
-    // Konten yang di-approve
-    var contentHtml = isTPP
-      ? '<div class="card mb-16"><div class="card-body">' +
-          '<div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:10px">RENCANA TPP</div>' +
-          tppItems.map(function(item) {
-            return '<div style="padding:10px;border:1px solid var(--border);border-radius:6px;margin-bottom:8px">' +
-              '<span class="badge ' + (item.tipe === 'CORRECTION' ? 'badge-blue' : 'badge-purple') + '" style="font-size:10px;margin-bottom:6px">' +
-                (item.tipe === 'CORRECTION' ? 'Koreksi' : 'Tindakan Pencegahan') +
-              '</span>' +
-              '<div style="font-size:13px">' + escHtml(item.deskripsi) + '</div>' +
-            '</div>';
-          }).join('') +
-          '<div style="font-size:12px;color:var(--text-muted);margin-top:8px">' +
-            '<i data-lucide="calendar" style="width:12px;height:12px;vertical-align:middle"></i>' +
-            ' Target: <strong>' + formatDate(f ? f.target_date : '') + '</strong>' +
+    // ── Foto temuan asli (selalu ditampilkan) ────────────────
+    var fotoTemuan = f && f.foto_urls
+      ? '<div style="margin-bottom:12px;padding:10px;background:var(--bg);border-radius:6px;border:1px solid var(--border)">' +
+          '<div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:6px;letter-spacing:.04em">FOTO BUKTI TEMUAN ASLI</div>' +
+          '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
+            f.foto_urls.split(',').filter(Boolean).map(function(url) {
+              return '<a href="' + escHtml(url) + '" target="_blank" class="btn btn-outline btn-sm" style="font-size:11px">' +
+                '<i data-lucide="image" style="width:11px;height:11px"></i> Lihat Foto Temuan</a>';
+            }).join('') +
           '</div>' +
-          (f && f.foto_urls
-            ? '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">' +
-                '<div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:6px;letter-spacing:.04em">FOTO BUKTI TEMUAN ASLI</div>' +
-                '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
-                  f.foto_urls.split(',').filter(Boolean).map(function(url) {
-                    return '<a href="' + escHtml(url) + '" target="_blank" class="btn btn-outline btn-sm" style="font-size:11px">' +
-                      '<i data-lucide="image" style="width:11px;height:11px"></i> Lihat Foto Temuan</a>';
-                  }).join('') +
-                '</div>' +
-              '</div>'
-            : '') +
-        '</div></div>'
-      : '<div class="card mb-16"><div class="card-body">' +
-          (f && f.foto_urls
-            ? '<div style="margin-bottom:12px;padding:10px;background:var(--bg);border-radius:6px;border:1px solid var(--border)">' +
-                '<div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:6px;letter-spacing:.04em">FOTO TEMUAN ASLI</div>' +
-                '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
-                  f.foto_urls.split(',').filter(Boolean).map(function(url) {
-                    return '<a href="' + escHtml(url) + '" target="_blank" class="btn btn-outline btn-sm" style="font-size:11px">' +
-                      '<i data-lucide="image" style="width:11px;height:11px"></i> Lihat Foto Temuan</a>';
-                  }).join('') +
-                '</div>' +
-              '</div>'
-            : '') +
-          '<div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:10px">BUKTI IMPLEMENTASI</div>' +
-          tppItems.map(function(item) {
-            return '<div style="padding:10px;border:1px solid var(--border);border-radius:6px;margin-bottom:8px">' +
-              '<span class="badge ' + (item.tipe === 'CORRECTION' ? 'badge-blue' : 'badge-purple') + '" style="font-size:10px;margin-bottom:6px">' +
-                (item.tipe === 'CORRECTION' ? 'Koreksi' : 'Tindakan Pencegahan') +
+        '</div>'
+      : '';
+
+    // ── Content berdasarkan stage ────────────────────────────
+    var contentHtml = isTPP
+      // APPROVAL TPP — tampilkan rencana correction + corrective action
+      ? '<div class="card mb-16"><div class="card-body">' +
+          '<div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:12px">RENCANA TPP</div>' +
+
+          // Correction
+          '<div style="padding:12px;border:1px solid var(--border);border-radius:6px;margin-bottom:10px">' +
+            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
+              '<span class="badge badge-blue" style="font-size:10px">Correction</span>' +
+              '<span style="font-size:11px;color:var(--text-muted)">' +
+                'Due: <strong>' + formatDate(res.due_date_correction || '') + '</strong>' +
               '</span>' +
-              '<div style="font-size:13px;margin-bottom:8px">' + escHtml(item.deskripsi) + '</div>' +
-              (item.impl_keterangan
-                ? '<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">' + escHtml(item.impl_keterangan) + '</div>'
-                : '') +
-              (item.impl_foto_urls
-                ? '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
-                    item.impl_foto_urls.split(',').filter(Boolean).map(function(url) {
-                      return '<a href="' + url + '" target="_blank" class="btn btn-outline btn-sm">' +
-                        '<i data-lucide="image" style="width:12px;height:12px"></i> Lihat Bukti</a>';
-                    }).join('') +
-                  '</div>'
-                : '<div style="font-size:12px;color:var(--rose)">Belum ada bukti diupload.</div>') +
-            '</div>';
-          }).join('') +
+            '</div>' +
+            '<div style="font-size:13px">' + escHtml(res.correction || '-') + '</div>' +
+          '</div>' +
+
+          // Corrective Action
+          '<div style="padding:12px;border:1px solid var(--border);border-radius:6px;margin-bottom:10px">' +
+            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
+              '<span class="badge badge-purple" style="font-size:10px">Corrective Action</span>' +
+              '<span style="font-size:11px;color:var(--text-muted)">' +
+                'Due: <strong>' + formatDate(res.due_date_corrective_action || '') + '</strong>' +
+              '</span>' +
+            '</div>' +
+            '<div style="font-size:13px">' + escHtml(res.corrective_action || '-') + '</div>' +
+          '</div>' +
+
+          fotoTemuan +
+        '</div></div>'
+
+      // APPROVAL IMPL — tampilkan bukti correction + corrective action
+      : '<div class="card mb-16"><div class="card-body">' +
+          fotoTemuan +
+          '<div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:12px">BUKTI IMPLEMENTASI</div>' +
+
+          // Correction impl
+          '<div style="padding:12px;border:1px solid var(--border);border-radius:6px;margin-bottom:10px">' +
+            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
+              '<span class="badge badge-blue" style="font-size:10px">Correction</span>' +
+              (res.impl_correction_submitted_at
+                ? '<span class="badge badge-emerald" style="font-size:10px">✓ Disubmit ' + formatDate(res.impl_correction_submitted_at) + '</span>'
+                : '<span class="badge badge-rose" style="font-size:10px">Belum disubmit</span>') +
+            '</div>' +
+            '<div style="font-size:13px;margin-bottom:8px">' + escHtml(res.correction || '-') + '</div>' +
+            (res.impl_correction_foto_urls
+              ? '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+                  res.impl_correction_foto_urls.split(',').filter(Boolean).map(function(url) {
+                    return '<a href="' + url + '" target="_blank" class="btn btn-outline btn-sm">' +
+                      '<i data-lucide="image" style="width:12px;height:12px"></i> Lihat Bukti</a>';
+                  }).join('') +
+                '</div>'
+              : '<div style="font-size:12px;color:var(--text-muted)">Belum ada bukti correction diupload.</div>') +
+          '</div>' +
+
+          // Corrective Action impl
+          '<div style="padding:12px;border:1px solid var(--border);border-radius:6px;margin-bottom:10px">' +
+            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
+              '<span class="badge badge-purple" style="font-size:10px">Corrective Action</span>' +
+              (res.impl_submitted_at
+                ? '<span class="badge badge-emerald" style="font-size:10px">✓ Disubmit ' + formatDate(res.impl_submitted_at) + '</span>'
+                : '<span class="badge badge-rose" style="font-size:10px">Belum disubmit</span>') +
+            '</div>' +
+            '<div style="font-size:13px;margin-bottom:8px">' + escHtml(res.corrective_action || '-') + '</div>' +
+            (res.impl_corrective_action_foto_urls
+              ? '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+                  res.impl_corrective_action_foto_urls.split(',').filter(Boolean).map(function(url) {
+                    return '<a href="' + url + '" target="_blank" class="btn btn-outline btn-sm">' +
+                      '<i data-lucide="image" style="width:12px;height:12px"></i> Lihat Bukti</a>';
+                  }).join('') +
+                '</div>'
+              : '<div style="font-size:12px;color:var(--text-muted)">Belum ada bukti corrective action diupload.</div>') +
+          '</div>' +
+
         '</div></div>';
 
     container.innerHTML =
@@ -1640,7 +1726,6 @@ async function _renderApprovalPage(container, task, period) {
 
       contentHtml +
       historyHtml +
-      skipHtml +
 
       // Komentar + tombol approve/reject
       '<div class="card"><div class="card-body">' +
