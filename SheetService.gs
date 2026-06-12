@@ -496,7 +496,7 @@ function batchCreateChecklistItems(tipe, kategori, items) {
 const REGISTRY_HEADERS = [
   'period_id','nama_periode','spreadsheet_id','spreadsheet_url',
   'tanggal_mulai','tanggal_selesai','status','created_by','created_at',
-  'archived','archived_at','completed_at'
+  'archived','archived_at','completed_at','tpp_plan_due_date'
 ];
 
 const PERIODS_CACHE_KEY = 'PERIODS_ALL';
@@ -598,9 +598,10 @@ function updatePeriod(periodId, updates) {
   const period = getAllPeriods(true).find(p => p.period_id === periodId);
   if (!period) throw new Error('Periode tidak ditemukan: ' + periodId);
   const C = CONFIG.COLS.AUDIT_REGISTRY;
-  if (updates.nama_periode    !== undefined) _updateCell(sheet, period._rowIndex, C.NAMA_PERIODE    + 1, updates.nama_periode);
-  if (updates.tanggal_mulai   !== undefined) _updateCell(sheet, period._rowIndex, C.TANGGAL_MULAI   + 1, updates.tanggal_mulai);
-  if (updates.tanggal_selesai !== undefined) _updateCell(sheet, period._rowIndex, C.TANGGAL_SELESAI + 1, updates.tanggal_selesai);
+  if (updates.nama_periode       !== undefined) _updateCell(sheet, period._rowIndex, C.NAMA_PERIODE       + 1, updates.nama_periode);
+  if (updates.tanggal_mulai      !== undefined) _updateCell(sheet, period._rowIndex, C.TANGGAL_MULAI      + 1, updates.tanggal_mulai);
+  if (updates.tanggal_selesai    !== undefined) _updateCell(sheet, period._rowIndex, C.TANGGAL_SELESAI    + 1, updates.tanggal_selesai);
+  if (updates.tpp_plan_due_date  !== undefined) _updateCell(sheet, period._rowIndex, C.TPP_PLAN_DUE_DATE  + 1, updates.tpp_plan_due_date);
   invalidatePeriodsCache();
   return { success: true };
 }
@@ -1278,10 +1279,8 @@ function verifyFindings(spreadsheetId, agendaId, updates, verifiedBy) {
       _updateCell(sheet, result._rowIndex, C.FOTO_URLS        + 1, '');
       _updateCell(sheet, result._rowIndex, C.AUDITOR_EMAIL    + 1, verifiedBy);
       _updateCell(sheet, result._rowIndex, C.SAVED_AT         + 1, now());
-      _updateCell(sheet, result._rowIndex, C.FINDING_STATUS   + 1, '');
-      _updateCell(sheet, result._rowIndex, C.TARGET_DATE      + 1, '');
-      _updateCell(sheet, result._rowIndex, C.IS_OVERDUE + 1, '');
-      _updateCell(sheet, result._rowIndex, C.CLOSED_AT        + 1, '');
+      _updateCell(sheet, result._rowIndex, C.FINDING_STATUS + 1, '');
+      _updateCell(sheet, result._rowIndex, C.CLOSED_AT      + 1, '');
     } else {
       // Non Comply tetap → set OPEN, update field yang diubah koordinator
       _updateCell(sheet, result._rowIndex, C.FINDING_STATUS   + 1, CONFIG.FINDING_STATUS.OPEN);
