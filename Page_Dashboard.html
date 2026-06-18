@@ -9,8 +9,8 @@
 //    { agendas, findings, summary, period }
 //  summary keys:
 //    total, pending_verification,
-//    open, tpp_or_dept_head, tpp_or_auditor, tpp_or_koordinator,
-//    open_impl, app_dept_head, app_auditor, app_koordinator,
+//    open, open_impl,
+//    app_dept_head, app_auditor, app_koordinator,
 //    closed, overdue,
 //    agenda_planned, agenda_started, agenda_done
 // ============================================================
@@ -681,8 +681,7 @@ function _dbApprovalSection(agendas, findings, s) {
   // ── Header row 1 (group labels) ──────────────────────────
   var gh = '<tr>' +
     '<th rowspan="2" class="db-col-area" style="vertical-align:middle;text-align:center!important;z-index:2;border-bottom:1px solid var(--border)">Area</th>' +
-    '<th rowspan="2" class="db-gh-open" style="vertical-align:middle;color:var(--rose,#f43f5e);border-bottom:2px solid var(--rose,#f43f5e)">OPEN</th>' +
-    '<th colspan="3" class="db-gh-tpp" style="color:var(--amber,#f59e0b);border-bottom:2px solid var(--amber,#f59e0b)">On Review TPP</th>' +
+    '<th rowspan="2" class="db-gh-open" style="vertical-align:middle;color:var(--rose,#f43f5e);border-bottom:2px solid var(--rose,#f43f5e)">Open TPP</th>' +
     '<th rowspan="2" class="db-gh-impl-open" style="vertical-align:middle;color:var(--blue,#3b82f6);border-bottom:2px solid var(--blue,#3b82f6)">Open<br>Implementasi</th>' +
     '<th colspan="3" class="db-gh-impl" style="color:var(--purple,#8b5cf6);border-bottom:2px solid var(--purple,#8b5cf6)">Approval Implementasi</th>' +
     '<th rowspan="2" class="db-gh-closed" style="vertical-align:middle;color:var(--emerald,#10b981);border-bottom:2px solid var(--emerald,#10b981)">Closed</th>' +
@@ -692,11 +691,7 @@ function _dbApprovalSection(agendas, findings, s) {
 
   // ── Header row 2 (column labels) ─────────────────────────
   var ch = '<tr>' +
-    // OPEN covered by rowspan
-    '<th class="db-gh-tpp" style="color:var(--amber,#f59e0b)">Dept Head</th>' +
-    '<th class="db-gh-tpp" style="color:var(--amber,#f59e0b)">Auditor</th>' +
-    '<th class="db-gh-tpp" style="color:var(--amber,#f59e0b)">Koordinator</th>' +
-    // Open Impl covered by rowspan
+    // Open TPP + Open Impl covered by rowspan
     '<th class="db-gh-impl" style="color:var(--purple,#8b5cf6)">Dept Head</th>' +
     '<th class="db-gh-impl" style="color:var(--purple,#8b5cf6)">Auditor</th>' +
     '<th class="db-gh-impl" style="color:var(--purple,#8b5cf6)">Koordinator</th>' +
@@ -705,8 +700,8 @@ function _dbApprovalSection(agendas, findings, s) {
 
   // ── Data rows ─────────────────────────────────────────────
   var dataRows = tableData.map(function(row, idx) {
-    var hasAny = (row.n_open + row.n_tpp_dh + row.n_tpp_aud + row.n_tpp_koor +
-                  row.n_open_impl + row.n_app_dh + row.n_app_aud + row.n_app_koor +
+    var hasAny = (row.n_open + row.n_open_impl +
+                  row.n_app_dh + row.n_app_aud + row.n_app_koor +
                   row.n_closed + row.n_overdue) > 0;
 
     return '<tr' + (!hasAny ? ' style="opacity:.5"' : '') + '>' +
@@ -721,17 +716,14 @@ function _dbApprovalSection(agendas, findings, s) {
         '</div>' +
       '</td>' +
       _dbTd(row.n_open,     'db-g-open') +
-      _dbTd(row.n_tpp_dh,   'db-g-tpp') +
-      _dbTd(row.n_tpp_aud,  'db-g-tpp') +
-      _dbTd(row.n_tpp_koor, 'db-g-tpp') +
       _dbTd(row.n_open_impl,'db-g-impl-open') +
       _dbTd(row.n_app_dh,   'db-g-impl') +
       _dbTd(row.n_app_aud,  'db-g-impl') +
       _dbTd(row.n_app_koor, 'db-g-impl') +
       _dbTd(row.n_closed,   'db-g-closed') +
       (showOverdue ? _dbTd(row.n_overdue, 'db-g-overdue') : '') +
-      _dbTdTotal(row.n_open + row.n_tpp_dh + row.n_tpp_aud + row.n_tpp_koor +
-                 row.n_open_impl + row.n_app_dh + row.n_app_aud + row.n_app_koor +
+      _dbTdTotal(row.n_open + row.n_open_impl +
+                 row.n_app_dh + row.n_app_aud + row.n_app_koor +
                  row.n_closed + row.n_overdue) +
     '</tr>';
   }).join('');
@@ -743,17 +735,14 @@ function _dbApprovalSection(agendas, findings, s) {
       '<div style="font-size:10px;font-weight:400;color:var(--text-muted)">' + tableData.length + ' area</div>' +
     '</td>' +
     _dbTd(totals.n_open,     'db-g-open', true) +
-    _dbTd(totals.n_tpp_dh,   'db-g-tpp', true) +
-    _dbTd(totals.n_tpp_aud,  'db-g-tpp', true) +
-    _dbTd(totals.n_tpp_koor, 'db-g-tpp', true) +
     _dbTd(totals.n_open_impl,'db-g-impl-open', true) +
     _dbTd(totals.n_app_dh,   'db-g-impl', true) +
     _dbTd(totals.n_app_aud,  'db-g-impl', true) +
     _dbTd(totals.n_app_koor, 'db-g-impl', true) +
     _dbTd(totals.n_closed,   'db-g-closed', true) +
     (showOverdue ? _dbTd(totals.n_overdue, 'db-g-overdue', true) : '') +
-    _dbTdTotal(totals.n_open + totals.n_tpp_dh + totals.n_tpp_aud + totals.n_tpp_koor +
-               totals.n_open_impl + totals.n_app_dh + totals.n_app_aud + totals.n_app_koor +
+    _dbTdTotal(totals.n_open + totals.n_open_impl +
+               totals.n_app_dh + totals.n_app_aud + totals.n_app_koor +
                totals.n_closed + totals.n_overdue, true) +
   '</tr>';
 
@@ -768,7 +757,6 @@ function _dbApprovalSection(agendas, findings, s) {
 
   var inAuditCount = (s.total || 0) - (
     (s.pending_verification || 0) + (s.open || 0) +
-    (s.tpp_or_dept_head || 0) + (s.tpp_or_auditor || 0) + (s.tpp_or_koordinator || 0) +
     (s.open_impl || 0) +
     (s.app_dept_head || 0) + (s.app_auditor || 0) + (s.app_koordinator || 0) +
     (s.closed || 0) + (s.overdue || 0)
@@ -854,16 +842,13 @@ function _dbBuildTableData(agendas, findings) {
       kategori:  ag.kategori || '',
       area_id:   ag.area_id,
       agenda_id: ag.agenda_id,
-      n_open:       _dbCount(af, 'OPEN'),
-      n_tpp_dh:     _dbCount(af, 'TPP_OR_DEPT_HEAD'),
-      n_tpp_aud:    _dbCount(af, 'TPP_OR_AUDITOR'),
-      n_tpp_koor:   _dbCount(af, 'TPP_OR_KOORDINATOR'),
-      n_open_impl:  _dbCount(af, 'OPEN_IMPL'),
-      n_app_dh:     _dbCount(af, 'APP_DEPT_HEAD'),
-      n_app_aud:    _dbCount(af, 'APP_AUDITOR'),
-      n_app_koor:   _dbCount(af, 'APP_KOORDINATOR'),
-      n_closed:     _dbCount(af, 'CLOSED'),
-      n_overdue:    _dbCount(af, 'OVERDUE'),
+      n_open:      _dbCount(af, 'OPEN'),
+      n_open_impl: _dbCount(af, 'OPEN_IMPL'),
+      n_app_dh:    _dbCount(af, 'APP_DEPT_HEAD'),
+      n_app_aud:   _dbCount(af, 'APP_AUDITOR'),
+      n_app_koor:  _dbCount(af, 'APP_KOORDINATOR'),
+      n_closed:    _dbCount(af, 'CLOSED'),
+      n_overdue:   _dbCount(af, 'OVERDUE'),
     };
   });
 }
@@ -874,7 +859,7 @@ function _dbCount(findings, status) {
 
 function _dbCalcTotals(rows) {
   var keys = [
-    'n_open','n_tpp_dh','n_tpp_aud','n_tpp_koor',
+    'n_open',
     'n_open_impl','n_app_dh','n_app_aud','n_app_koor',
     'n_closed','n_overdue'
   ];
