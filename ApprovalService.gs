@@ -16,12 +16,9 @@
 
 // STATUS_FLOW pakai string literal — tidak bergantung pada load order CONFIG
 const STATUS_FLOW = {
-  'TPP_OR_DEPT_HEAD':   { stage: 'TPP',  level: 'DeptHead',    next: 'TPP_OR_AUDITOR',     reject: 'OPEN'      },
-  'TPP_OR_AUDITOR':     { stage: 'TPP',  level: 'Auditor',     next: 'TPP_OR_KOORDINATOR', reject: 'OPEN'      },
-  'TPP_OR_KOORDINATOR': { stage: 'TPP',  level: 'Koordinator', next: 'OPEN_IMPL',           reject: 'OPEN'      },
-  'APP_DEPT_HEAD':      { stage: 'IMPL', level: 'DeptHead',    next: 'APP_AUDITOR',         reject: 'OPEN_IMPL' },
-  'APP_AUDITOR':        { stage: 'IMPL', level: 'Auditor',     next: 'APP_KOORDINATOR',     reject: 'OPEN_IMPL' },
-  'APP_KOORDINATOR':    { stage: 'IMPL', level: 'Koordinator', next: 'CLOSED',              reject: 'OPEN_IMPL' },
+  'APP_DEPT_HEAD':   { stage: 'IMPL', level: 'DeptHead',    next: 'APP_AUDITOR',      reject: 'OPEN_IMPL' },
+  'APP_AUDITOR':     { stage: 'IMPL', level: 'Auditor',     next: 'APP_KOORDINATOR',  reject: 'OPEN_IMPL' },
+  'APP_KOORDINATOR': { stage: 'IMPL', level: 'Koordinator', next: 'CLOSED',           reject: 'OPEN_IMPL' },
 };
 
 /**
@@ -100,19 +97,12 @@ function _handleApprove({ spreadsheetId, result, agenda, flow, byEmail, komentar
     try { notifyFindingClosed(agenda, result); } catch(e) {}
     _checkAgendaAllClosed(spreadsheetId, agenda.agenda_id);
 
-  } else if (flow.next === FS.OPEN_IMPL) {
-    // TPP_OR_KOORDINATOR approve → OPEN_IMPL
-    updateResultField(spreadsheetId, result.result_id, C.FINDING_STATUS, FS.OPEN_IMPL);
-    try { notifyTPPFullyApproved(agenda, result); } catch(e) {}
-
   } else {
     // Maju ke level berikutnya
     updateResultField(spreadsheetId, result.result_id, C.FINDING_STATUS, flow.next);
     try {
-      if (flow.next === FS.TPP_OR_AUDITOR)     notifyTPPToAuditors(agenda, result);
-      if (flow.next === FS.TPP_OR_KOORDINATOR) notifyTPPApprovedByAuditor(agenda, result, byEmail);
-      if (flow.next === FS.APP_AUDITOR)        notifyImplToAuditors(agenda, result);
-      if (flow.next === FS.APP_KOORDINATOR)    notifyImplApprovedByAuditor(agenda, result, byEmail);
+      if (flow.next === FS.APP_AUDITOR)     notifyImplToAuditors(agenda, result);
+      if (flow.next === FS.APP_KOORDINATOR) notifyImplApprovedByAuditor(agenda, result, byEmail);
     } catch(e) { console.warn('Notif approval gagal:', e.message); }
   }
 
@@ -194,11 +184,14 @@ function _validateApprover(agenda, level, email, findingStatus, spreadsheetId, r
  * Dipanggil setelah setiap APP_KOORDINATOR approve.
  */
 function _checkAgendaAllClosed(spreadsheetId, agendaId) {
-  const FS       = CONFIG.FINDING_STATUS;
-  const findings = getFindingsByAgenda(spreadsheetId, agendaId);
-  if (!findings.length) return false;
+  const FS        = CONFIG.FINDING_STATUS;
+  const allResults = getAuditResultsByAgenda(spreadsheetId, agendaId);
+  const nonComply  = allResults.filter(function(r) {
+    return r.status === CONFIG.RESULT_STATUS.NON_COMPLY;
+  });
+  if (!nonComply.length) return false;
 
-  const allClosed = findings.every(function(f) {
+  const allClosed = nonComply.every(function(f) {
     return f.finding_status === FS.CLOSED || f.finding_status === FS.OVERDUE;
   });
 
