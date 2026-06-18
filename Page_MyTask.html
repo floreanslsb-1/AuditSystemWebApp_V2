@@ -1214,12 +1214,20 @@ async function _verifConfirmSubmit() {
 //  SUB-PAGE: ISI TPP (Auditee)
 // ════════════════════════════════════════════════════════════
 
+function _tppInfoRow(label, value, alt) {
+  return '<div style="padding:10px 16px;' + (alt ? 'background:var(--bg)' : '') + ';' +
+    'border-bottom:1px solid var(--border)">' +
+    '<div style="font-size:10px;font-weight:700;color:var(--text-muted);' +
+        'letter-spacing:.06em;margin-bottom:3px">' + label + '</div>' +
+    '<div style="font-size:13px">' + value + '</div>' +
+  '</div>';
+}
+
 async function _renderIsiTppPage(container, task, period) {
   container.innerHTML =
     '<div class="page-loader"><div class="spinner dark"></div><span>Memuat...</span></div>';
 
   try {
-    // Ambil data TPP existing (resubmit setelah reject) dan approval log
     var tppData = await api('GET_TPP_ITEMS', {
       period_id: period.period_id,
       result_id: task.result_id,
@@ -1230,125 +1238,133 @@ async function _renderIsiTppPage(container, task, period) {
       result_id: task.result_id,
     });
 
-    var f          = task.finding;
-    var existing   = (tppData && tppData[0]) ? tppData[0] : null; // AUDIT_RESULTS row
-    var isResubmit = !!(existing && existing.correction);
+    var f        = task.finding;
+    var existing = (tppData && tppData[0]) ? tppData[0] : null;
 
-    // Hitung batas maksimal due date dari tanggal_selesai periode
+    // Hitung batas maksimal due date
     var maxDateCorr = '';
     var maxDateCA   = '';
     if (period.tanggal_selesai) {
       var endDate = new Date(period.tanggal_selesai);
-      var maxCorr = new Date(endDate);
-      maxCorr.setMonth(maxCorr.getMonth() + 3);
-      var maxCA   = new Date(endDate);
-      maxCA.setFullYear(maxCA.getFullYear() + 1);
+      var maxCorr = new Date(endDate); maxCorr.setMonth(maxCorr.getMonth() + 3);
+      var maxCA   = new Date(endDate); maxCA.setFullYear(maxCA.getFullYear() + 1);
       maxDateCorr = maxCorr.toISOString().split('T')[0];
       maxDateCA   = maxCA.toISOString().split('T')[0];
     }
 
     var historyHtml = _renderApprovalHistory(log, 'TPP');
 
+    // ── Header dokumen (dua kolom seperti form TPP fisik) ────
+    var headerCard =
+      '<div class="card mb-16">' +
+        // Judul dokumen
+        '<div style="background:var(--primary,#1F3864);border-radius:var(--radius) var(--radius) 0 0;' +
+            'padding:14px 20px">' +
+          '<div style="color:#fff;font-size:15px;font-weight:700;letter-spacing:.01em">' +
+            'Rencana Tindakan Perbaikan dan Pencegahan' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="card-body" style="padding:0">' +
+          // Dua kolom: kiri = metadata, kanan = info temuan
+          '<div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--border)">' +
+
+            // Kolom kiri — metadata dokumen
+            '<div style="border-right:1px solid var(--border)">' +
+              _tppInfoRow('No. Dokumen', escHtml(f ? f.result_id : '-'), true) +
+              _tppInfoRow('Periode Audit', escHtml(period.nama_periode || '-'), false) +
+              _tppInfoRow('Dept / Area', escHtml(task.agenda ? task.agenda.dept : '-'), true) +
+            '</div>' +
+
+            // Kolom kanan — info temuan
+            '<div>' +
+              _tppInfoRow('Deskripsi Ketidaksesuaian',
+                escHtml(f ? f.deskripsi_temuan : '-'), true) +
+              _tppInfoRow('Lokasi', escHtml(f ? f.lokasi_temuan || '-' : '-'), false) +
+              '<div style="padding:10px 16px;background:' + (true ? 'var(--bg)' : '') + '">' +
+                '<div style="font-size:10px;font-weight:700;color:var(--text-muted);' +
+                    'letter-spacing:.06em;margin-bottom:6px">BUKTI FOTO TEMUAN</div>' +
+                (f && f.foto_urls
+                  ? '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
+                      f.foto_urls.split(',').filter(Boolean).map(function(url, i) {
+                        return '<a href="' + escHtml(url) + '" target="_blank" ' +
+                          'class="btn btn-outline btn-sm" style="font-size:11px">' +
+                          '<i data-lucide="image" style="width:11px;height:11px"></i> Foto ' + (i + 1) + '</a>';
+                      }).join('') +
+                    '</div>'
+                  : '<span style="font-size:12px;color:var(--text-muted)">Tidak ada foto</span>') +
+              '</div>' +
+            '</div>' +
+
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    // ── Form TPP ─────────────────────────────────────────────
+    var formCard =
+      '<div class="card mb-16"><div class="card-body">' +
+
+        // Correction
+        '<div style="border-bottom:1px solid var(--border);padding-bottom:16px;margin-bottom:16px">' +
+          '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">' +
+            '<span style="background:var(--blue,#3b82f6);color:#fff;font-size:10px;font-weight:700;' +
+                'padding:2px 8px;border-radius:4px;letter-spacing:.05em">CORRECTION</span>' +
+            '<span style="font-size:11px;color:var(--text-muted)">Tindakan segera</span>' +
+          '</div>' +
+          '<div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start">' +
+            '<textarea class="form-control" id="tpp-correction" rows="2" ' +
+              'placeholder="Uraian tindakan perbaikan segera...">' +
+              escHtml(existing && existing.correction ? existing.correction : '') +
+            '</textarea>' +
+            '<div>' +
+              '<div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;white-space:nowrap">' +
+                'Due Date <span class="required">*</span>' +
+                (maxDateCorr ? '<br><span style="color:var(--text-muted)">maks. ' + formatDate(maxDateCorr) + '</span>' : '') +
+              '</div>' +
+              '<input class="form-control" type="date" id="tpp-due-date-correction" ' +
+                'style="min-width:150px" ' +
+                (maxDateCorr ? 'max="' + maxDateCorr + '" ' : '') +
+                'value="' + (existing && existing.due_date_correction ? existing.due_date_correction : '') + '">' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+
+        // Corrective Action
+        '<div>' +
+          '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">' +
+            '<span style="background:var(--purple,#8b5cf6);color:#fff;font-size:10px;font-weight:700;' +
+                'padding:2px 8px;border-radius:4px;letter-spacing:.05em">CORRECTIVE ACTION</span>' +
+            '<span style="font-size:11px;color:var(--text-muted)">Tindakan jangka panjang</span>' +
+          '</div>' +
+          '<div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start">' +
+            '<textarea class="form-control" id="tpp-corrective-action" rows="2" ' +
+              'placeholder="Uraian tindakan korektif jangka panjang...">' +
+              escHtml(existing && existing.corrective_action ? existing.corrective_action : '') +
+            '</textarea>' +
+            '<div>' +
+              '<div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;white-space:nowrap">' +
+                'Due Date <span class="required">*</span>' +
+                (maxDateCA ? '<br><span style="color:var(--text-muted)">maks. ' + formatDate(maxDateCA) + '</span>' : '') +
+              '</div>' +
+              '<input class="form-control" type="date" id="tpp-due-date-corrective-action" ' +
+                'style="min-width:150px" ' +
+                (maxDateCA ? 'max="' + maxDateCA + '" ' : '') +
+                'value="' + (existing && existing.due_date_corrective_action ? existing.due_date_corrective_action : '') + '">' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+
+      '</div></div>';
+
     container.innerHTML =
       _subPageHeader(
         'Isi TPP — ' + escHtml(task.agenda ? task.agenda.dept : ''),
         '#' + (f ? f.nomor_persyaratan + '.' + f.check_item_no : '')
       ) +
-
-      // Info temuan
-      '<div class="card mb-16"><div class="card-body" style="padding:14px 16px">' +
-        '<div style="display:flex;gap:10px;align-items:flex-start">' +
-          statusBadge(f ? f.status : '') +
-          '<div style="flex:1;min-width:0">' +
-            '<div style="font-size:13px;font-weight:600">' + escHtml(f ? f.deskripsi_temuan : '') + '</div>' +
-            '<div style="font-size:11px;color:var(--text-muted);margin-top:3px">' +
-              escHtml(task.agenda ? task.agenda.dept : '') +
-              ' · #' + (f ? f.nomor_persyaratan + '.' + f.check_item_no : '') +
-            '</div>' +
-            (f && f.foto_urls
-              ? '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">' +
-                  '<div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:6px;letter-spacing:.04em">FOTO BUKTI TEMUAN</div>' +
-                  '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
-                    f.foto_urls.split(',').filter(Boolean).map(function(url) {
-                      return '<a href="' + escHtml(url) + '" target="_blank" ' +
-                        'class="btn btn-outline btn-sm" style="font-size:11px">' +
-                        '<i data-lucide="image" style="width:11px;height:11px"></i> Lihat Foto</a>';
-                    }).join('') +
-                  '</div>' +
-                '</div>'
-              : '') +
-          '</div>' +
-        '</div>' +
-      '</div></div>' +
-
       historyHtml +
-
-      // Form TPP
-      '<div class="card mb-16"><div class="card-body">' +
-        '<div style="font-size:13px;font-weight:600;margin-bottom:4px">Tindakan Perbaikan & Pencegahan</div>' +
-        '<div style="font-size:11px;color:var(--text-muted);margin-bottom:16px">' +
-          'Isi correction dan corrective action beserta due date masing-masing.' +
-        '</div>' +
-
-        // ── Correction ──────────────────────────────────────
-        '<div style="background:var(--surface-2,#f8f9fa);border:1px solid var(--border);' +
-            'border-radius:8px;padding:14px 16px;margin-bottom:16px">' +
-          '<div style="font-size:12px;font-weight:700;color:var(--blue,#3b82f6);' +
-              'letter-spacing:.06em;margin-bottom:12px">' +
-            '<i data-lucide="zap" style="width:12px;height:12px;vertical-align:middle;margin-right:4px"></i>' +
-            'CORRECTION — Tindakan Segera' +
-          '</div>' +
-          '<div class="form-group">' +
-            '<label class="form-label">Tindakan Correction <span class="required">*</span></label>' +
-            '<textarea class="form-control" id="tpp-correction" rows="3" ' +
-              'placeholder="Tindakan perbaikan segera untuk mengatasi temuan...">' +
-              escHtml(existing && existing.correction ? existing.correction : '') +
-            '</textarea>' +
-          '</div>' +
-          '<div class="form-group">' +
-            '<label class="form-label">Due Date Correction <span class="required">*</span>' +
-              '<span style="font-size:11px;font-weight:400;color:var(--text-muted);margin-left:6px">' +
-                '(maks. ' + (maxDateCorr ? formatDate(maxDateCorr) : '3 bulan dari selesai periode') + ')' +
-              '</span>' +
-            '</label>' +
-            '<input class="form-control" type="date" id="tpp-due-date-correction" ' +
-              'style="max-width:200px" ' +
-              (maxDateCorr ? 'max="' + maxDateCorr + '" ' : '') +
-              'value="' + (existing && existing.due_date_correction ? existing.due_date_correction : '') + '">' +
-          '</div>' +
-        '</div>' +
-
-        // ── Corrective Action ────────────────────────────────
-        '<div style="background:var(--surface-2,#f8f9fa);border:1px solid var(--border);' +
-            'border-radius:8px;padding:14px 16px;margin-bottom:16px">' +
-          '<div style="font-size:12px;font-weight:700;color:var(--purple,#8b5cf6);' +
-              'letter-spacing:.06em;margin-bottom:12px">' +
-            '<i data-lucide="shield" style="width:12px;height:12px;vertical-align:middle;margin-right:4px"></i>' +
-            'CORRECTIVE ACTION — Tindakan Jangka Panjang' +
-          '</div>' +
-          '<div class="form-group">' +
-            '<label class="form-label">Tindakan Corrective Action <span class="required">*</span></label>' +
-            '<textarea class="form-control" id="tpp-corrective-action" rows="3" ' +
-              'placeholder="Rencana tindakan korektif jangka panjang agar temuan tidak berulang...">' +
-              escHtml(existing && existing.corrective_action ? existing.corrective_action : '') +
-            '</textarea>' +
-          '</div>' +
-          '<div class="form-group">' +
-            '<label class="form-label">Due Date Corrective Action <span class="required">*</span>' +
-              '<span style="font-size:11px;font-weight:400;color:var(--text-muted);margin-left:6px">' +
-                '(maks. ' + (maxDateCA ? formatDate(maxDateCA) : '1 tahun dari selesai periode') + ')' +
-              '</span>' +
-            '</label>' +
-            '<input class="form-control" type="date" id="tpp-due-date-corrective-action" ' +
-              'style="max-width:200px" ' +
-              (maxDateCA ? 'max="' + maxDateCA + '" ' : '') +
-              'value="' + (existing && existing.due_date_corrective_action ? existing.due_date_corrective_action : '') + '">' +
-          '</div>' +
-        '</div>' +
-
-      '</div></div>' +
-
-      '<div style="display:flex;justify-content:flex-end;gap:8px">' +
+      headerCard +
+      formCard +
+      '<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:24px">' +
         '<button class="btn btn-outline" onclick="_backToMyTask()">Batal</button>' +
         '<button class="btn btn-primary" id="tpp-submit-btn" ' +
           'onclick="singleClick(this,function(){ _submitTpp(\'' +
