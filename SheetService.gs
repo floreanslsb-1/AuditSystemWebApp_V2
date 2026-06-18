@@ -565,7 +565,7 @@ function createPeriod({ namaPeriode, tanggalMulai, tanggalSelesai, createdBy }) 
   _appendRow(sheet, [
     period_id, namaTrim, spreadsheet_id, spreadsheet_url,
     tanggalMulai, tanggalSelesai, CONFIG.PERIOD_STATUS.PLANNED,
-    createdBy, now(), false, '', '',
+    createdBy, now(), false, '', '', '',
   ]);
   invalidatePeriodsCache();
   return { period_id, spreadsheet_id, spreadsheet_url };
@@ -663,9 +663,7 @@ function completePeriod(periodId, completedBy, force) {
   if (period.status === CONFIG.PERIOD_STATUS.COMPLETED)
     throw new Error('Periode sudah selesai.');
 
-  // Tandai temuan yang sudah lewat target sebagai OVERDUE dulu
-  try { markOverdueFindings(period.spreadsheet_id, periodId); }
-  catch(e) { console.warn('markOverdue gagal:', e.message); }
+  // markOverdueFindings dihapus — overdue dicatat di dashboard, tidak mengubah finding_status
 
   // Hitung temuan yang belum closed (masih dalam alur aktif)
   const FS = CONFIG.FINDING_STATUS;
@@ -1294,15 +1292,32 @@ function verifyFindings(spreadsheetId, agendaId, updates, verifiedBy) {
       _updateCell(sheet, result._rowIndex, C.SAVED_AT          + 1, now());
     }
   });
+  // Catat event VERIFIED di APPROVAL_LOG per temuan yang di-verifikasi
+  updates.forEach(function(upd) {
+    if (upd.final_status !== CONFIG.RESULT_STATUS.COMPLY) {
+      appendApprovalLog(spreadsheetId, {
+        result_id:   upd.result_id,
+        agenda_id:   agendaId,
+        stage:       'VERIFICATION',
+        level:       'Koordinator',
+        action:      'VERIFIED',
+        by_email:    verifiedBy,
+        komentar:    '',
+        skipped:     false,
+        skip_reason: '',
+      });
+    }
+  });
+
   // Kirim notifikasi ke auditee untuk mengisi TPP
-    try {
-      const openFindings = getAuditResultsByAgenda(spreadsheetId, agendaId)
-        .filter(function(r) { return r.finding_status === CONFIG.FINDING_STATUS.OPEN; });
-      if (openFindings.length > 0) {
-        const ag = getAgendaById(agendaId);
-        if (ag) notifyFindingsVerified(ag, openFindings);
-      }
-    } catch(e) { console.warn('Notif requestTPP gagal:', e.message); }
+  try {
+    const openFindings = getAuditResultsByAgenda(spreadsheetId, agendaId)
+      .filter(function(r) { return r.finding_status === CONFIG.FINDING_STATUS.OPEN; });
+    if (openFindings.length > 0) {
+      const ag = getAgendaById(agendaId);
+      if (ag) notifyFindingsVerified(ag, openFindings);
+    }
+  } catch(e) { console.warn('Notif requestTPP gagal:', e.message); }
 
   return { success: true, verified: updates.length };
 }
@@ -1318,13 +1333,13 @@ function getLocks(spreadsheetId, agendaId) {
   const sheet = _getAuditSheet(spreadsheetId, CONFIG.AUDIT_SHEETS.REQUIREMENT_LOCKS);
   if (sheet.getLastRow() < 3) return [];
   const data = sheet.getRange(3, 1, sheet.getLastRow() - 2, LOCK_HEADERS.length).getValues();
-  const rows = data
-    .filter(r => r[0] !== '' && String(r[1]) === String(agendaId))
-    .map(row => {
-      const obj = { _rowIndex: data.indexOf(row) + 3 };
-      LOCK_HEADERS.forEach((h, j) => { obj[h] = row[j]; });
-      return obj;
-    });
+  const rows = [];
+  data.forEach(function(row, i) {
+    if (row[0] === '' || String(row[1]) !== String(agendaId)) return;
+    const obj = { _rowIndex: i + 3 };
+    LOCK_HEADERS.forEach(function(h, j) { obj[h] = row[j]; });
+    rows.push(obj);
+  });
   // Cleanup lock expired yang masih LOCKED
   rows.forEach(function(l) {
     if (l.status === 'LOCKED' && isLockExpired(l.locked_at)) {
@@ -1466,11 +1481,12 @@ function getApprovalLogByResult(spreadsheetId, resultId) {
   const sheet = _getAuditSheet(spreadsheetId, CONFIG.AUDIT_SHEETS.APPROVAL_LOG);
   if (sheet.getLastRow() < 3) return [];
   const data = sheet.getRange(3, 1, sheet.getLastRow() - 2, APPROVAL_LOG_HEADERS.length).getValues();
-  return data
-    .filter(r => r[0] !== '' && String(r[1]) === String(resultId))
-    .map(row => {
-      const obj = { _rowIndex: data.indexOf(row) + 3 };
-      APPROVAL_LOG_HEADERS.forEach((h, j) => { obj[h] = row[j]; });
-      return obj;
-    });
+  const results = [];
+  data.forEach(function(row, i) {
+    if (row[0] === '' || String(row[1]) !== String(resultId)) return;
+    const obj = { _rowIndex: i + 3 };
+    APPROVAL_LOG_HEADERS.forEach(function(h, j) { obj[h] = row[j]; });
+    results.push(obj);
+  });
+  return results;
 }
