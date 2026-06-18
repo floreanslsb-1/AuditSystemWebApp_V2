@@ -1398,7 +1398,7 @@ function submitTpp(spreadsheetId, resultId, agendaId, tppData, submittedBy) {
   updateResultField(spreadsheetId, resultId, C.DUE_DATE_CORRECTION,        tppData.due_date_correction || '');
   updateResultField(spreadsheetId, resultId, C.CORRECTIVE_ACTION,          tppData.corrective_action || '');
   updateResultField(spreadsheetId, resultId, C.DUE_DATE_CORRECTIVE_ACTION, tppData.due_date_corrective_action || '');
-  updateResultField(spreadsheetId, resultId, C.FINDING_STATUS,             CONFIG.FINDING_STATUS.TPP_OR_DEPT_HEAD);
+  updateResultField(spreadsheetId, resultId, C.FINDING_STATUS, CONFIG.FINDING_STATUS.OPEN_IMPL);
   appendApprovalLog(spreadsheetId, {
     result_id: resultId, agenda_id: agendaId,
     stage: 'TPP', level: 'AUDITEE', action: 'SUBMITTED',
@@ -1407,8 +1407,23 @@ function submitTpp(spreadsheetId, resultId, agendaId, tppData, submittedBy) {
   try {
     const ag  = getAgendaById(agendaId);
     const res = getAuditResultsByAgenda(spreadsheetId, agendaId).find(function(r) { return r.result_id === resultId; });
-    if (ag && res) notifyTPPSubmitted(ag, res);
+    if (ag && res) {
+      notifyTppSubmittedToKoordinator(ag, res);
+      notifyTppSubmittedToAuditee(ag, res);
+    }
   } catch(e) { console.warn('Notifikasi TPP submitted gagal:', e.message); }
+  return { success: true };
+}
+/**
+ * Update rencana TPP saat status OPEN_IMPL — auditee bisa edit correction/CA + due date.
+ * Tidak mengubah finding_status, tidak trigger notifikasi.
+ */
+function updateTppPlan(spreadsheetId, resultId, tppData) {
+  const C = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
+  updateResultField(spreadsheetId, resultId, C.CORRECTION,                 tppData.correction || '');
+  updateResultField(spreadsheetId, resultId, C.DUE_DATE_CORRECTION,        tppData.due_date_correction || '');
+  updateResultField(spreadsheetId, resultId, C.CORRECTIVE_ACTION,          tppData.corrective_action || '');
+  updateResultField(spreadsheetId, resultId, C.DUE_DATE_CORRECTIVE_ACTION, tppData.due_date_corrective_action || '');
   return { success: true };
 }
 
@@ -1416,9 +1431,10 @@ function submitTpp(spreadsheetId, resultId, agendaId, tppData, submittedBy) {
  * Submit bukti Correction — hanya dicatat, tidak trigger approval.
  * Correction masih bisa di-resubmit sampai Corrective Action disubmit.
  */
-function submitCorrectionImpl(spreadsheetId, resultId, agendaId, fotoUrls, submittedBy) {
+function submitCorrectionImpl(spreadsheetId, resultId, agendaId, fotoUrls, keterangan, submittedBy) {
   const C = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
   updateResultField(spreadsheetId, resultId, C.IMPL_CORRECTION_FOTO_URLS,    toCSV(fotoUrls));
+  updateResultField(spreadsheetId, resultId, C.IMPL_CORRECTION_KETERANGAN,   keterangan || '');
   updateResultField(spreadsheetId, resultId, C.IMPL_CORRECTION_SUBMITTED_AT, now());
   updateResultField(spreadsheetId, resultId, C.IMPL_CORRECTION_SUBMITTED_BY, submittedBy);
   appendApprovalLog(spreadsheetId, {
@@ -1438,11 +1454,12 @@ function submitCorrectionImpl(spreadsheetId, resultId, agendaId, fotoUrls, submi
  * Submit bukti Corrective Action — trigger approval chain.
  * Set finding_status → APP_DEPT_HEAD.
  */
-function submitCorrectiveActionImpl(spreadsheetId, resultId, agendaId, fotoUrls, submittedBy) {
+function submitCorrectiveActionImpl(spreadsheetId, resultId, agendaId, fotoUrls, keterangan, submittedBy) {
   const C = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
-  updateResultField(spreadsheetId, resultId, C.IMPL_CORRECTIVE_ACTION_FOTO_URLS, toCSV(fotoUrls));
-  updateResultField(spreadsheetId, resultId, C.IMPL_SUBMITTED_AT,                now());
-  updateResultField(spreadsheetId, resultId, C.IMPL_SUBMITTED_BY,                submittedBy);
+  updateResultField(spreadsheetId, resultId, C.IMPL_CORRECTIVE_ACTION_FOTO_URLS,  toCSV(fotoUrls));
+  updateResultField(spreadsheetId, resultId, C.IMPL_CORRECTIVE_ACTION_KETERANGAN, keterangan || '');
+  updateResultField(spreadsheetId, resultId, C.IMPL_SUBMITTED_AT,                 now());
+  updateResultField(spreadsheetId, resultId, C.IMPL_SUBMITTED_BY,                 submittedBy);
   updateResultField(spreadsheetId, resultId, C.FINDING_STATUS,                   CONFIG.FINDING_STATUS.APP_DEPT_HEAD);
   appendApprovalLog(spreadsheetId, {
     result_id: resultId, agenda_id: agendaId,
