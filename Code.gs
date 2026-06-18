@@ -575,6 +575,21 @@ function _routeAction(action, payload, profile) {
       return result_gti ? [_sanitizeObj(result_gti)] : [];
     }
 
+    case 'UPDATE_TPP_PLAN': {
+      requireAccess(['isAuditee', 'isDeptHead'], profile);
+      const period_utp = getPeriodById(payload.period_id);
+      return updateTppPlan(
+        period_utp.spreadsheet_id,
+        payload.result_id,
+        {
+          correction:                 payload.correction,
+          due_date_correction:        payload.due_date_correction,
+          corrective_action:          payload.corrective_action,
+          due_date_corrective_action: payload.due_date_corrective_action,
+        }
+      );
+    }
+
     // ── Approval ──────────────────────────────────────────────
     case 'PROCESS_APPROVAL': {
       requireAccess(['isDeptHead', 'isAuditor', 'isKoordinator'], profile);
@@ -686,6 +701,22 @@ function _routeAction(action, payload, profile) {
       return { success: true };
     }
 
+    case 'GET_HASIL_AUDIT': {
+      const period_ha = payload.period_id ? getPeriodById(payload.period_id) : getActivePeriod();
+      if (!period_ha || !period_ha.spreadsheet_id) return [];
+      const findings_ha = getAllFindingsByPeriod(period_ha.spreadsheet_id, period_ha.period_id);
+      const agendas_ha  = getCachedAgendasByPeriod(period_ha.period_id);
+      return findings_ha
+        .filter(function(f) { return f.status === CONFIG.RESULT_STATUS.NON_COMPLY; })
+        .map(function(f) {
+          var ag = agendas_ha.find(function(a) { return a.agenda_id === f.agenda_id; });
+          return _sanitizeObj(Object.assign({}, f, {
+            dept:     ag ? ag.dept     : '',
+            kategori: ag ? ag.kategori : '',
+          }));
+        });
+    }
+
     // ── Dashboard ─────────────────────────────────────────────
     case 'GET_DASHBOARD':
     case 'GET_DASHBOARD_SUMMARY':
@@ -742,9 +773,6 @@ function _getDashboardData(profile, periodId) {
       total:                findings.length,
       pending_verification: findings.filter(f => f.finding_status === fs.PENDING_VERIFICATION).length,
       open:                 findings.filter(f => f.finding_status === fs.OPEN).length,
-      tpp_or_dept_head:     findings.filter(f => f.finding_status === fs.TPP_OR_DEPT_HEAD).length,
-      tpp_or_auditor:       findings.filter(f => f.finding_status === fs.TPP_OR_AUDITOR).length,
-      tpp_or_koordinator:   findings.filter(f => f.finding_status === fs.TPP_OR_KOORDINATOR).length,
       open_impl:            findings.filter(f => f.finding_status === fs.OPEN_IMPL).length,
       app_dept_head:        findings.filter(f => f.finding_status === fs.APP_DEPT_HEAD).length,
       app_auditor:          findings.filter(f => f.finding_status === fs.APP_AUDITOR).length,
@@ -773,7 +801,6 @@ function _emptySummary() {
     total: 0,
     pending_verification: 0,
     open: 0,
-    tpp_or_dept_head: 0, tpp_or_auditor: 0, tpp_or_koordinator: 0,
     open_impl: 0,
     app_dept_head: 0, app_auditor: 0, app_koordinator: 0,
     closed: 0,
