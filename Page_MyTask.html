@@ -1214,14 +1214,7 @@ async function _verifConfirmSubmit() {
 //  SUB-PAGE: ISI TPP (Auditee)
 // ════════════════════════════════════════════════════════════
 
-function _tppInfoRow(label, value, alt) {
-  return '<div style="padding:10px 16px;' + (alt ? 'background:var(--bg)' : '') + ';' +
-    'border-bottom:1px solid var(--border)">' +
-    '<div style="font-size:10px;font-weight:700;color:var(--text-muted);' +
-        'letter-spacing:.06em;margin-bottom:3px">' + label + '</div>' +
-    '<div style="font-size:13px">' + value + '</div>' +
-  '</div>';
-}
+// _tppInfoRow tidak dipakai di Opsi A
 
 async function _renderIsiTppPage(container, task, period) {
   container.innerHTML =
@@ -1254,50 +1247,56 @@ async function _renderIsiTppPage(container, task, period) {
 
     var historyHtml = _renderApprovalHistory(log, 'TPP');
 
-    // ── Header dokumen (dua kolom seperti form TPP fisik) ────
+    // ── Header dokumen — Opsi C (Header bar + meta strip) ────
     var headerCard =
-      '<div class="card mb-16">' +
-        // Judul dokumen
-        '<div style="background:var(--primary,#1F3864);border-radius:var(--radius) var(--radius) 0 0;' +
-            'padding:14px 20px">' +
-          '<div style="color:#fff;font-size:15px;font-weight:700;letter-spacing:.01em">' +
+      '<div class="card mb-16" style="overflow:hidden">' +
+
+        // Header biru dengan judul + subtitle ringkas
+        '<div style="background:var(--primary,#1F3864);padding:12px 16px">' +
+          '<div style="color:#fff;font-size:14px;font-weight:700">' +
             'Rencana Tindakan Perbaikan dan Pencegahan' +
           '</div>' +
         '</div>' +
 
-        '<div class="card-body" style="padding:0">' +
-          // Dua kolom: kiri = metadata, kanan = info temuan
-          '<div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--border)">' +
-
-            // Kolom kiri — metadata dokumen
-            '<div style="border-right:1px solid var(--border)">' +
-              _tppInfoRow('No. Dokumen', escHtml(f ? f.result_id : '-'), true) +
-              _tppInfoRow('Periode Audit', escHtml(period.nama_periode || '-'), false) +
-              _tppInfoRow('Dept / Area', escHtml(task.agenda ? task.agenda.dept : '-'), true) +
-            '</div>' +
-
-            // Kolom kanan — info temuan
-            '<div>' +
-              _tppInfoRow('Deskripsi Ketidaksesuaian',
-                escHtml(f ? f.deskripsi_temuan : '-'), true) +
-              _tppInfoRow('Lokasi', escHtml(f ? f.lokasi_temuan || '-' : '-'), false) +
-              '<div style="padding:10px 16px;background:' + (true ? 'var(--bg)' : '') + '">' +
-                '<div style="font-size:10px;font-weight:700;color:var(--text-muted);' +
-                    'letter-spacing:.06em;margin-bottom:6px">BUKTI FOTO TEMUAN</div>' +
-                (f && f.foto_urls
-                  ? '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
-                      f.foto_urls.split(',').filter(Boolean).map(function(url, i) {
-                        return '<a href="' + escHtml(url) + '" target="_blank" ' +
-                          'class="btn btn-outline btn-sm" style="font-size:11px">' +
-                          '<i data-lucide="image" style="width:11px;height:11px"></i> Foto ' + (i + 1) + '</a>';
-                      }).join('') +
-                    '</div>'
-                  : '<span style="font-size:12px;color:var(--text-muted)">Tidak ada foto</span>') +
-              '</div>' +
-            '</div>' +
-
+        // Meta strip — 3 kolom tipis
+        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;' +
+            'border-bottom:1px solid var(--border);background:var(--surface-2,#f8f9fa)">' +
+          '<div style="padding:8px 14px;border-right:1px solid var(--border)">' +
+            '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em">NO. DOKUMEN</div>' +
+            '<div style="font-size:12px;font-weight:600;font-family:monospace">' + escHtml(f ? f.result_id : '-') + '</div>' +
+          '</div>' +
+          '<div style="padding:8px 14px;border-right:1px solid var(--border)">' +
+            '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em">PERIODE AUDIT</div>' +
+            '<div style="font-size:12px;font-weight:600">' + escHtml(period.nama_periode || '-') + '</div>' +
+          '</div>' +
+          '<div style="padding:8px 14px">' +
+            '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em">DEPT / AREA</div>' +
+            '<div style="font-size:12px;font-weight:600">' + escHtml(task.agenda ? task.agenda.dept : '-') + '</div>' +
           '</div>' +
         '</div>' +
+
+        // Info temuan — 2 kolom
+        '<div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--border)">' +
+          '<div style="padding:10px 14px;border-right:1px solid var(--border)">' +
+            '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em;margin-bottom:4px">DESKRIPSI KETIDAKSESUAIAN</div>' +
+            '<div style="font-size:13px">' + escHtml(f ? f.deskripsi_temuan : '-') + '</div>' +
+          '</div>' +
+          '<div style="padding:10px 14px">' +
+            '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em;margin-bottom:4px">LOKASI</div>' +
+            '<div style="font-size:13px;margin-bottom:10px">' + escHtml(f ? f.lokasi_temuan || '-' : '-') + '</div>' +
+            '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em;margin-bottom:4px">BUKTI FOTO</div>' +
+            (f && f.foto_urls
+              ? '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
+                  f.foto_urls.split(',').filter(Boolean).map(function(url, i) {
+                    return '<a href="' + escHtml(url) + '" target="_blank" ' +
+                      'class="btn btn-outline btn-sm" style="font-size:11px">' +
+                      '<i data-lucide="image" style="width:11px;height:11px"></i> Foto ' + (i + 1) + '</a>';
+                  }).join('') +
+                '</div>'
+              : '<span style="font-size:12px;color:var(--text-muted)">-</span>') +
+          '</div>' +
+        '</div>' +
+
       '</div>';
 
     // ── Form TPP ─────────────────────────────────────────────
@@ -1312,17 +1311,18 @@ async function _renderIsiTppPage(container, task, period) {
             '<span style="font-size:11px;color:var(--text-muted)">Tindakan segera</span>' +
           '</div>' +
           '<div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start">' +
-            '<textarea class="form-control" id="tpp-correction" rows="2" ' +
+            '<textarea class="form-control" id="tpp-correction" rows="3" ' +
+              'style="resize:vertical;min-height:unset" ' +
               'placeholder="Uraian tindakan perbaikan segera...">' +
               escHtml(existing && existing.correction ? existing.correction : '') +
             '</textarea>' +
-            '<div>' +
+            '<div style="flex-shrink:0">' +
               '<div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;white-space:nowrap">' +
                 'Due Date <span class="required">*</span>' +
                 (maxDateCorr ? '<br><span style="color:var(--text-muted)">maks. ' + formatDate(maxDateCorr) + '</span>' : '') +
               '</div>' +
               '<input class="form-control" type="date" id="tpp-due-date-correction" ' +
-                'style="min-width:150px" ' +
+                'style="width:130px;font-size:12px;padding:5px 8px" ' +
                 (maxDateCorr ? 'max="' + maxDateCorr + '" ' : '') +
                 'value="' + (existing && existing.due_date_correction ? existing.due_date_correction : '') + '">' +
             '</div>' +
@@ -1337,17 +1337,18 @@ async function _renderIsiTppPage(container, task, period) {
             '<span style="font-size:11px;color:var(--text-muted)">Tindakan jangka panjang</span>' +
           '</div>' +
           '<div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start">' +
-            '<textarea class="form-control" id="tpp-corrective-action" rows="2" ' +
+            '<textarea class="form-control" id="tpp-corrective-action" rows="3" ' +
+              'style="resize:vertical;min-height:unset" ' +
               'placeholder="Uraian tindakan korektif jangka panjang...">' +
               escHtml(existing && existing.corrective_action ? existing.corrective_action : '') +
             '</textarea>' +
-            '<div>' +
+            '<div style="flex-shrink:0">' +
               '<div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;white-space:nowrap">' +
                 'Due Date <span class="required">*</span>' +
                 (maxDateCA ? '<br><span style="color:var(--text-muted)">maks. ' + formatDate(maxDateCA) + '</span>' : '') +
               '</div>' +
               '<input class="form-control" type="date" id="tpp-due-date-corrective-action" ' +
-                'style="min-width:150px" ' +
+                'style="width:130px;font-size:12px;padding:5px 8px" ' +
                 (maxDateCA ? 'max="' + maxDateCA + '" ' : '') +
                 'value="' + (existing && existing.due_date_corrective_action ? existing.due_date_corrective_action : '') + '">' +
             '</div>' +
@@ -1841,44 +1842,83 @@ async function _massApproveAll(stage) {
 // ── Approval History ─────────────────────────────────────────
 
 function _renderApprovalHistory(log, stage) {
-  var relevant = (log || []).filter(function(l) {
-    return l.stage === stage && l.action !== 'SUBMITTED';
+  // Tampilkan semua event — tidak filter per stage agar history lengkap dari awal
+  var relevant = (log || []).slice().sort(function(a, b) {
+    return new Date(a.at) - new Date(b.at);
   });
   if (!relevant.length) return '';
 
-  return '<div class="card mb-16" style="border:1px solid var(--border)">' +
+  // Label per action + stage
+  var _actionLabel = function(l) {
+    if (l.action === 'VERIFIED')   return 'Diverifikasi';
+    if (l.action === 'APPROVED')   return 'Disetujui';
+    if (l.action === 'REJECTED')   return 'Ditolak';
+    if (l.action === 'SUBMITTED') {
+      if (l.stage === 'CORRECTION') return 'Bukti Correction Disubmit';
+      if (l.stage === 'IMPL')       return 'Bukti Impl. Disubmit';
+      return 'TPP Disubmit';
+    }
+    return l.action;
+  };
+
+  var _iconAndColor = function(l) {
+    if (l.action === 'APPROVED' || l.action === 'VERIFIED')
+      return { icon: 'check', color: 'var(--emerald,#10b981)' };
+    if (l.action === 'REJECTED')
+      return { icon: 'x', color: 'var(--rose,#f43f5e)' };
+    if (l.action === 'SUBMITTED')
+      return { icon: 'upload', color: 'var(--blue,#3b82f6)' };
+    return { icon: 'clock', color: 'var(--text-muted)' };
+  };
+
+  return '<div class="card mb-16">' +
     '<div class="card-body" style="padding:12px 16px">' +
-      '<div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:10px;letter-spacing:.06em">RIWAYAT APPROVAL</div>' +
-      relevant.map(function(l) {
-        var isApproved = l.action === 'APPROVED';
-        var isSkipped  = l.skipped === true || l.skipped === 'TRUE';
-        return '<div style="display:flex;gap:10px;align-items:flex-start;padding:6px 0;' +
-          'border-bottom:1px solid var(--border)">' +
-          '<div style="width:20px;height:20px;border-radius:50%;flex-shrink:0;' +
-            'background:' + (isApproved ? 'var(--emerald,#10b981)' : 'var(--rose,#f43f5e)') + ';' +
-            'display:flex;align-items:center;justify-content:center;margin-top:1px">' +
-            '<i data-lucide="' + (isApproved ? 'check' : 'x') + '" ' +
-              'style="width:11px;height:11px;color:#fff"></i>' +
+      '<div style="font-size:11px;font-weight:700;color:var(--text-muted);' +
+          'margin-bottom:10px;letter-spacing:.06em">RIWAYAT DOKUMEN</div>' +
+      relevant.map(function(l, idx) {
+        var ic       = _iconAndColor(l);
+        var isLast   = idx === relevant.length - 1;
+        var isSkipped = l.skipped === true || l.skipped === 'TRUE';
+        return '<div style="display:flex;gap:10px;align-items:flex-start;' +
+            'padding:8px 0;' + (!isLast ? 'border-bottom:1px solid var(--border)' : '') + '">' +
+
+          // Ikon bulat
+          '<div style="width:22px;height:22px;border-radius:50%;flex-shrink:0;' +
+              'background:' + ic.color + ';' +
+              'display:flex;align-items:center;justify-content:center;margin-top:1px">' +
+            '<i data-lucide="' + ic.icon + '" style="width:11px;height:11px;color:#fff"></i>' +
           '</div>' +
+
           '<div style="flex:1;min-width:0">' +
-            '<div style="font-size:12px;font-weight:600">' +
-              escHtml(l.level) +
-              (isSkipped ? ' <span class="badge badge-amber" style="font-size:10px">Skip</span>' : '') +
+
+            // Baris pertama: label aksi + badge stage
+            '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
+              '<span style="font-size:12px;font-weight:600">' + _actionLabel(l) + '</span>' +
+              '<span style="font-size:10px;background:var(--surface-2,#f3f4f6);' +
+                  'color:var(--text-muted);padding:1px 6px;border-radius:4px">' +
+                escHtml(l.stage || '') +
+              '</span>' +
+              (isSkipped ? '<span class="badge badge-amber" style="font-size:10px">Skip</span>' : '') +
             '</div>' +
-            '<div style="font-size:11px;color:var(--text-muted)">' +
-              escHtml(l.by_email ? l.by_email.split('@')[0] : '') +
+
+            // Baris kedua: siapa + kapan
+            '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">' +
+              escHtml(l.level || '') +
+              (l.by_email ? ' · ' + escHtml(l.by_email.split('@')[0]) : '') +
               ' · ' + formatDate(l.at) +
             '</div>' +
+
+            // Komentar kalau ada
             (l.komentar
-              ? '<div style="font-size:12px;margin-top:3px;color:' +
-                  (isApproved ? 'var(--text)' : 'var(--rose)') + '">' +
+              ? '<div style="font-size:12px;margin-top:4px;padding:6px 8px;' +
+                  'background:' + (l.action === 'REJECTED' ? '#fff1f2' : 'var(--bg)') + ';' +
+                  'border-left:2px solid ' + ic.color + ';' +
+                  'border-radius:0 4px 4px 0;color:' +
+                  (l.action === 'REJECTED' ? 'var(--rose,#f43f5e)' : 'var(--text)') + '">' +
                   escHtml(l.komentar) +
                 '</div>'
               : '') +
-            (isSkipped && l.skip_reason
-              ? '<div style="font-size:11px;color:var(--amber,#f59e0b);margin-top:2px">' +
-                  'Alasan skip: ' + escHtml(l.skip_reason) + '</div>'
-              : '') +
+
           '</div>' +
         '</div>';
       }).join('') +
