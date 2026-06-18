@@ -1,0 +1,495 @@
+<script>
+// ════════════════════════════════════════════════════════════
+//  Page_HasilAudit.html
+//  Tabel semua temuan Non Comply + status correction/corrective action
+//  + overdue flags (computed di frontend, tidak disimpan ke sheet)
+// ════════════════════════════════════════════════════════════
+
+Pages['hasil-audit'] = async function(container) {
+  container.innerHTML =
+    '<div class="page-loader"><div class="spinner dark"></div><span>Memuat data temuan...</span></div>';
+  try {
+    var allPeriods = await cachedApi('GET_PERIODS', {}, 60);
+    var viewable   = (allPeriods || []).filter(function(p) {
+      return p.status === 'ACTIVE' || p.status === 'COMPLETED';
+    }).sort(function(a, b) {
+      if (a.status === 'ACTIVE') return -1;
+      if (b.status === 'ACTIVE') return 1;
+      return (b.completed_at || b.tanggal_selesai || '') >
+             (a.completed_at || a.tanggal_selesai || '') ? 1 : -1;
+    });
+
+    var defaultId  = App.activePeriod ? App.activePeriod.period_id
+                   : (viewable[0] ? viewable[0].period_id : null);
+    var selectedId = (App.hasilAuditSelectedPeriodId &&
+      viewable.find(function(p) { return p.period_id === App.hasilAuditSelectedPeriodId; }))
+      ? App.hasilAuditSelectedPeriodId : defaultId;
+
+    App.hasilAuditSelectedPeriodId = selectedId;
+    App._hasilAuditPeriods         = viewable;
+
+    var selectedPeriod = viewable.find(function(p) { return p.period_id === selectedId; });
+
+    var findings = await cachedApi('GET_HASIL_AUDIT', { period_id: selectedId }, 20);
+    _renderHasilAudit(container, findings, viewable, selectedId, selectedPeriod);
+  } catch(err) {
+    container.innerHTML =
+      '<div class="empty-state">' +
+        '<i data-lucide="alert-triangle" style="width:48px;height:48px;opacity:.3;margin-bottom:16px"></i>' +
+        '<div class="empty-title">Gagal Memuat Data</div>' +
+        '<div class="empty-desc">' + escHtml(err.message) + '</div>' +
+      '</div>';
+    lucide.createIcons();
+  }
+};
+
+async function _hasilAuditSwitchPeriod(periodId) {
+  App.hasilAuditSelectedPeriodId = periodId;
+  var container = document.getElementById('page-content');
+  var dataSection = document.getElementById('hasil-audit-data');
+  if (dataSection) {
+    dataSection.innerHTML =
+      '<div class="page-loader" style="padding:60px 0"><div class="spinner dark"></div>' +
+      '<span>Memuat data...</span></div>';
+  }
+  try {
+    var viewable       = App._hasilAuditPeriods || [];
+    var selectedPeriod = viewable.find(function(p) { return p.period_id === periodId; });
+    var findings       = await cachedApi('GET_HASIL_AUDIT', { period_id: periodId }, 20);
+    if (dataSection) _renderHasilAuditData(dataSection, findings, periodId, selectedPeriod);
+    lucide.createIcons();
+  } catch(err) {
+    if (dataSection) dataSection.innerHTML =
+      '<div class="empty-state"><div class="empty-desc">' + escHtml(err.message) + '</div></div>';
+  }
+}
+
+// ── Hitung overdue flags dari data yang ada (computed, tidak simpan ke sheet) ──
+function _computeOverdue(result, period) {
+  var today = new Date(); today.setHours(0, 0, 0, 0);
+  var flags = { tpp_plan: false, correction: false, corrective_action: false };
+
+  // Rencana TPP overdue — bandingkan tpp_submitted_at vs tpp_plan_due_date periode
+  if (period && period.tpp_plan_due_date) {
+    var planDue = new Date(period.tpp_plan_due_date); planDue.setHours(0,0,0,0);
+    if (!result.tpp_submitted_at) {
+      if (today > planDue) flags.tpp_plan = true;
+    } else {
+      var submitted = new Date(result.tpp_submitted_at); submitted.setHours(0,0,0,0);
+      if (submitted > planDue) flags.tpp_plan = true;
+    }
+  }
+
+  // Correction overdue
+  if (result.due_date_correction) {
+    var corrDue = new Date(result.due_date_correction); corrDue.setHours(0,0,0,0);
+    if (!result.impl_correction_submitted_at) {
+      if (today > corrDue) flags.correction = true;
+    } else {
+      var corrSubmitted = new Date(result.impl_correction_submitted_at); corrSubmitted.setHours(0,0,0,0);
+      if (corrSubmitted > corrDue) flags.correction = true;
+    }
+  }
+
+  // Corrective Action overdue
+  if (result.due_date_corrective_action) {
+    var caDue = new Date(result.due_date_corrective_action); caDue.setHours(0,0,0,0);
+    if (!result.impl_submitted_at) {
+      if (today > caDue) flags.corrective_action = true;
+    } else {
+      var caSubmitted = new Date(result.impl_submitted_at); caSubmitted.setHours(0,0,0,0);
+      if (caSubmitted > caDue) flags.corrective_action = true;
+    }
+  }
+
+  return flags;
+}
+
+// ── Hitung label status due date ──────────────────────────────
+function _dueDateStatus(dueDateStr, submittedAtStr) {
+  if (!dueDateStr) return '';
+  var today     = new Date(); today.setHours(0,0,0,0);
+  var due       = new Date(dueDateStr); due.setHours(0,0,0,0);
+  var diffDays  = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
+
+  if (submittedAtStr) {
+    var sub = new Date(submittedAtStr); sub.setHours(0,0,0,0);
+    if (sub > due) {
+      var lateDays = Math.ceil((sub - due) / (1000 * 60 * 60 * 24));
+      return '<span style="color:var(--rose,#f43f5e);font-size:11px;font-weight:600">Terlambat ' + lateDays + ' hari</span>';
+    }
+    return '<span style="color:var(--emerald,#10b981);font-size:11px;font-weight:600">Tepat waktu</span>';
+  }
+
+  if (diffDays < 0)
+    return '<span style="color:var(--rose,#f43f5e);font-size:11px;font-weight:700">Overdue ' + Math.abs(diffDays) + ' hari</span>';
+  if (diffDays === 0)
+    return '<span style="color:var(--rose,#f43f5e);font-size:11px;font-weight:600">Jatuh tempo hari ini</span>';
+  if (diffDays <= 7)
+    return '<span style="color:var(--amber,#f59e0b);font-size:11px;font-weight:600">Due in ' + diffDays + ' hari</span>';
+  return '<span style="color:var(--text-muted);font-size:11px">Due in ' + diffDays + ' hari</span>';
+}
+
+function _renderHasilAudit(container, findings, viewable, selectedId, selectedPeriod) {
+  var selectorHtml = '';
+  if (viewable.length >= 1) {
+    selectorHtml =
+      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px">' +
+        '<span style="font-size:12px;font-weight:600;color:var(--text-muted);flex-shrink:0">Lihat periode:</span>' +
+        '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+          viewable.map(function(p) {
+            var isSelected = p.period_id === selectedId;
+            var isActive   = p.status === 'ACTIVE';
+            return '<button onclick="singleClick(this,function(){ _hasilAuditSwitchPeriod(\'' + escAttr(p.period_id) + '\') })" ' +
+              'style="padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;' +
+                'border:1.5px solid ' + (isSelected ? 'var(--blue,#3b82f6)' : 'var(--border)') + ';' +
+                'background:' + (isSelected ? 'rgba(59,130,246,.1)' : 'transparent') + ';' +
+                'color:' + (isSelected ? 'var(--blue,#3b82f6)' : 'var(--text-muted)') + ';' +
+                'display:inline-flex;align-items:center;gap:5px">' +
+              (isActive ? '<span style="width:6px;height:6px;border-radius:50%;background:var(--emerald,#10b981);flex-shrink:0"></span>' : '') +
+              escHtml(p.nama_periode) +
+            '</button>';
+          }).join('') +
+        '</div>' +
+      '</div>';
+  }
+  container.innerHTML = selectorHtml + '<div id="hasil-audit-data"></div>';
+  var dataSection = document.getElementById('hasil-audit-data');
+  _renderHasilAuditData(dataSection, findings, selectedId, selectedPeriod);
+  lucide.createIcons();
+}
+
+function _renderHasilAuditData(container, findings, selectedId, period) {
+  if (!findings || !findings.length) {
+    container.innerHTML =
+      '<div class="page-hero mb-24"><h1 style="margin:0">Hasil Audit</h1></div>' +
+      '<div class="empty-state">' +
+        '<i data-lucide="inbox" style="width:48px;height:48px;opacity:.25;margin-bottom:16px"></i>' +
+        '<div class="empty-title">Belum ada temuan Non Comply</div>' +
+        '<div class="empty-desc">Temuan akan muncul di sini setelah audit diselesaikan dan diverifikasi.</div>' +
+      '</div>';
+    lucide.createIcons();
+    return;
+  }
+
+  // ── Render tabel ──────────────────────────────────────────
+  var rows = findings.map(function(f) {
+    var overdue = _computeOverdue(f, period);
+
+    // Finding status badge
+    var fsColor = {
+      'OPEN':            'var(--rose,#f43f5e)',
+      'OPEN_IMPL':       'var(--blue,#3b82f6)',
+      'APP_DEPT_HEAD':   'var(--purple,#8b5cf6)',
+      'APP_AUDITOR':     'var(--purple,#8b5cf6)',
+      'APP_KOORDINATOR': 'var(--purple,#8b5cf6)',
+      'CLOSED':          'var(--emerald,#10b981)',
+      'OVERDUE':         'var(--rose,#f43f5e)',
+    };
+    var fsLabel = {
+      'OPEN':            'Open TPP',
+      'OPEN_IMPL':       'Open Impl',
+      'APP_DEPT_HEAD':   'Review Dept Head',
+      'APP_AUDITOR':     'Review Auditor',
+      'APP_KOORDINATOR': 'Review Koordinator',
+      'CLOSED':          'Closed',
+      'OVERDUE':         'Overdue',
+    };
+    var fsCol   = fsColor[f.finding_status] || 'var(--text-muted)';
+    var fsLbl   = fsLabel[f.finding_status] || f.finding_status || '-';
+    var fsBadge = '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;' +
+      'border-radius:20px;font-size:10px;font-weight:700;' +
+      'background:' + fsCol + '1a;color:' + fsCol + ';border:1px solid ' + fsCol + '44">' +
+      fsLbl + '</span>';
+
+    // Foto temuan
+    var fotoHtml = f.foto_urls
+      ? f.foto_urls.split(',').filter(Boolean).map(function(url, i) {
+          return '<a href="' + escHtml(url) + '" target="_blank" ' +
+            'class="btn btn-outline btn-sm" style="font-size:10px;padding:2px 7px">' +
+            '<i data-lucide="image" style="width:10px;height:10px"></i> ' + (i + 1) + '</a>';
+        }).join('')
+      : '<span style="color:var(--text-muted);font-size:11px">-</span>';
+
+    // Bukti correction
+    var corrBukti = f.impl_correction_foto_urls
+      ? f.impl_correction_foto_urls.split(',').filter(Boolean).map(function(url, i) {
+          return '<a href="' + escHtml(url) + '" target="_blank" ' +
+            'class="btn btn-outline btn-sm" style="font-size:10px;padding:2px 7px">' +
+            '<i data-lucide="image" style="width:10px;height:10px"></i> ' + (i + 1) + '</a>';
+        }).join('')
+      : '<span style="color:var(--text-muted);font-size:11px">-</span>';
+
+    // Bukti corrective action
+    var caBukti = f.impl_corrective_action_foto_urls
+      ? f.impl_corrective_action_foto_urls.split(',').filter(Boolean).map(function(url, i) {
+          return '<a href="' + escHtml(url) + '" target="_blank" ' +
+            'class="btn btn-outline btn-sm" style="font-size:10px;padding:2px 7px">' +
+            '<i data-lucide="image" style="width:10px;height:10px"></i> ' + (i + 1) + '</a>';
+        }).join('')
+      : '<span style="color:var(--text-muted);font-size:11px">-</span>';
+
+    // Overdue flag cell helper
+    function _overdueFlag(isOverdue) {
+      return isOverdue
+        ? '<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;' +
+            'color:var(--rose,#f43f5e)">' +
+            '<i data-lucide="alert-triangle" style="width:10px;height:10px"></i> Overdue' +
+          '</span>'
+        : '';
+    }
+
+    return '<tr>' +
+      // Result ID
+      '<td style="font-family:monospace;font-size:11px;white-space:nowrap;color:var(--text-muted)">' +
+        escHtml(f.result_id || '') +
+      '</td>' +
+      // Dept
+      '<td style="white-space:nowrap;font-weight:600;font-size:13px">' + escHtml(f.dept || '') + '</td>' +
+      // Deskripsi temuan
+      '<td style="font-size:13px;min-width:160px">' + escHtml(f.deskripsi_temuan || '-') + '</td>' +
+      // Lokasi
+      '<td style="font-size:12px;color:var(--text-muted);white-space:nowrap">' + escHtml(f.lokasi_temuan || '-') + '</td>' +
+      // Bukti temuan
+      '<td style="white-space:nowrap">' + fotoHtml + '</td>' +
+      // Status temuan
+      '<td style="white-space:nowrap">' +
+        fsBadge +
+        (overdue.tpp_plan ? '<br><span style="font-size:10px;color:var(--amber,#f59e0b);font-weight:600">Rencana TPP Overdue</span>' : '') +
+      '</td>' +
+      // Correction
+      '<td style="font-size:12px;min-width:140px">' + escHtml(f.correction || '-') + '</td>' +
+      // Status correction
+      '<td style="white-space:nowrap">' +
+        _dueDateStatus(f.due_date_correction, f.impl_correction_submitted_at) +
+        (overdue.correction ? '<br>' + '<span style="font-size:10px;font-weight:700;color:var(--rose,#f43f5e)">⚠ Overdue</span>' : '') +
+      '</td>' +
+      // Due date correction
+      '<td style="font-size:12px;white-space:nowrap;color:var(--text-muted)">' +
+        (f.due_date_correction ? formatDate(f.due_date_correction) : '-') +
+      '</td>' +
+      // Aktual correction submitted
+      '<td style="font-size:12px;white-space:nowrap;color:var(--text-muted)">' +
+        (f.impl_correction_submitted_at ? formatDate(f.impl_correction_submitted_at) : '-') +
+      '</td>' +
+      // Bukti correction
+      '<td style="white-space:nowrap">' + corrBukti + '</td>' +
+      // Keterangan correction
+      '<td style="font-size:12px;min-width:120px;color:var(--text-muted)">' +
+        escHtml(f.impl_correction_keterangan || '-') +
+      '</td>' +
+      // Corrective Action
+      '<td style="font-size:12px;min-width:140px">' + escHtml(f.corrective_action || '-') + '</td>' +
+      // Status corrective action
+      '<td style="white-space:nowrap">' +
+        _dueDateStatus(f.due_date_corrective_action, f.impl_submitted_at) +
+        (overdue.corrective_action ? '<br><span style="font-size:10px;font-weight:700;color:var(--rose,#f43f5e)">⚠ Overdue</span>' : '') +
+      '</td>' +
+      // Due date corrective action
+      '<td style="font-size:12px;white-space:nowrap;color:var(--text-muted)">' +
+        (f.due_date_corrective_action ? formatDate(f.due_date_corrective_action) : '-') +
+      '</td>' +
+      // Aktual corrective action submitted
+      '<td style="font-size:12px;white-space:nowrap;color:var(--text-muted)">' +
+        (f.impl_submitted_at ? formatDate(f.impl_submitted_at) : '-') +
+      '</td>' +
+      // Bukti corrective action
+      '<td style="white-space:nowrap">' + caBukti + '</td>' +
+      // Keterangan corrective action
+      '<td style="font-size:12px;min-width:120px;color:var(--text-muted)">' +
+        escHtml(f.impl_corrective_action_keterangan || '-') +
+      '</td>' +
+    '</tr>';
+  }).join('');
+
+  container.innerHTML =
+    // Header
+    '<div class="page-hero mb-16">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">' +
+        '<div>' +
+          '<h1 style="margin:0 0 4px">Hasil Audit</h1>' +
+          '<div style="font-size:13px;color:var(--text-muted)">' +
+            (period ? escHtml(period.nama_periode) : '') + ' · ' + findings.length + ' temuan Non Comply' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+
+    // Search + filter bar
+    '<div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap">' +
+      '<div style="position:relative;flex:1;min-width:200px">' +
+        '<i data-lucide="search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);' +
+          'width:14px;height:14px;color:var(--text-muted);pointer-events:none"></i>' +
+        '<input type="text" id="ha-search" class="form-control" ' +
+          'style="padding-left:34px;font-size:13px" ' +
+          'placeholder="Cari dept, deskripsi, result ID..." ' +
+          'oninput="_hasilAuditFilter()">' +
+      '</div>' +
+      '<select id="ha-filter-status" class="form-control" style="font-size:13px;width:auto;min-width:160px" ' +
+        'onchange="_hasilAuditFilter()">' +
+        '<option value="">Semua Status</option>' +
+        '<option value="OPEN">Open TPP</option>' +
+        '<option value="OPEN_IMPL">Open Implementasi</option>' +
+        '<option value="APP_DEPT_HEAD">Review Dept Head</option>' +
+        '<option value="APP_AUDITOR">Review Auditor</option>' +
+        '<option value="APP_KOORDINATOR">Review Koordinator</option>' +
+        '<option value="CLOSED">Closed</option>' +
+        '<option value="OVERDUE">Overdue</option>' +
+      '</select>' +
+      '<select id="ha-filter-overdue" class="form-control" style="font-size:13px;width:auto;min-width:160px" ' +
+        'onchange="_hasilAuditFilter()">' +
+        '<option value="">Semua</option>' +
+        '<option value="tpp_plan">Rencana TPP Overdue</option>' +
+        '<option value="correction">Correction Overdue</option>' +
+        '<option value="corrective_action">Corrective Action Overdue</option>' +
+      '</select>' +
+    '</div>' +
+
+    // Tabel
+    '<div style="overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border)">' +
+      '<table id="ha-table" style="width:100%;border-collapse:collapse;min-width:1400px;font-size:12px">' +
+        '<thead>' +
+          '<tr style="background:var(--surface2)">' +
+            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
+              'color:var(--text-muted);border-bottom:1px solid var(--border);white-space:nowrap">Result ID</th>' +
+            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
+              'color:var(--text-muted);border-bottom:1px solid var(--border);white-space:nowrap">Dept</th>' +
+            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
+              'color:var(--text-muted);border-bottom:1px solid var(--border)">Deskripsi Temuan</th>' +
+            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
+              'color:var(--text-muted);border-bottom:1px solid var(--border)">Lokasi</th>' +
+            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
+              'color:var(--text-muted);border-bottom:1px solid var(--border)">Bukti Temuan</th>' +
+            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
+              'color:var(--text-muted);border-bottom:1px solid var(--border);white-space:nowrap;' +
+              'border-right:2px solid var(--border)">Status Temuan</th>' +
+            // Correction group
+            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
+              'color:var(--blue,#3b82f6);border-bottom:1px solid var(--border);background:rgba(59,130,246,.04)">Correction</th>' +
+            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
+              'color:var(--blue,#3b82f6);border-bottom:1px solid var(--border);background:rgba(59,130,246,.04);white-space:nowrap">Status</th>' +
+            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
+              'color:var(--blue,#3b82f6);border-bottom:1px solid var(--border);background:rgba(59,130,246,.04);white-space:nowrap">Due Date</th>' +
+            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
+              'color:var(--blue,#3b82f6);border-bottom:1px solid var(--border);background:rgba(59,130,246,.04);white-space:nowrap">Aktual Submit</th>' +
+            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
+              'color:var(--blue,#3b82f6);border-bottom:1px solid var(--border);background:rgba(59,130,246,.04)">Bukti</th>' +
+            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
+              'color:var(--blue,#3b82f6);border-bottom:1px solid var(--border);background:rgba(59,130,246,.04);' +
+              'border-right:2px solid var(--border)">Keterangan</th>' +
+            // Corrective Action group
+            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
+              'color:var(--purple,#8b5cf6);border-bottom:1px solid var(--border);background:rgba(139,92,246,.04)">Corrective Action</th>' +
+            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
+              'color:var(--purple,#8b5cf6);border-bottom:1px solid var(--border);background:rgba(139,92,246,.04);white-space:nowrap">Status</th>' +
+            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
+              'color:var(--purple,#8b5cf6);border-bottom:1px solid var(--border);background:rgba(139,92,246,.04);white-space:nowrap">Due Date</th>' +
+            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
+              'color:var(--purple,#8b5cf6);border-bottom:1px solid var(--border);background:rgba(139,92,246,.04);white-space:nowrap">Aktual Submit</th>' +
+            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
+              'color:var(--purple,#8b5cf6);border-bottom:1px solid var(--border);background:rgba(139,92,246,.04)">Bukti</th>' +
+            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
+              'color:var(--purple,#8b5cf6);border-bottom:1px solid var(--border);background:rgba(139,92,246,.04)">Keterangan</th>' +
+          '</tr>' +
+        '</thead>' +
+        '<tbody id="ha-tbody">' + rows + '</tbody>' +
+      '</table>' +
+    '</div>' +
+
+    '<div id="ha-empty" style="display:none;text-align:center;padding:48px;font-size:13px;color:var(--text-muted)">' +
+      'Tidak ada temuan yang sesuai dengan filter.' +
+    '</div>';
+
+  // Simpan data findings untuk filter
+  window._hasilAuditFindings = findings;
+  window._hasilAuditPeriod   = period;
+
+  lucide.createIcons();
+}
+
+// ── Filter / Search ───────────────────────────────────────────
+function _hasilAuditFilter() {
+  var query    = (document.getElementById('ha-search')         || {}).value?.toLowerCase()?.trim() || '';
+  var status   = (document.getElementById('ha-filter-status')  || {}).value || '';
+  var overdue  = (document.getElementById('ha-filter-overdue') || {}).value || '';
+  var findings = window._hasilAuditFindings || [];
+  var period   = window._hasilAuditPeriod   || null;
+  var tbody    = document.getElementById('ha-tbody');
+  var empty    = document.getElementById('ha-empty');
+  var table    = document.getElementById('ha-table');
+  if (!tbody) return;
+
+  var filtered = findings.filter(function(f) {
+    // Query search
+    if (query) {
+      var haystack = [f.result_id, f.dept, f.deskripsi_temuan, f.lokasi_temuan,
+                      f.correction, f.corrective_action].join(' ').toLowerCase();
+      if (!haystack.includes(query)) return false;
+    }
+    // Status filter
+    if (status && f.finding_status !== status) return false;
+    // Overdue filter
+    if (overdue) {
+      var flags = _computeOverdue(f, period);
+      if (!flags[overdue]) return false;
+    }
+    return true;
+  });
+
+  // Re-render tbody
+  tbody.innerHTML = filtered.map(function(f) {
+    var overdueFl = _computeOverdue(f, period);
+    var fsColor = {
+      'OPEN':'var(--rose,#f43f5e)','OPEN_IMPL':'var(--blue,#3b82f6)',
+      'APP_DEPT_HEAD':'var(--purple,#8b5cf6)','APP_AUDITOR':'var(--purple,#8b5cf6)',
+      'APP_KOORDINATOR':'var(--purple,#8b5cf6)','CLOSED':'var(--emerald,#10b981)','OVERDUE':'var(--rose,#f43f5e)',
+    };
+    var fsLabel = {
+      'OPEN':'Open TPP','OPEN_IMPL':'Open Impl','APP_DEPT_HEAD':'Review Dept Head',
+      'APP_AUDITOR':'Review Auditor','APP_KOORDINATOR':'Review Koordinator','CLOSED':'Closed','OVERDUE':'Overdue',
+    };
+    var fsCol   = fsColor[f.finding_status] || 'var(--text-muted)';
+    var fsLbl   = fsLabel[f.finding_status] || f.finding_status || '-';
+    var fsBadge = '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;' +
+      'border-radius:20px;font-size:10px;font-weight:700;' +
+      'background:' + fsCol + '1a;color:' + fsCol + ';border:1px solid ' + fsCol + '44">' + fsLbl + '</span>';
+
+    function _fotoLinks(urls) {
+      if (!urls) return '<span style="color:var(--text-muted);font-size:11px">-</span>';
+      return urls.split(',').filter(Boolean).map(function(url, i) {
+        return '<a href="' + escHtml(url) + '" target="_blank" class="btn btn-outline btn-sm" style="font-size:10px;padding:2px 7px">' +
+          '<i data-lucide="image" style="width:10px;height:10px"></i> ' + (i + 1) + '</a>';
+      }).join('');
+    }
+
+    return '<tr>' +
+      '<td style="font-family:monospace;font-size:11px;white-space:nowrap;color:var(--text-muted)">' + escHtml(f.result_id || '') + '</td>' +
+      '<td style="white-space:nowrap;font-weight:600;font-size:13px">' + escHtml(f.dept || '') + '</td>' +
+      '<td style="font-size:13px;min-width:160px">' + escHtml(f.deskripsi_temuan || '-') + '</td>' +
+      '<td style="font-size:12px;color:var(--text-muted);white-space:nowrap">' + escHtml(f.lokasi_temuan || '-') + '</td>' +
+      '<td style="white-space:nowrap">' + _fotoLinks(f.foto_urls) + '</td>' +
+      '<td style="white-space:nowrap;border-right:2px solid var(--border)">' +
+        fsBadge +
+        (overdueFl.tpp_plan ? '<br><span style="font-size:10px;color:var(--amber,#f59e0b);font-weight:600">Rencana TPP Overdue</span>' : '') +
+      '</td>' +
+      '<td style="font-size:12px;min-width:140px">' + escHtml(f.correction || '-') + '</td>' +
+      '<td style="white-space:nowrap">' + _dueDateStatus(f.due_date_correction, f.impl_correction_submitted_at) + '</td>' +
+      '<td style="font-size:12px;white-space:nowrap;color:var(--text-muted)">' + (f.due_date_correction ? formatDate(f.due_date_correction) : '-') + '</td>' +
+      '<td style="font-size:12px;white-space:nowrap;color:var(--text-muted)">' + (f.impl_correction_submitted_at ? formatDate(f.impl_correction_submitted_at) : '-') + '</td>' +
+      '<td style="white-space:nowrap">' + _fotoLinks(f.impl_correction_foto_urls) + '</td>' +
+      '<td style="font-size:12px;min-width:120px;color:var(--text-muted);border-right:2px solid var(--border)">' + escHtml(f.impl_correction_keterangan || '-') + '</td>' +
+      '<td style="font-size:12px;min-width:140px">' + escHtml(f.corrective_action || '-') + '</td>' +
+      '<td style="white-space:nowrap">' + _dueDateStatus(f.due_date_corrective_action, f.impl_submitted_at) + '</td>' +
+      '<td style="font-size:12px;white-space:nowrap;color:var(--text-muted)">' + (f.due_date_corrective_action ? formatDate(f.due_date_corrective_action) : '-') + '</td>' +
+      '<td style="font-size:12px;white-space:nowrap;color:var(--text-muted)">' + (f.impl_submitted_at ? formatDate(f.impl_submitted_at) : '-') + '</td>' +
+      '<td style="white-space:nowrap">' + _fotoLinks(f.impl_corrective_action_foto_urls) + '</td>' +
+      '<td style="font-size:12px;min-width:120px;color:var(--text-muted)">' + escHtml(f.impl_corrective_action_keterangan || '-') + '</td>' +
+    '</tr>';
+  }).join('');
+
+  var visible = filtered.length > 0;
+  if (table)  table.style.display = visible ? '' : 'none';
+  if (empty)  empty.style.display = visible ? 'none' : '';
+  lucide.createIcons();
+}
+</script>
