@@ -1398,7 +1398,7 @@ async function _submitTpp(resultId, agendaId, periodId) {
     });
     clearCache('GET_ALL_FINDINGS_BY_PERIOD');
     clearCache('GET_APPROVAL_LOG');
-    toast('TPP berhasil disubmit. Menunggu approval Dept Head.', 'success');
+    toast('TPP berhasil disubmit. Silakan upload bukti implementasi.', 'success');
     navigateTo('mytask');
   } catch(err) {
     toast(err.message, 'error');
