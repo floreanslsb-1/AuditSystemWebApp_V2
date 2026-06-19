@@ -896,16 +896,37 @@ function jsonStr(data) {
 //    Event    : Time-driven → Day timer → 08:00 - 09:00 WIB
 //
 //  Yang dicek setiap hari:
-//  1. TPP Plan Due Date reminder — H-7 dan H-3 dari tpp_plan_due_date
-//  2. Pending approval digest    — hanya Senin minggu ke-1 & ke-3 tiap bulan
-//  3. Correction overdue digest  — hanya Senin minggu ke-1 & ke-3 tiap bulan
+//  1. TPP Plan Due Date reminder      — H-7 dan H-3 dari tpp_plan_due_date,
+//                                        broadcast ke SEMUA auditee + Koordinator
+//                                        (terlepas status submit, karena bersifat broadcast)
+//  2. Reminder bulanan OPEN+OPEN_IMPL — Senin minggu ke-1 tiap bulan, TANPA limit,
+//                                        terus terkirim sampai temuan CLOSED atau
+//                                        periode tidak lagi ACTIVE
+//  3. Pending approval digest         — Senin minggu ke-1 & ke-3, maksimal 6x per status
 // ════════════════════════════════════════════════════════════
+
+/**
+ * True jika `date` adalah Senin minggu ke-1 dalam bulan berjalan.
+ */
+function _isFirstMonday(date) {
+  if (date.getDay() !== 1) return false; // bukan Senin sama sekali
+
+  var firstOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
+  var firstMonday  = new Date(firstOfMonth);
+  var offsetToMon  = (8 - firstOfMonth.getDay()) % 7; // 0 kalau tgl 1 sudah Senin
+  firstMonday.setDate(1 + offsetToMon);
+
+  var diffWeeks  = Math.round((date - firstMonday) / (7 * 24 * 60 * 60 * 1000));
+  var weekNumber = diffWeeks + 1; // Senin pertama = minggu ke-1
+
+  return weekNumber === 1;
+}
 
 /**
  * True jika `date` adalah Senin minggu ke-1 ATAU minggu ke-3 dalam bulan berjalan.
  * "Minggu ke-N" dihitung dari Senin pertama bulan tersebut sebagai minggu ke-1.
  */
-function _isSecondOrFourthMondayCheck(date) {
+function _isFirstOrThirdMonday(date) {
   if (date.getDay() !== 1) return false; // bukan Senin sama sekali
 
   var firstOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
@@ -947,48 +968,43 @@ function runDailyReminders() {
     dueDatePassed = today > planDue;
   }
 
-  // ── 1a. TPP Plan Due Date reminder — SEBELUM due date (H-7, H-3) ──
+  // ── 1. TPP Plan Due Date reminder — H-7 & H-3, BROADCAST ke semua auditee + Koordinator ──
+  //      Tidak peduli status submit — semua auditee yang punya temuan Non Comply di periode ini dapat.
   if (period.tpp_plan_due_date && !dueDatePassed) {
     var diffDays = Math.round((new Date(period.tpp_plan_due_date) - today) / (1000 * 60 * 60 * 24));
     if (diffDays === 7 || diffDays === 3) {
-      var openFindingsForReminder = findings.filter(function(f) {
-        return f.finding_status === CONFIG.FINDING_STATUS.OPEN && f._agenda;
-      });
+      var allNonComplyFindings = findings.filter(function(f) { return !!f._agenda; });
       try {
-        notifyTppDueDateReminder(period, diffDays, openFindingsForReminder);
-        console.log('[DAILY] TPP due date reminder (H-' + diffDays + ') sent');
+        notifyTppDueDateReminder(period, diffDays, allNonComplyFindings);
+        console.log('[DAILY] TPP due date reminder (H-' + diffDays + ') sent (broadcast)');
       } catch(e) { console.warn('[DAILY] TPP reminder gagal:', e.message); }
     }
   }
 
-  // ── 1b. TPP Plan Overdue reminder — SETELAH due date, Senin wk1/wk3, max 6x ──
-  if (dueDatePassed && _isSecondOrFourthMondayCheck(today)) {
-    var openFindings = findings.filter(function(f) {
-      return f.finding_status === CONFIG.FINDING_STATUS.OPEN && f._agenda;
+  // ── 2. Reminder bulanan gabungan OPEN + OPEN_IMPL — Senin wk1, TANPA limit ──
+  //      OPEN      : hanya setelah TPP plan due date lewat (belum isi rencana TPP)
+  //      OPEN_IMPL : selalu, terlepas due date, untuk yang belum lengkap correction/CA
+  //      Terus terkirim sampai temuan berubah status atau periode tidak ACTIVE lagi.
+  if (_isFirstMonday(today)) {
+    var openFindingsMonthly = dueDatePassed
+      ? findings.filter(function(f) { return f.finding_status === CONFIG.FINDING_STATUS.OPEN && f._agenda; })
+      : [];
+    var openImplFindingsMonthly = findings.filter(function(f) {
+      return f.finding_status === CONFIG.FINDING_STATUS.OPEN_IMPL && f._agenda &&
+        (!f.impl_correction_submitted_at || !f.impl_submitted_at);
     });
 
-    // Filter findings yang masih < 6x reminder, sekaligus update counter
-    var eligibleOpenFindings = [];
-    openFindings.forEach(function(f) {
-      var check = _checkReminderCounter(f);
-      if (check.shouldSend) {
-        eligibleOpenFindings.push(f);
-        try {
-          _updateReminderTracking(period.spreadsheet_id, f.result_id, check.newCount, f.finding_status);
-        } catch(e) { console.warn('[DAILY] Update reminder tracking gagal:', e.message); }
-      }
-    });
-
-    if (eligibleOpenFindings.length > 0) {
+    if (openFindingsMonthly.length > 0 || openImplFindingsMonthly.length > 0) {
       try {
-        notifyTppOverdueReminder(period, eligibleOpenFindings);
-        console.log('[DAILY] TPP overdue reminder sent: ' + eligibleOpenFindings.length + ' findings');
-      } catch(e) { console.warn('[DAILY] TPP overdue reminder gagal:', e.message); }
+        notifyTppAndImplMonthlyReminder(period, openFindingsMonthly, openImplFindingsMonthly);
+        console.log('[DAILY] Monthly OPEN+OPEN_IMPL reminder sent: ' +
+          openFindingsMonthly.length + ' OPEN, ' + openImplFindingsMonthly.length + ' OPEN_IMPL');
+      } catch(e) { console.warn('[DAILY] Monthly OPEN+OPEN_IMPL reminder gagal:', e.message); }
     }
   }
 
-  // ── 2. Pending approval digest — Senin wk1/wk3, max 6x per level ──
-  if (_isSecondOrFourthMondayCheck(today)) {
+  // ── 3. Pending approval digest — Senin wk1/wk3, max 6x per level ──
+  if (_isFirstOrThirdMonday(today)) {
     var approvalStatuses = [
       CONFIG.FINDING_STATUS.APP_DEPT_HEAD,
       CONFIG.FINDING_STATUS.APP_AUDITOR,
@@ -1017,20 +1033,92 @@ function runDailyReminders() {
     }
   }
 
-  // ── 3. Correction + Corrective Action gabungan — bulanan, hanya setelah TPP due date lewat ──
-  var isFirstOfMonth = today.getDate() === 1;
-  if (dueDatePassed && isFirstOfMonth) {
-    var openImplFindings = findings.filter(function(f) {
+  console.log('[DAILY] Selesai.');
+}
+
+// ════════════════════════════════════════════════════════════
+//  TEST HELPER — simulasi runDailyReminders dengan tanggal palsu
+//  HAPUS setelah testing selesai. Jalankan manual dari GAS Editor.
+// ════════════════════════════════════════════════════════════
+function TEST_runDailyRemindersWithFakeDate(fakeDateStr) {
+  // fakeDateStr format: 'YYYY-MM-DD', contoh '2026-06-22' untuk simulasi Senin
+  var fakeToday = new Date(fakeDateStr); fakeToday.setHours(0, 0, 0, 0);
+  console.log('[TEST] Simulasi runDailyReminders dengan today = ' + fakeToday.toDateString() +
+    ' (hari: ' + ['Min','Sen','Sel','Rab','Kam','Jum','Sab'][fakeToday.getDay()] + ')');
+
+  var period = getActivePeriod();
+  if (!period || !period.spreadsheet_id) {
+    console.log('[TEST] Tidak ada periode aktif.');
+    return;
+  }
+
+  var findings = getAllFindingsByPeriod(period.spreadsheet_id, period.period_id);
+  var agendas  = getCachedAgendasByPeriod(period.period_id);
+  findings.forEach(function(f) {
+    f._agenda = agendas.find(function(a) { return a.agenda_id === f.agenda_id; });
+  });
+
+  var dueDatePassed = false;
+  if (period.tpp_plan_due_date) {
+    var planDue = new Date(period.tpp_plan_due_date); planDue.setHours(0, 0, 0, 0);
+    dueDatePassed = fakeToday > planDue;
+  }
+  console.log('[TEST] tpp_plan_due_date=' + period.tpp_plan_due_date + ' dueDatePassed=' + dueDatePassed);
+  console.log('[TEST] isFirstMonday=' + _isFirstMonday(fakeToday) + ' isFirstOrThirdMonday=' + _isFirstOrThirdMonday(fakeToday));
+
+  // ── 1. H-7/H-3 broadcast ──
+  if (period.tpp_plan_due_date && !dueDatePassed) {
+    var diffDays = Math.round((new Date(period.tpp_plan_due_date) - fakeToday) / (1000 * 60 * 60 * 24));
+    console.log('[TEST] diffDays to tpp_plan_due_date = ' + diffDays);
+    if (diffDays === 7 || diffDays === 3) {
+      var allNonComplyFindings = findings.filter(function(f) { return !!f._agenda; });
+      notifyTppDueDateReminder(period, diffDays, allNonComplyFindings);
+      console.log('[TEST] ✅ H-' + diffDays + ' broadcast reminder sent: ' + allNonComplyFindings.length + ' findings');
+    } else {
+      console.log('[TEST] ⏭ Skip H-7/H-3 (diffDays tidak match)');
+    }
+  } else {
+    console.log('[TEST] ⏭ Skip H-7/H-3 (due date sudah lewat atau belum diset)');
+  }
+
+  // ── 2. Reminder bulanan OPEN+OPEN_IMPL ──
+  if (_isFirstMonday(fakeToday)) {
+    var openFindingsMonthly = dueDatePassed
+      ? findings.filter(function(f) { return f.finding_status === CONFIG.FINDING_STATUS.OPEN && f._agenda; })
+      : [];
+    var openImplFindingsMonthly = findings.filter(function(f) {
       return f.finding_status === CONFIG.FINDING_STATUS.OPEN_IMPL && f._agenda &&
         (!f.impl_correction_submitted_at || !f.impl_submitted_at);
     });
-    if (openImplFindings.length > 0) {
-      try {
-        notifyCorrectionAndCAReminder(period, openImplFindings);
-        console.log('[DAILY] Correction+CA monthly reminder sent: ' + openImplFindings.length + ' findings');
-      } catch(e) { console.warn('[DAILY] Correction+CA reminder gagal:', e.message); }
+    console.log('[TEST] OPEN monthly=' + openFindingsMonthly.length + ' OPEN_IMPL monthly=' + openImplFindingsMonthly.length);
+    if (openFindingsMonthly.length > 0 || openImplFindingsMonthly.length > 0) {
+      notifyTppAndImplMonthlyReminder(period, openFindingsMonthly, openImplFindingsMonthly);
+      console.log('[TEST] ✅ Monthly OPEN+OPEN_IMPL reminder sent');
     }
+  } else {
+    console.log('[TEST] ⏭ Skip monthly reminder (bukan Senin wk1)');
   }
 
-  console.log('[DAILY] Selesai.');
+  // ── 3. Approval digest ──
+  if (_isFirstOrThirdMonday(fakeToday)) {
+    var approvalStatuses = [
+      CONFIG.FINDING_STATUS.APP_DEPT_HEAD,
+      CONFIG.FINDING_STATUS.APP_AUDITOR,
+      CONFIG.FINDING_STATUS.APP_KOORDINATOR,
+    ];
+    var pendingApproval = findings.filter(function(f) {
+      return approvalStatuses.indexOf(f.finding_status) !== -1 && f._agenda;
+    });
+    console.log('[TEST] pendingApproval=' + pendingApproval.length);
+    // NOTE: counter check di-skip di test helper supaya tidak mengubah reminder_count asli.
+    // Kalau mau test counter/limit 6x juga, panggil notifyPendingApprovalDigest langsung manual.
+    if (pendingApproval.length > 0) {
+      notifyPendingApprovalDigest(period, pendingApproval, agendas);
+      console.log('[TEST] ✅ Approval digest sent (counter TIDAK di-update di test ini)');
+    }
+  } else {
+    console.log('[TEST] ⏭ Skip approval digest (bukan Senin wk1/wk3)');
+  }
+
+  console.log('[TEST] Selesai.');
 }
