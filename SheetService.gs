@@ -927,9 +927,9 @@ function _setupAuditSheets(ss, periodId, namaPeriode) {
       'corrective_action','due_date_corrective_action',
       'impl_correction_foto_urls','impl_correction_submitted_at','impl_correction_submitted_by',
       'impl_corrective_action_foto_urls','impl_corrective_action_keterangan','impl_submitted_at','impl_submitted_by',
-        'closed_at',
-        'reminder_count','reminder_status_snapshot',
-      ];
+      'closed_at',
+      'reminder_count','reminder_status_snapshot',
+    ],
     REQUIREMENT_LOCKS: [
       'lock_id','agenda_id','nomor_persyaratan','locked_by','locked_at','status',
     ],
@@ -1395,7 +1395,8 @@ function releaseLock(spreadsheetId, agendaId, nomorPersyaratan, auditorEmail) {
 
 /**
  * Submit rencana TPP (Correction + Corrective Action + due dates).
- * Menulis langsung ke kolom AUDIT_RESULTS, lalu set finding_status → TPP_OR_DEPT_HEAD.
+ * Menulis langsung ke kolom AUDIT_RESULTS, lalu set finding_status → OPEN_IMPL.
+ * Tidak ada approval untuk rencana TPP — auditee langsung lanjut ke tahap upload bukti implementasi.
  */
 function submitTpp(spreadsheetId, resultId, agendaId, tppData, submittedBy) {
   const C = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
@@ -1479,28 +1480,6 @@ function submitCorrectiveActionImpl(spreadsheetId, resultId, agendaId, fotoUrls,
     if (ag && res) notifyImplSubmitted(ag, res);
   } catch(e) { console.warn('Notifikasi impl submitted gagal:', e.message); }
   return { success: true };
-}
-
-/**
- * Cek & hitung reminder counter untuk satu finding.
- * Reset otomatis kalau finding_status sudah berubah sejak reminder terakhir.
- */
-function _checkReminderCounter(result) {
-  var snapshot     = result.reminder_status_snapshot || '';
-  var currentCount = (snapshot === result.finding_status) ? (Number(result.reminder_count) || 0) : 0;
-  return {
-    shouldSend: currentCount < 6,
-    newCount:   currentCount + 1,
-  };
-}
-
-/**
- * Update kolom reminder_count & reminder_status_snapshot setelah reminder terkirim.
- */
-function _updateReminderTracking(spreadsheetId, resultId, newCount, currentStatus) {
-  const C = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
-  updateResultField(spreadsheetId, resultId, C.REMINDER_COUNT,           newCount);
-  updateResultField(spreadsheetId, resultId, C.REMINDER_STATUS_SNAPSHOT, currentStatus);
 }
 
 // ════════════════════════════════════════════════════════════
