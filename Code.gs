@@ -575,6 +575,15 @@ function _routeAction(action, payload, profile) {
       return result_gti ? [_sanitizeObj(result_gti)] : [];
     }
 
+    case 'NOTIFY_TPP_DUE_DATE_SET': {
+      requireAccess(['isKoordinator'], profile);
+      const period_ntds = getPeriodById(payload.period_id);
+      if (!period_ntds) throw new Error('Periode tidak ditemukan.');
+      try { notifyTppDueDateSet(period_ntds, payload.due_date, profile.email); }
+      catch(e) { console.warn('notifyTppDueDateSet error:', e.message); }
+      return { success: true };
+    }
+
     case 'UPDATE_TPP_PLAN': {
       requireAccess(['isAuditee', 'isDeptHead'], profile);
       const period_utp = getPeriodById(payload.period_id);
@@ -649,6 +658,7 @@ function _routeAction(action, payload, profile) {
         payload.result_id,
         payload.agenda_id,
         urls_sci,
+        payload.keterangan || '',
         profile.email
       );
 
@@ -680,6 +690,7 @@ function _routeAction(action, payload, profile) {
         payload.result_id,
         payload.agenda_id,
         urls_scai,
+        payload.keterangan || '',
         profile.email
       );
 
@@ -875,4 +886,108 @@ function testInitDataFlat() {
 
 function jsonStr(data) {
   return JSON.stringify(data);
+}
+
+// ════════════════════════════════════════════════════════════
+//  DAILY DIGEST REMINDER — dipanggil oleh time-based trigger harian
+//  Setup trigger manual di GAS Editor:
+//    Triggers → Add Trigger
+//    Function : runDailyReminders
+//    Event    : Time-driven → Day timer → 08:00 - 09:00 WIB
+//
+//  Yang dicek setiap hari:
+//  1. TPP Plan Due Date reminder — H-7 dan H-3 dari tpp_plan_due_date
+//  2. Pending approval digest    — hanya Senin minggu ke-1 & ke-3 tiap bulan
+//  3. Correction overdue digest  — hanya Senin minggu ke-1 & ke-3 tiap bulan
+// ════════════════════════════════════════════════════════════
+
+/**
+ * True jika `date` adalah Senin minggu ke-1 ATAU minggu ke-3 dalam bulan berjalan.
+ * "Minggu ke-N" dihitung dari Senin pertama bulan tersebut sebagai minggu ke-1.
+ */
+function _isSecondOrFourthMondayCheck(date) {
+  if (date.getDay() !== 1) return false; // bukan Senin sama sekali
+
+  var firstOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
+  var firstMonday  = new Date(firstOfMonth);
+  var offsetToMon  = (8 - firstOfMonth.getDay()) % 7; // 0 kalau tgl 1 sudah Senin
+  firstMonday.setDate(1 + offsetToMon);
+
+  var diffWeeks  = Math.round((date - firstMonday) / (7 * 24 * 60 * 60 * 1000));
+  var weekNumber = diffWeeks + 1; // Senin pertama = minggu ke-1
+
+  return weekNumber === 1 || weekNumber === 3;
+}
+
+function runDailyReminders() {
+  var today  = new Date(); today.setHours(0, 0, 0, 0);
+  var period = getActivePeriod();
+  if (!period || !period.spreadsheet_id) {
+    console.log('[DAILY] Tidak ada periode aktif.');
+    return;
+  }
+
+  console.log('[DAILY] Menjalankan reminder untuk periode: ' + period.period_id);
+
+  // ── 1. TPP Plan Due Date reminder ─────────────────────────
+  if (period.tpp_plan_due_date) {
+    var due      = new Date(period.tpp_plan_due_date); due.setHours(0, 0, 0, 0);
+    var diffDays = Math.round((due - today) / (1000 * 60 * 60 * 24));
+    if (diffDays === 7 || diffDays === 3) {
+      try {
+        notifyTppDueDateReminder(period, diffDays);
+        console.log('[DAILY] TPP due date reminder sent: ' + diffDays + ' hari lagi');
+      } catch(e) { console.warn('[DAILY] TPP reminder gagal:', e.message); }
+    }
+  }
+
+  // ── 2 & 3 hanya jalan di Senin minggu ke-1 dan ke-3 ───────
+  if (!_isSecondOrFourthMondayCheck(today)) {
+    console.log('[DAILY] Bukan jadwal digest (Senin minggu-1/3), skip.');
+    return;
+  }
+
+  var findings = [], agendas = [];
+  try {
+    findings = getAllFindingsByPeriod(period.spreadsheet_id, period.period_id);
+    agendas  = getCachedAgendasByPeriod(period.period_id);
+    findings.forEach(function(f) {
+      f._agenda = agendas.find(function(a) { return a.agenda_id === f.agenda_id; });
+    });
+  } catch(e) {
+    console.warn('[DAILY] Gagal ambil findings:', e.message);
+    return;
+  }
+
+  // ── 2. Pending approval digest ────────────────────────────
+  var approvalStatuses = [
+    CONFIG.FINDING_STATUS.APP_DEPT_HEAD,
+    CONFIG.FINDING_STATUS.APP_AUDITOR,
+    CONFIG.FINDING_STATUS.APP_KOORDINATOR,
+  ];
+  var pendingApproval = findings.filter(function(f) {
+    return approvalStatuses.indexOf(f.finding_status) !== -1 && f._agenda;
+  });
+  if (pendingApproval.length > 0) {
+    try {
+      notifyPendingApprovalDigest(period, pendingApproval, agendas);
+      console.log('[DAILY] Pending approval digest sent: ' + pendingApproval.length + ' findings');
+    } catch(e) { console.warn('[DAILY] Pending approval digest gagal:', e.message); }
+  }
+
+  // ── 3. OPEN_IMPL correction overdue ───────────────────────
+  var corrOverdue = findings.filter(function(f) {
+    if (f.finding_status !== CONFIG.FINDING_STATUS.OPEN_IMPL) return false;
+    if (!f.due_date_correction) return false;
+    var corrDue = new Date(f.due_date_correction); corrDue.setHours(0, 0, 0, 0);
+    return !f.impl_correction_submitted_at && today > corrDue;
+  });
+  if (corrOverdue.length > 0) {
+    try {
+      notifyCorrectionOverdueDigest(period, corrOverdue, agendas);
+      console.log('[DAILY] Correction overdue digest sent: ' + corrOverdue.length + ' findings');
+    } catch(e) { console.warn('[DAILY] Correction overdue digest gagal:', e.message); }
+  }
+
+  console.log('[DAILY] Selesai.');
 }
