@@ -231,6 +231,17 @@ function _renderMyTask(container, tasks, period) {
                 '<th style="width:130px">Lokasi Temuan</th>' +
                 '<th style="width:90px;text-align:center">Bukti</th>' +
                 '<th style="width:48px"></th>'
+              : sectionTasks[0] && sectionTasks[0].type === 'UPLOAD_IMPL'
+              ? '<th style="width:40px;text-align:center">No</th>' +
+                '<th style="width:140px">Result ID</th>' +
+                '<th style="width:110px">Dept / Bagian</th>' +
+                '<th>Deskripsi Temuan</th>' +
+                '<th style="width:110px">Lokasi</th>' +
+                '<th>Correction</th>' +
+                '<th style="width:110px">Due Correction</th>' +
+                '<th>Corrective Action</th>' +
+                '<th style="width:110px">Due CA</th>' +
+                '<th style="width:48px"></th>'
               : '<th>Detail</th>' +
                 '<th style="width:150px">Area</th>' +
                 '<th style="width:48px"></th>'
@@ -320,6 +331,37 @@ function _renderMyTask(container, tasks, period) {
                   '</td>' +
                   '<td><i data-lucide="chevron-right" style="width:14px;height:14px;color:var(--text-muted)"></i></td>' +
                 '</tr>';
+              } else if (t.type === 'UPLOAD_IMPL') {
+                var implIdx   = sectionTasks.indexOf(t);
+                var fi        = t.finding || {};
+                var today_ui  = new Date(); today_ui.setHours(0,0,0,0);
+                var corrDue_ui = fi.due_date_correction ? new Date(fi.due_date_correction) : null;
+                var caDue_ui   = fi.due_date_corrective_action ? new Date(fi.due_date_corrective_action) : null;
+                var corrOverdue_ui = corrDue_ui && !fi.impl_correction_submitted_at &&
+                  today_ui > new Date(corrDue_ui.getFullYear(), corrDue_ui.getMonth(), corrDue_ui.getDate());
+                var caOverdue_ui   = caDue_ui && !fi.impl_submitted_at &&
+                  today_ui > new Date(caDue_ui.getFullYear(), caDue_ui.getMonth(), caDue_ui.getDate());
+
+                return '<tr style="cursor:pointer" onclick="_openTaskDetail(' + globalIdx + ')" ' +
+                  'onmouseover="this.style.background=\'var(--bg)\'" ' +
+                  'onmouseout="this.style.background=\'\'">' +
+                  '<td style="text-align:center;font-size:12px;color:var(--text-muted);font-weight:600">' + (implIdx + 1) + '</td>' +
+                  '<td class="td-mono" style="font-size:11px">' + escHtml(t.result_id || '') + '</td>' +
+                  '<td class="text-sm">' + areaName + '</td>' +
+                  '<td style="font-size:12px">' +
+                    '<div style="font-weight:500">' + escHtml(fi.deskripsi_temuan || '—') + '</div>' +
+                  '</td>' +
+                  '<td style="font-size:12px;color:var(--text-muted)">' + escHtml(fi.lokasi_temuan || '—') + '</td>' +
+                  '<td style="font-size:12px">' + escHtml(fi.correction || '—') + '</td>' +
+                  '<td style="font-size:12px' + (corrOverdue_ui ? ';color:var(--rose,#f43f5e);font-weight:700' : '') + '">' +
+                    formatDate(fi.due_date_correction || '') + (corrOverdue_ui ? ' (Overdue)' : '') +
+                  '</td>' +
+                  '<td style="font-size:12px">' + escHtml(fi.corrective_action || '—') + '</td>' +
+                  '<td style="font-size:12px' + (caOverdue_ui ? ';color:var(--rose,#f43f5e);font-weight:700' : '') + '">' +
+                    formatDate(fi.due_date_corrective_action || '') + (caOverdue_ui ? ' (Overdue)' : '') +
+                  '</td>' +
+                  '<td><i data-lucide="chevron-right" style="width:14px;height:14px;color:var(--text-muted)"></i></td>' +
+                '</tr>';
               } else {
                 var shortId = t.result_id ? t.result_id.split('_').slice(-2).join('_') : '';
                 detailHtml =
@@ -344,10 +386,28 @@ function _renderMyTask(container, tasks, period) {
       '</div>';
     }
 
+    var hasOverdueImpl_ui = uploadImplTasks.some(function(t) {
+      var fi = t.finding || {};
+      var today_ui = new Date(); today_ui.setHours(0,0,0,0);
+      var corrDue_ui = fi.due_date_correction ? new Date(fi.due_date_correction) : null;
+      var caDue_ui   = fi.due_date_corrective_action ? new Date(fi.due_date_corrective_action) : null;
+      var corrLate = corrDue_ui && !fi.impl_correction_submitted_at &&
+        today_ui > new Date(corrDue_ui.getFullYear(), corrDue_ui.getMonth(), corrDue_ui.getDate());
+      var caLate = caDue_ui && !fi.impl_submitted_at &&
+        today_ui > new Date(caDue_ui.getFullYear(), caDue_ui.getMonth(), caDue_ui.getDate());
+      return corrLate || caLate;
+    });
+    var overdueImplNote_ui = hasOverdueImpl_ui
+      ? '<div style="padding:8px 16px;font-size:12px;color:var(--rose,#f43f5e)">' +
+          '⚠ Item berwarna merah pada tabel di atas sudah melewati due date dan tercatat sebagai overdue.' +
+        '</div>'
+      : '';
+
     listHtml =
       _taskSection('Verifikasi Temuan', 'shield-check', 'var(--amber,#f59e0b)', verifikasiTasks) +
       _taskSection('Rencana Tindakan Perbaikan dan Pencegahan (TPP)', 'wrench', 'var(--blue,#3b82f6)', isiTppTasks) +
       _taskSection('Upload Implementasi', 'camera', 'var(--purple,#8b5cf6)', uploadImplTasks) +
+      overdueImplNote_ui +
       _taskSection(
         'Approval Implementasi', 'upload-cloud', 'var(--emerald,#10b981)', approvalImplTasks,
         (approvalImplTasks.length > 1 && App.profile.isKoordinator
@@ -1372,10 +1432,15 @@ async function _renderIsiTppPage(container, task, period) {
 }
 
 async function _submitTpp(resultId, agendaId, periodId) {
-  var correction       = (document.getElementById('tpp-correction') || {}).value?.trim();
-  var dueDateCorr      = (document.getElementById('tpp-due-date-correction') || {}).value;
-  var correctiveAction = (document.getElementById('tpp-corrective-action') || {}).value?.trim();
-  var dueDateCA        = (document.getElementById('tpp-due-date-corrective-action') || {}).value;
+  var elCorrection = document.getElementById('tpp-correction');
+  var elDueCorr    = document.getElementById('tpp-due-date-correction');
+  var elCA         = document.getElementById('tpp-corrective-action');
+  var elDueCA      = document.getElementById('tpp-due-date-corrective-action');
+
+  var correction       = (elCorrection || {}).value?.trim();
+  var dueDateCorr      = (elDueCorr || {}).value;
+  var correctiveAction = (elCA || {}).value?.trim();
+  var dueDateCA        = (elDueCA || {}).value;
 
   if (!correction)       return toast('Correction wajib diisi.', 'error');
   if (!dueDateCorr)      return toast('Due date correction wajib diisi.', 'error');
@@ -1385,6 +1450,13 @@ async function _submitTpp(resultId, agendaId, periodId) {
   var btn      = document.getElementById('tpp-submit-btn');
   btn.disabled = true;
   btn.innerHTML = '<div class="spinner" style="width:13px;height:13px;border-width:2px"></div> Mengirim...';
+
+  // Disable semua field form supaya tidak bisa diubah / submit dobel selama proses
+  [elCorrection, elDueCorr, elCA, elDueCA].forEach(function(el) {
+    if (el) el.disabled = true;
+  });
+  var cancelBtn = document.querySelector('.btn.btn-outline[onclick="_backToMyTask()"]');
+  if (cancelBtn) cancelBtn.disabled = true;
 
   try {
     await api('SUBMIT_TPP', {
@@ -1404,6 +1476,10 @@ async function _submitTpp(resultId, agendaId, periodId) {
     toast(err.message, 'error');
     btn.disabled = false;
     btn.innerHTML = '<i data-lucide="send" style="width:14px;height:14px"></i> Submit TPP';
+    [elCorrection, elDueCorr, elCA, elDueCA].forEach(function(el) {
+      if (el) el.disabled = false;
+    });
+    if (cancelBtn) cancelBtn.disabled = false;
     lucide.createIcons();
   }
 }
