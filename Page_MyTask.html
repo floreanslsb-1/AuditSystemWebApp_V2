@@ -134,8 +134,6 @@ async function _buildTaskList(findings, agendas, period) {
     'APP_DEPT_HEAD':   { type: 'APPROVAL_IMPL', label: 'Review Implementasi', badge: 'badge-purple', icon: 'upload-cloud', matchFn: function(p, ag) { return !!p.isDeptHead && ag && p.deptHeadAreas && p.deptHeadAreas.indexOf(ag.area_id) !== -1; } },
     'APP_AUDITOR':     { type: 'APPROVAL_IMPL', label: 'Review Implementasi', badge: 'badge-purple', icon: 'upload-cloud', matchFn: function(p, ag) { return !!p.isAuditor  && ag && _emailInCsv(ag.auditor_emails, p.email); } },
     'APP_KOORDINATOR': { type: 'APPROVAL_IMPL', label: 'Approval Impl Final', badge: 'badge-teal',   icon: 'upload-cloud', matchFn: function(p)     { return !!p.isKoordinator; } },
-  };!p.isAuditor  && ag && _emailInCsv(ag.auditor_emails, p.email); } },
-    'APP_KOORDINATOR':    { type: 'APPROVAL_IMPL', label: 'Approval Impl Final', badge: 'badge-emerald', icon: 'upload-cloud',  matchFn: function(p)     { return !!p.isKoordinator; } },
   };
 
   findings.forEach(function(f) {
@@ -193,11 +191,10 @@ function _renderMyTask(container, tasks, period) {
       '</div></div>';
   } else {
     // Group by type
-    var verifikasiTasks  = tasks.filter(function(t) { return t.type === 'VERIFIKASI'; });
-    var isiTppTasks      = tasks.filter(function(t) { return t.type === 'ISI_TPP'; });
-    var uploadImplTasks  = tasks.filter(function(t) { return t.type === 'UPLOAD_IMPL'; });
-    var approvalTppTasks = tasks.filter(function(t) { return t.type === 'APPROVAL_TPP'; });
-    var approvalImplTasks= tasks.filter(function(t) { return t.type === 'APPROVAL_IMPL'; });
+    var verifikasiTasks   = tasks.filter(function(t) { return t.type === 'VERIFIKASI'; });
+    var isiTppTasks       = tasks.filter(function(t) { return t.type === 'ISI_TPP'; });
+    var uploadImplTasks   = tasks.filter(function(t) { return t.type === 'UPLOAD_IMPL'; });
+    var approvalImplTasks = tasks.filter(function(t) { return t.type === 'APPROVAL_IMPL'; });
 
     // Helper: render satu section dengan header + table
     function _taskSection(sectionTitle, sectionIcon, sectionColor, sectionTasks, massApproveBtn) {
@@ -352,15 +349,6 @@ function _renderMyTask(container, tasks, period) {
       _taskSection('Rencana Tindakan Perbaikan dan Pencegahan (TPP)', 'wrench', 'var(--blue,#3b82f6)', isiTppTasks) +
       _taskSection('Upload Implementasi', 'camera', 'var(--purple,#8b5cf6)', uploadImplTasks) +
       _taskSection(
-        'Approval TPP', 'check-circle', 'var(--teal,#14b8a6)', approvalTppTasks,
-        (approvalTppTasks.length > 1 && App.profile.isKoordinator
-          ? '<button class="btn btn-outline btn-sm" onclick="_massApproveAll(\'TPP\')">' +
-              '<i data-lucide="check-circle" style="width:13px;height:13px"></i> ' +
-              'Approve Semua (' + approvalTppTasks.length + ')' +
-            '</button>'
-          : '')
-      ) +
-      _taskSection(
         'Approval Implementasi', 'upload-cloud', 'var(--emerald,#10b981)', approvalImplTasks,
         (approvalImplTasks.length > 1 && App.profile.isKoordinator
           ? '<button class="btn btn-outline btn-sm" onclick="_massApproveAll(\'IMPL\')">' +
@@ -382,6 +370,7 @@ function _renderMyTask(container, tasks, period) {
           : ' · Tidak ada tugas') +
       '</p>' +
     '</div>' +
+    _renderTppPlanDueDateBanner(period) +
     listHtml;
 
   // Simpan tasks ke window untuk dipakai saat klik
@@ -1361,6 +1350,7 @@ async function _renderIsiTppPage(container, task, period) {
         'Isi TPP — ' + escHtml(task.agenda ? task.agenda.dept : ''),
         ''
       ) +
+      _renderTppPlanDueDateBanner(period) +
       headerCard +
       formCard +
       historyHtml +
@@ -1737,10 +1727,11 @@ async function _submitCorrectionImpl(resultId, agendaId, periodId) {
   try {
     var b64files = await filesToBase64(files);
     await api('SUBMIT_CORRECTION_IMPL', {
-      period_id: periodId,
-      result_id: resultId,
-      agenda_id: agendaId,
-      files:     b64files,
+      period_id:  periodId,
+      result_id:  resultId,
+      agenda_id:  agendaId,
+      files:      b64files,
+      keterangan: (document.getElementById('impl-correction-ket') || {}).value?.trim() || '',
     });
     clearCache('GET_ALL_FINDINGS_BY_PERIOD');
     toast('Bukti correction berhasil dikirim.', 'success');
@@ -1766,10 +1757,11 @@ async function _submitCorrectiveActionImpl(resultId, agendaId, periodId) {
   try {
     var b64files = await filesToBase64(files);
     await api('SUBMIT_CORRECTIVE_ACTION_IMPL', {
-      period_id: periodId,
-      result_id: resultId,
-      agenda_id: agendaId,
-      files:     b64files,
+      period_id:  periodId,
+      result_id:  resultId,
+      agenda_id:  agendaId,
+      files:      b64files,
+      keterangan: (document.getElementById('impl-ca-ket') || {}).value?.trim() || '',
     });
     clearCache('GET_ALL_FINDINGS_BY_PERIOD');
     toast('Bukti corrective action berhasil dikirim. Menunggu approval Dept Head.', 'success');
