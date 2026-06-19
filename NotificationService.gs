@@ -20,14 +20,17 @@ function _findingInfo(result, agenda) {
       <tr><td style="padding:6px;color:#666;width:160px;">Area</td>
           <td style="padding:6px;font-weight:bold;">${escapeHtml(agenda.dept)}</td></tr>
       <tr style="background:#f9f9f9;">
-          <td style="padding:6px;color:#666;">Check Item</td>
-          <td style="padding:6px;">#${result.nomor_persyaratan}.${result.check_item_no} — ${escapeHtml(result.check_item || '')}</td></tr>
-      <tr><td style="padding:6px;color:#666;">Standar</td>
-          <td style="padding:6px;">${escapeHtml(result.standar_check_item || '-')}</td></tr>
+          <td style="padding:6px;color:#666;">Result ID</td>
+          <td style="padding:6px;font-family:monospace;">${escapeHtml(result.result_id || '')}</td></tr>
+      <tr><td style="padding:6px;color:#666;">Check Item</td>
+          <td style="padding:6px;">${escapeHtml(result.check_item || '')}</td></tr>
       <tr style="background:#f9f9f9;">
-          <td style="padding:6px;color:#666;">Deskripsi Temuan</td>
+          <td style="padding:6px;color:#666;">Standar</td>
+          <td style="padding:6px;">${escapeHtml(result.standar_check_item || '-')}</td></tr>
+      <tr><td style="padding:6px;color:#666;">Deskripsi Temuan</td>
           <td style="padding:6px;">${escapeHtml(result.deskripsi_temuan || '')}</td></tr>
-      <tr><td style="padding:6px;color:#666;">Status</td>
+      <tr style="background:#f9f9f9;">
+          <td style="padding:6px;color:#666;">Status</td>
           <td style="padding:6px;font-weight:bold;">${escapeHtml(result.status || '')}</td></tr>
     </table>`;
 }
@@ -299,7 +302,7 @@ function notifyCorrectionSubmitted(agenda, result) {
     diperlukan untuk correction. Auditee masih dapat mengupload ulang bukti correction
     sampai corrective action disubmit.</p>`;
   sendEmail(recipients,
-    `INFORMASI — CORRECTION DISUBMIT | ${agenda.dept} | Temuan #${result.nomor_persyaratan}.${result.check_item_no}`,
+    `INFORMASI — CORRECTION DISUBMIT | ${agenda.dept} | Temuan #${result.result_id}`,
     emailTemplate('Correction Disubmit', body));
 }
 
@@ -317,7 +320,7 @@ function notifyImplSubmitted(agenda, result) {
     <p>Silakan tinjau bukti implementasi yang telah diupload dan berikan persetujuan
     atau penolakan beserta komentar.</p>`;
   sendEmail(agenda.dept_head_email,
-    `PERSETUJUAN DIPERLUKAN — IMPLEMENTASI ${agenda.dept} | Temuan #${result.nomor_persyaratan}.${result.check_item_no}`,
+    `PERSETUJUAN DIPERLUKAN — IMPLEMENTASI ${agenda.dept} | Temuan #${result.result_id}`,
     emailTemplate('Persetujuan Implementasi Diperlukan', body,
       'Tinjau Bukti & Setujui di My Task', _appLink('mytask', { result_id: result.result_id })));
 }
@@ -332,7 +335,7 @@ function notifyImplToAuditors(agenda, result) {
     <p>Cukup satu Auditor dari tim yang memberikan persetujuan.
     Auditor lain akan menerima notifikasi informasi secara otomatis.</p>`;
   sendEmail(auditors,
-    `PERSETUJUAN DIPERLUKAN — IMPLEMENTASI (AUDITOR) ${agenda.dept} | Temuan #${result.nomor_persyaratan}.${result.check_item_no}`,
+    `PERSETUJUAN DIPERLUKAN — IMPLEMENTASI (AUDITOR) ${agenda.dept} | Temuan #${result.result_id}`,
     emailTemplate('Persetujuan Implementasi oleh Auditor Diperlukan', body,
       'Tinjau Bukti & Setujui di My Task', _appLink('mytask', { result_id: result.result_id })));
 }
@@ -364,7 +367,7 @@ function notifyImplApprovedByAuditor(agenda, result, approverEmail) {
           <td style="padding:6px;">Ya</td></tr>
     </table>`;
   sendEmail(koordinators.map(u => u.email),
-    `PERSETUJUAN FINAL DIPERLUKAN — PENUTUPAN TEMUAN ${agenda.dept} | Temuan #${result.nomor_persyaratan}.${result.check_item_no}`,
+    `PERSETUJUAN FINAL DIPERLUKAN — PENUTUPAN TEMUAN ${agenda.dept} | Temuan #${result.result_id}`,
     emailTemplate('Persetujuan Final: Penutupan Temuan', body,
       'Tinjau & Tutup Temuan di My Task', _appLink('mytask', { result_id: result.result_id })));
 }
@@ -387,7 +390,7 @@ function notifyFindingClosed(agenda, result) {
     <p style="margin-top:16px;">Terima kasih atas kerja sama semua pihak dalam
     menyelesaikan tindak lanjut temuan audit ini.</p>`;
   sendEmail(recipients,
-    `TEMUAN CLOSED — ${agenda.dept} | Temuan #${result.nomor_persyaratan}.${result.check_item_no}`,
+    `TEMUAN CLOSED — ${agenda.dept} | Temuan #${result.result_id}`,
     emailTemplate('Temuan Resmi Ditutup', body,
       'Lihat Dashboard', _appLink('dashboard')));
 }
@@ -414,7 +417,7 @@ function notifyRejected(agenda, result, stage, rejecterEmail, komentar) {
     <p style="margin-top:16px;">Auditee dimohon memperbaiki dan mengajukan ulang.
     Proses approval akan dimulai kembali dari tahap Dept Head.</p>`;
   sendEmail(allParties,
-    `DITOLAK — ${stageSubject} ${agenda.dept} | Temuan #${result.nomor_persyaratan}.${result.check_item_no}`,
+    `DITOLAK — ${stageSubject} ${agenda.dept} | Temuan #${result.result_id}`,
     emailTemplate(`${stageLabel} Ditolak`, body,
       'Perbaiki & Ajukan Ulang di My Task', _appLink('mytask', { result_id: result.result_id })));
 }
