@@ -981,8 +981,17 @@ async function loadAdminPeriods(container) {
                 ? '<button class="btn btn-outline btn-sm" onclick="singleClick(this,function(btn){ setPeriodStatus(\'' + escHtml(p.period_id) + '\',\'COMPLETED\', btn) })">' +
                     '<i data-lucide="check-circle" style="width:12px;height:12px"></i> Selesai' +
                   '</button>' +
-                  '<button class="btn btn-outline btn-sm" onclick="singleClick(this,function(){ openTppDueDateModal(\'' + escHtml(p.period_id) + '\',\'' + escHtml(p.tpp_plan_due_date || '') + '\') })" title="Set Due Date TPP">' +
-                    '<i data-lucide="calendar-clock" style="width:12px;height:12px"></i> Due Date TPP' +
+                  '<button class="btn btn-sm" ' +
+                    'style="border:1px solid ' + (p.tpp_plan_due_date ? 'var(--emerald,#10b981)' : 'var(--border)') + ';' +
+                    'color:' + (p.tpp_plan_due_date ? 'var(--emerald,#10b981)' : 'var(--text-muted)') + ';' +
+                    'background:' + (p.tpp_plan_due_date ? 'rgba(16,185,129,.06)' : 'transparent') + ';' +
+                    'display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:500" ' +
+                    'onclick="singleClick(this,function(){ openTppDueDateModal(\'' + escHtml(p.period_id) + '\',\'' + escHtml(p.tpp_plan_due_date || '') + '\') })" ' +
+                    'title="' + (p.tpp_plan_due_date ? 'Ubah due date TPP (saat ini: ' + formatDate(p.tpp_plan_due_date) + ')' : 'Set due date pengisian rencana TPP') + '">' +
+                    '<i data-lucide="calendar" style="width:12px;height:12px"></i>' +
+                    (p.tpp_plan_due_date
+                      ? formatDate(p.tpp_plan_due_date)
+                      : 'Set Due Date TPP') +
                   '</button>'
                 : '') +
             '</div>' +
@@ -1052,6 +1061,16 @@ async function savePeriod() {
 }
 
 function openTppDueDateModal(periodId, currentDueDate) {
+  // Normalisasi ke format yyyy-MM-dd yang diterima input type="date"
+  var normalizedDate = '';
+  if (currentDueDate) {
+    var d = new Date(currentDueDate);
+    if (!isNaN(d.getTime())) {
+      normalizedDate = d.toISOString().split('T')[0];
+    } else {
+      normalizedDate = currentDueDate; // pakai as-is kalau sudah yyyy-MM-dd
+    }
+  }
   createModal({
     id: 'tpp-due-date-modal',
     title: 'Set Due Date Rencana TPP',
@@ -1063,7 +1082,7 @@ function openTppDueDateModal(periodId, currentDueDate) {
       '<div class="form-group">' +
         '<label class="form-label">Due Date Rencana TPP <span class="required">*</span></label>' +
         '<input class="form-control" type="date" id="tdd-due-date" style="max-width:200px" ' +
-          'value="' + escHtml(currentDueDate) + '">' +
+          'value="' + escHtml(normalizedDate) + '">' +
         '<div style="font-size:11px;color:var(--text-muted);margin-top:6px">' +
           'Bisa diubah kapan saja selama periode masih aktif.' +
         '</div>' +
@@ -1089,8 +1108,17 @@ async function saveTppDueDate(periodId) {
       period_id: periodId,
       updates:   { tpp_plan_due_date: dueDate },
     });
+    // Kirim notifikasi ke semua pihak (non-blocking)
+    try {
+      await api('NOTIFY_TPP_DUE_DATE_SET', {
+        period_id: periodId,
+        due_date:  dueDate,
+      });
+    } catch(eNotif) {
+      console.warn('Notifikasi due date TPP gagal (non-fatal):', eNotif.message);
+    }
     clearCache('GET_PERIODS');
-    toast('Due date TPP berhasil disimpan.', 'success');
+    toast('Due date TPP berhasil disimpan. Notifikasi dikirim ke semua pihak.', 'success');
     closeModal('tpp-due-date-modal');
     adminTab('periods', document.querySelector('.tab-btn.active'));
   } catch(err) { toast(err.message, 'error'); restore(); }
