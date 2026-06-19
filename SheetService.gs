@@ -1416,7 +1416,6 @@ function submitTpp(spreadsheetId, resultId, agendaId, tppData, submittedBy) {
     const ag  = getAgendaById(agendaId);
     const res = getAuditResultsByAgenda(spreadsheetId, agendaId).find(function(r) { return r.result_id === resultId; });
     if (ag && res) {
-      notifyTppSubmittedToKoordinator(ag, res);
       notifyTppSubmittedToAuditee(ag, res);
     }
   } catch(e) { console.warn('Notifikasi TPP submitted gagal:', e.message); }
