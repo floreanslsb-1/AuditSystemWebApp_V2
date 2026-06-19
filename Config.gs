@@ -214,6 +214,10 @@ const CONFIG = {
 
       // Grup 8 — penutupan
       CLOSED_AT: 31,
+
+      // Grup 9 — reminder tracking (generik untuk TPP overdue & approval reminder)
+      REMINDER_COUNT:            32,
+      REMINDER_STATUS_SNAPSHOT:  33,
     },
 
     // REQUIREMENT_LOCKS — agenda_id menggantikan session_id
