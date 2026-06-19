@@ -554,6 +554,38 @@ function renderSidebar() {
   lucide.createIcons();
 }
 
+// ── TPP Plan Due Date Banner ──────────────────────────────────
+function _renderTppPlanDueDateBanner(period) {
+  if (!period || !period.tpp_plan_due_date || period.status !== 'ACTIVE') return '';
+  var today   = new Date(); today.setHours(0,0,0,0);
+  var due     = new Date(period.tpp_plan_due_date); due.setHours(0,0,0,0);
+  var diff    = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
+  var color, bg, icon, label;
+  if (diff < 0) {
+    color = 'var(--rose,#f43f5e)'; bg = 'rgba(244,63,94,.08)';
+    icon  = 'alert-triangle';
+    label = 'Batas pengisian rencana TPP sudah lewat ' + Math.abs(diff) + ' hari lalu (' + formatDate(period.tpp_plan_due_date) + ')';
+  } else if (diff === 0) {
+    color = 'var(--rose,#f43f5e)'; bg = 'rgba(244,63,94,.08)';
+    icon  = 'alert-triangle';
+    label = 'Batas pengisian rencana TPP <strong>hari ini</strong> (' + formatDate(period.tpp_plan_due_date) + ')';
+  } else if (diff <= 7) {
+    color = 'var(--amber,#f59e0b)'; bg = 'rgba(245,158,11,.08)';
+    icon  = 'clock';
+    label = 'Batas pengisian rencana TPP dalam <strong>' + diff + ' hari</strong> (' + formatDate(period.tpp_plan_due_date) + ')';
+  } else {
+    color = 'var(--blue,#3b82f6)'; bg = 'rgba(59,130,246,.07)';
+    icon  = 'calendar-clock';
+    label = 'Batas pengisian rencana TPP: <strong>' + formatDate(period.tpp_plan_due_date) + '</strong>';
+  }
+  return '<div style="display:flex;align-items:center;gap:8px;padding:9px 14px;' +
+    'border-radius:8px;border:1px solid ' + color + '33;background:' + bg + ';' +
+    'margin-bottom:16px;font-size:12px;color:' + color + '">' +
+    '<i data-lucide="' + icon + '" style="width:14px;height:14px;flex-shrink:0"></i>' +
+    '<span>' + label + '</span>' +
+  '</div>';
+}
+
 // ── Background task badge fetch ───────────────────────────────
 async function _fetchAndRenderTaskBadge() {
   var period = App.activePeriod;
