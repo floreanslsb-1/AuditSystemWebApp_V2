@@ -164,7 +164,7 @@ const CONFIG = {
   // ── Kolom file audit per-periode ────────────────────────────
   AUDIT_COLS: {
 
-    // AUDIT_RESULTS — 21 kolom, gabungan result + finding + checklist snapshot
+    // AUDIT_RESULTS — 36 kolom, gabungan result + finding + checklist snapshot
     // Baris dibuat saat agenda dibuat (Opsi B), di-populate per check item
     AUDIT_RESULTS: {
       // Grup 1 — identitas baris
@@ -204,20 +204,22 @@ const CONFIG = {
 
       // Grup 6 — implementasi correction (dicatat, tidak trigger approval)
       IMPL_CORRECTION_FOTO_URLS:    25,
-      IMPL_CORRECTION_SUBMITTED_AT: 26,
-      IMPL_CORRECTION_SUBMITTED_BY: 27,
+      IMPL_CORRECTION_KETERANGAN:   26,
+      IMPL_CORRECTION_SUBMITTED_AT: 27,
+      IMPL_CORRECTION_SUBMITTED_BY: 28,
 
       // Grup 7 — implementasi corrective action (trigger approval chain)
-      IMPL_CORRECTIVE_ACTION_FOTO_URLS: 28,
-      IMPL_SUBMITTED_AT:                29,
-      IMPL_SUBMITTED_BY:                30,
+      IMPL_CORRECTIVE_ACTION_FOTO_URLS:  29,
+      IMPL_CORRECTIVE_ACTION_KETERANGAN: 30,
+      IMPL_SUBMITTED_AT:                 31,
+      IMPL_SUBMITTED_BY:                 32,
 
       // Grup 8 — penutupan
-      CLOSED_AT: 31,
+      CLOSED_AT: 33,
 
       // Grup 9 — reminder tracking (generik untuk TPP overdue & approval reminder)
-      REMINDER_COUNT:            32,
-      REMINDER_STATUS_SNAPSHOT:  33,
+      REMINDER_COUNT:            34,
+      REMINDER_STATUS_SNAPSHOT:  35,
     },
 
     // REQUIREMENT_LOCKS — agenda_id menggantikan session_id
