@@ -183,6 +183,44 @@ function notifyFindingsVerified(agenda, findings) {
 //  TPP (TINDAKAN PERBAIKAN DAN PENCEGAHAN)
 // ════════════════════════════════════════════════════════════
 
+function notifyTppDueDateSet(period, dueDate, setByEmail) {
+  // Kumpulkan semua penerima: auditee + auditor + koordinator dari semua agenda periode ini
+  const agendas = getCachedAgendasByPeriod(period.period_id);
+  const emailSet = {};
+
+  agendas.forEach(function(ag) {
+    parseCSV(ag.auditee_emails).forEach(function(e) { if (e) emailSet[normalizeEmail(e)] = e; });
+    parseCSV(ag.auditor_emails).forEach(function(e) { if (e) emailSet[normalizeEmail(e)] = e; });
+  });
+  getAllKoordinators().forEach(function(u) { if (u.email) emailSet[normalizeEmail(u.email)] = u.email; });
+
+  const recipients = Object.values(emailSet);
+  if (!recipients.length) return;
+
+  const body = `
+    <p>Koordinator telah menetapkan batas waktu pengisian rencana Tindakan Perbaikan dan
+    Pencegahan (TPP) untuk periode <strong>${escapeHtml(period.nama_periode)}</strong>.</p>
+    <table style="border-collapse:collapse;width:100%;font-size:13px;margin:16px 0">
+      <tr><td style="padding:8px;color:#666;width:180px;">Periode Audit</td>
+          <td style="padding:8px;font-weight:600">${escapeHtml(period.nama_periode)}</td></tr>
+      <tr style="background:#f9f9f9">
+          <td style="padding:8px;color:#666">Due Date Rencana TPP</td>
+          <td style="padding:8px;font-weight:700;color:#1F3864;font-size:14px">${formatDateOnlyWIB(dueDate)}</td></tr>
+    </table>
+    <p>Auditee yang memiliki temuan <strong>Non Comply</strong> dengan status <strong>Open TPP</strong>
+    wajib mengisi rencana correction dan corrective action sebelum tanggal tersebut.</p>
+    <p style="font-size:12px;color:#888;margin-top:16px">
+      Jika pengisian dilakukan setelah due date, akan tercatat sebagai <em>Rencana TPP Overdue</em>
+      di dashboard monitoring.</p>`;
+
+  sendEmail(
+    recipients,
+    `DUE DATE RENCANA TPP DITETAPKAN — ${period.nama_periode} | ${formatDateOnlyWIB(dueDate)}`,
+    emailTemplate(`Due Date Rencana TPP: ${period.nama_periode}`, body,
+      'Isi TPP di My Task', _appLink('mytask'))
+  );
+}
+
 function notifyTppSubmittedToKoordinator(agenda, result) {
   const koordinators = getAllKoordinators();
   if (!koordinators.length) return;
@@ -468,4 +506,167 @@ function notifyRejected(agenda, result, stage, rejecterEmail, komentar) {
     `DITOLAK — ${stageSubject} ${agenda.dept} | Temuan #${result.nomor_persyaratan}.${result.check_item_no}`,
     emailTemplate(`${stageLabel} Ditolak`, body,
       'Perbaiki & Ajukan Ulang di My Task', _appLink('mytask', { result_id: result.result_id })));
+}
+
+// ════════════════════════════════════════════════════════════
+//  REMINDER & DIGEST — dipanggil oleh runDailyReminders (Code.gs)
+// ════════════════════════════════════════════════════════════
+
+function notifyTppDueDateReminder(period, daysLeft) {
+  const agendas  = getCachedAgendasByPeriod(period.period_id);
+  const emailSet = {};
+  agendas.forEach(function(ag) {
+    parseCSV(ag.auditee_emails).forEach(function(e) { if (e) emailSet[normalizeEmail(e)] = e; });
+    parseCSV(ag.auditor_emails).forEach(function(e) { if (e) emailSet[normalizeEmail(e)] = e; });
+  });
+  getAllKoordinators().forEach(function(u) { if (u.email) emailSet[normalizeEmail(u.email)] = u.email; });
+  const recipients = Object.values(emailSet);
+  if (!recipients.length) return;
+
+  const isUrgent = daysLeft <= 3;
+  const body = `
+    <p ${isUrgent ? 'style="color:#f43f5e"' : ''}>
+      ${isUrgent ? '⚠ ' : ''}Batas waktu pengisian rencana Tindakan Perbaikan dan Pencegahan (TPP)
+      untuk periode <strong>${escapeHtml(period.nama_periode)}</strong>
+      tinggal <strong>${daysLeft} hari lagi</strong>.
+    </p>
+    <table style="border-collapse:collapse;width:100%;font-size:13px;margin:16px 0">
+      <tr><td style="padding:8px;color:#666;width:180px">Periode Audit</td>
+          <td style="padding:8px;font-weight:600">${escapeHtml(period.nama_periode)}</td></tr>
+      <tr style="background:#f9f9f9">
+          <td style="padding:8px;color:#666">Due Date Rencana TPP</td>
+          <td style="padding:8px;font-weight:700;color:#1F3864;font-size:14px">${formatDateOnlyWIB(period.tpp_plan_due_date)}</td></tr>
+      <tr><td style="padding:8px;color:#666">Sisa Waktu</td>
+          <td style="padding:8px;font-weight:700;color:${isUrgent ? '#f43f5e' : '#f59e0b'}">${daysLeft} hari</td></tr>
+    </table>
+    <p>Auditee yang memiliki temuan <strong>Non Comply</strong> dengan status <strong>Open TPP</strong>
+    segera mengisi rencana correction dan corrective action sebelum batas waktu.</p>
+    <p style="font-size:12px;color:#888;margin-top:16px">
+      Jika pengisian dilakukan setelah due date, akan tercatat sebagai
+      <em>Rencana TPP Overdue</em> di dashboard monitoring.</p>`;
+
+  sendEmail(
+    recipients,
+    `${isUrgent ? '⚠ SEGERA — ' : ''}REMINDER: Due Date Rencana TPP ${daysLeft} Hari Lagi — ${period.nama_periode}`,
+    emailTemplate(`Reminder: ${daysLeft} Hari Lagi — Due Date Rencana TPP`, body,
+      'Isi TPP di My Task', _appLink('mytask'))
+  );
+}
+
+function notifyPendingApprovalDigest(period, findings, agendas) {
+  var recipientMap = {};
+
+  function _addToMap(email, finding) {
+    if (!email) return;
+    var key = normalizeEmail(email);
+    if (!recipientMap[key]) recipientMap[key] = { email: email, findings: [] };
+    recipientMap[key].findings.push(finding);
+  }
+
+  findings.forEach(function(f) {
+    var ag = f._agenda;
+    if (!ag) return;
+    if (f.finding_status === CONFIG.FINDING_STATUS.APP_DEPT_HEAD) {
+      _addToMap(ag.dept_head_email, f);
+    } else if (f.finding_status === CONFIG.FINDING_STATUS.APP_AUDITOR) {
+      parseCSV(ag.auditor_emails).forEach(function(e) { _addToMap(e, f); });
+    } else if (f.finding_status === CONFIG.FINDING_STATUS.APP_KOORDINATOR) {
+      getAllKoordinators().forEach(function(u) { _addToMap(u.email, f); });
+    }
+  });
+
+  Object.values(recipientMap).forEach(function(rec) {
+    if (!rec.findings.length) return;
+    var rows = rec.findings.map(function(f) {
+      var ag = f._agenda || {};
+      var statusLabel = {
+        'APP_DEPT_HEAD':   'Menunggu Dept Head',
+        'APP_AUDITOR':     'Menunggu Auditor',
+        'APP_KOORDINATOR': 'Menunggu Koordinator',
+      }[f.finding_status] || f.finding_status;
+      return `<tr>
+        <td style="padding:7px 10px;border-bottom:1px solid #eee;font-family:monospace;font-size:11px;color:#888">${escapeHtml(f.result_id || '')}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #eee;font-weight:600">${escapeHtml(ag.dept || '')}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #eee;font-size:12px">${escapeHtml(f.deskripsi_temuan || '-')}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #eee;font-size:11px;color:#8b5cf6;font-weight:600">${statusLabel}</td>
+      </tr>`;
+    }).join('');
+
+    const body = `
+      <p>Anda memiliki <strong>${rec.findings.length} temuan</strong> yang menunggu
+      persetujuan Anda di periode <strong>${escapeHtml(period.nama_periode)}</strong>.</p>
+      <table style="border-collapse:collapse;width:100%;font-size:13px;margin:16px 0">
+        <thead>
+          <tr style="background:#f3f4f6">
+            <th style="padding:8px 10px;text-align:left;font-size:10px;color:#6b7280">RESULT ID</th>
+            <th style="padding:8px 10px;text-align:left;font-size:10px;color:#6b7280">DEPT</th>
+            <th style="padding:8px 10px;text-align:left;font-size:10px;color:#6b7280">DESKRIPSI</th>
+            <th style="padding:8px 10px;text-align:left;font-size:10px;color:#6b7280">STATUS</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <p>Silakan buka My Task untuk meninjau dan memberikan persetujuan.</p>`;
+
+    sendEmail(
+      rec.email,
+      `[REMINDER] ${rec.findings.length} Temuan Menunggu Persetujuan Anda — ${period.nama_periode}`,
+      emailTemplate('Reminder: Temuan Menunggu Persetujuan', body, 'Buka My Task', _appLink('mytask'))
+    );
+  });
+}
+
+function notifyCorrectionOverdueDigest(period, findings, agendas) {
+  var recipientMap = {};
+
+  findings.forEach(function(f) {
+    var ag = f._agenda;
+    if (!ag) return;
+    parseCSV(ag.auditee_emails).forEach(function(email) {
+      if (!email) return;
+      var key = normalizeEmail(email);
+      if (!recipientMap[key]) recipientMap[key] = { email: email, findings: [] };
+      recipientMap[key].findings.push(f);
+    });
+  });
+
+  Object.values(recipientMap).forEach(function(rec) {
+    if (!rec.findings.length) return;
+    var today = new Date(); today.setHours(0, 0, 0, 0);
+    var rows = rec.findings.map(function(f) {
+      var ag       = f._agenda || {};
+      var corrDue  = new Date(f.due_date_correction); corrDue.setHours(0, 0, 0, 0);
+      var lateDays = Math.round((today - corrDue) / (1000 * 60 * 60 * 24));
+      return `<tr>
+        <td style="padding:7px 10px;border-bottom:1px solid #eee;font-family:monospace;font-size:11px;color:#888">${escapeHtml(f.result_id || '')}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #eee;font-weight:600">${escapeHtml(ag.dept || '')}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #eee;font-size:12px">${escapeHtml(f.deskripsi_temuan || '-')}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #eee;font-size:11px;color:#f43f5e;font-weight:700">${formatDateOnlyWIB(f.due_date_correction)} (${lateDays} hari terlambat)</td>
+      </tr>`;
+    }).join('');
+
+    const body = `
+      <p>Anda memiliki <strong>${rec.findings.length} temuan</strong> dengan bukti
+      <strong>Correction yang sudah melewati due date</strong> di periode
+      <strong>${escapeHtml(period.nama_periode)}</strong>.</p>
+      <table style="border-collapse:collapse;width:100%;font-size:13px;margin:16px 0">
+        <thead>
+          <tr style="background:#fff1f2">
+            <th style="padding:8px 10px;text-align:left;font-size:10px;color:#6b7280">RESULT ID</th>
+            <th style="padding:8px 10px;text-align:left;font-size:10px;color:#6b7280">DEPT</th>
+            <th style="padding:8px 10px;text-align:left;font-size:10px;color:#6b7280">DESKRIPSI</th>
+            <th style="padding:8px 10px;text-align:left;font-size:10px;color:#6b7280">DUE DATE</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <p>Segera upload bukti correction meskipun sudah terlambat — keterlambatan tetap
+      tercatat di sistem monitoring.</p>`;
+
+    sendEmail(
+      rec.email,
+      `⚠ CORRECTION OVERDUE — ${rec.findings.length} Temuan Belum Diupload — ${period.nama_periode}`,
+      emailTemplate('Correction Overdue: Segera Upload Bukti', body, 'Upload Bukti di My Task', _appLink('mytask'))
+    );
+  });
 }
