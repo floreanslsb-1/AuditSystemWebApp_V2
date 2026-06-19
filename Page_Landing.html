@@ -38,7 +38,8 @@ Pages['home'] = function(container) {
         '<span class="lp-period-dot"></span>' +
         '<span class="lp-period-label">Periode aktif</span>' +
         '<span class="lp-period-name">' + escHtml(App.activePeriod.nama_periode) + '</span>' +
-      '</div>'
+      '</div>' +
+      _renderTppPlanDueDateBanner(App.activePeriod)
     : '<div class="lp-period lp-period--inactive">' +
         '<span class="lp-period-dot lp-period-dot--off"></span>' +
         '<span class="lp-period-label">Tidak ada periode aktif</span>' +
