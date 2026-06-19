@@ -180,6 +180,9 @@ function _renderDashboardData(container, data, viewablePeriods, selectedPeriodId
       '</div>' +
     '</div>' +
 
+    // ── TPP Plan Due Date Banner ──────────────────────────────
+    _renderTppPlanDueDateBanner(period) +
+
     // ── Section 1: Audit Progress + OFI Summary (side by side) ──
     '<div class="db-top-row">' +
       _dbProgressSection(agendas, s, donePct, totalAgendas) +
