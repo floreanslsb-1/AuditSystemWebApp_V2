@@ -670,7 +670,6 @@ function completePeriod(periodId, completedBy, force) {
   const openStatuses = [
     FS.PENDING_VERIFICATION,
     FS.OPEN,
-    FS.TPP_OR_DEPT_HEAD, FS.TPP_OR_AUDITOR, FS.TPP_OR_KOORDINATOR,
     FS.OPEN_IMPL,
     FS.APP_DEPT_HEAD, FS.APP_AUDITOR, FS.APP_KOORDINATOR,
   ];
@@ -838,13 +837,19 @@ function resetAgendaData(spreadsheetId, agendaId) {
   const results = getAuditResultsByAgenda(spreadsheetId, agendaId);
   const clearCols = [
     C.STATUS, C.DESKRIPSI_TEMUAN, C.LOKASI_TEMUAN, C.FOTO_URLS, C.AUDITOR_EMAIL, C.SAVED_AT,
-    C.FINDING_STATUS, C.TARGET_DATE, C.IS_OVERDUE, C.CLOSED_AT
+    C.FINDING_STATUS,
+    C.TPP_SUBMITTED_AT, C.TPP_SUBMITTED_BY,
+    C.CORRECTION, C.DUE_DATE_CORRECTION,
+    C.CORRECTIVE_ACTION, C.DUE_DATE_CORRECTIVE_ACTION,
+    C.IMPL_CORRECTION_FOTO_URLS, C.IMPL_CORRECTION_KETERANGAN,
+    C.IMPL_CORRECTION_SUBMITTED_AT, C.IMPL_CORRECTION_SUBMITTED_BY,
+    C.IMPL_CORRECTIVE_ACTION_FOTO_URLS, C.IMPL_CORRECTIVE_ACTION_KETERANGAN,
+    C.IMPL_SUBMITTED_AT, C.IMPL_SUBMITTED_BY,
+    C.CLOSED_AT,
+    C.REMINDER_COUNT, C.REMINDER_STATUS_SNAPSHOT,
   ];
   results.forEach(function(r) {
     clearCols.forEach(function(col) { _updateCell(sheet, r._rowIndex, col + 1, ''); });
-    _deleteRowsByColValue(spreadsheetId,
-      CONFIG.AUDIT_SHEETS.TPP_ITEMS,
-      CONFIG.AUDIT_COLS.TPP_ITEMS.RESULT_ID, r.result_id);
   });
   _deleteRowsByColValue(spreadsheetId,
     CONFIG.AUDIT_SHEETS.REQUIREMENT_LOCKS,
@@ -921,9 +926,10 @@ function _setupAuditSheets(ss, periodId, namaPeriode) {
       'correction','due_date_correction',
       'corrective_action','due_date_corrective_action',
       'impl_correction_foto_urls','impl_correction_submitted_at','impl_correction_submitted_by',
-      'impl_corrective_action_foto_urls','impl_submitted_at','impl_submitted_by',
-      'closed_at',
-    ],
+      'impl_corrective_action_foto_urls','impl_corrective_action_keterangan','impl_submitted_at','impl_submitted_by',
+        'closed_at',
+        'reminder_count','reminder_status_snapshot',
+      ];
     REQUIREMENT_LOCKS: [
       'lock_id','agenda_id','nomor_persyaratan','locked_by','locked_at','status',
     ],
@@ -988,9 +994,10 @@ const AUDIT_RESULT_HEADERS = [
   'tpp_submitted_at','tpp_submitted_by',
   'correction','due_date_correction',
   'corrective_action','due_date_corrective_action',
-  'impl_correction_foto_urls','impl_correction_submitted_at','impl_correction_submitted_by',
-  'impl_corrective_action_foto_urls','impl_submitted_at','impl_submitted_by',
+  'impl_correction_foto_urls','impl_correction_keterangan','impl_correction_submitted_at','impl_correction_submitted_by',
+  'impl_corrective_action_foto_urls','impl_corrective_action_keterangan','impl_submitted_at','impl_submitted_by',
   'closed_at',
+  'reminder_count','reminder_status_snapshot',
 ];
 
 function getAuditResultsByAgenda(spreadsheetId, agendaId) {
@@ -1472,6 +1479,54 @@ function submitCorrectiveActionImpl(spreadsheetId, resultId, agendaId, fotoUrls,
     if (ag && res) notifyImplSubmitted(ag, res);
   } catch(e) { console.warn('Notifikasi impl submitted gagal:', e.message); }
   return { success: true };
+}
+
+/**
+ * Cek & hitung reminder counter untuk satu finding.
+ * Reset otomatis kalau finding_status sudah berubah sejak reminder terakhir.
+ */
+function _checkReminderCounter(result) {
+  var snapshot     = result.reminder_status_snapshot || '';
+  var currentCount = (snapshot === result.finding_status) ? (Number(result.reminder_count) || 0) : 0;
+  return {
+    shouldSend: currentCount < 6,
+    newCount:   currentCount + 1,
+  };
+}
+
+/**
+ * Update kolom reminder_count & reminder_status_snapshot setelah reminder terkirim.
+ */
+function _updateReminderTracking(spreadsheetId, resultId, newCount, currentStatus) {
+  const C = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
+  updateResultField(spreadsheetId, resultId, C.REMINDER_COUNT,           newCount);
+  updateResultField(spreadsheetId, resultId, C.REMINDER_STATUS_SNAPSHOT, currentStatus);
+}
+
+// ════════════════════════════════════════════════════════════
+//  REMINDER TRACKING — generik untuk TPP overdue & approval reminder
+// ════════════════════════════════════════════════════════════
+
+/**
+ * Cek & hitung reminder counter untuk satu finding.
+ * Reset otomatis kalau finding_status sudah berubah sejak reminder terakhir.
+ */
+function _checkReminderCounter(result) {
+  var snapshot     = result.reminder_status_snapshot || '';
+  var currentCount = (snapshot === result.finding_status) ? (Number(result.reminder_count) || 0) : 0;
+  return {
+    shouldSend: currentCount < 6,
+    newCount:   currentCount + 1,
+  };
+}
+
+/**
+ * Update kolom reminder_count & reminder_status_snapshot setelah reminder terkirim.
+ */
+function _updateReminderTracking(spreadsheetId, resultId, newCount, currentStatus) {
+  const C = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
+  updateResultField(spreadsheetId, resultId, C.REMINDER_COUNT,           newCount);
+  updateResultField(spreadsheetId, resultId, C.REMINDER_STATUS_SNAPSHOT, currentStatus);
 }
 
 
