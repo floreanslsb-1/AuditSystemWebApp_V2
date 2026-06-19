@@ -929,24 +929,6 @@ function runDailyReminders() {
 
   console.log('[DAILY] Menjalankan reminder untuk periode: ' + period.period_id);
 
-  // ── 1. TPP Plan Due Date reminder ─────────────────────────
-  if (period.tpp_plan_due_date) {
-    var due      = new Date(period.tpp_plan_due_date); due.setHours(0, 0, 0, 0);
-    var diffDays = Math.round((due - today) / (1000 * 60 * 60 * 24));
-    if (diffDays === 7 || diffDays === 3) {
-      try {
-        notifyTppDueDateReminder(period, diffDays);
-        console.log('[DAILY] TPP due date reminder sent: ' + diffDays + ' hari lagi');
-      } catch(e) { console.warn('[DAILY] TPP reminder gagal:', e.message); }
-    }
-  }
-
-  // ── 2 & 3 hanya jalan di Senin minggu ke-1 dan ke-3 ───────
-  if (!_isSecondOrFourthMondayCheck(today)) {
-    console.log('[DAILY] Bukan jadwal digest (Senin minggu-1/3), skip.');
-    return;
-  }
-
   var findings = [], agendas = [];
   try {
     findings = getAllFindingsByPeriod(period.spreadsheet_id, period.period_id);
@@ -959,34 +941,95 @@ function runDailyReminders() {
     return;
   }
 
-  // ── 2. Pending approval digest ────────────────────────────
-  var approvalStatuses = [
-    CONFIG.FINDING_STATUS.APP_DEPT_HEAD,
-    CONFIG.FINDING_STATUS.APP_AUDITOR,
-    CONFIG.FINDING_STATUS.APP_KOORDINATOR,
-  ];
-  var pendingApproval = findings.filter(function(f) {
-    return approvalStatuses.indexOf(f.finding_status) !== -1 && f._agenda;
-  });
-  if (pendingApproval.length > 0) {
-    try {
-      notifyPendingApprovalDigest(period, pendingApproval, agendas);
-      console.log('[DAILY] Pending approval digest sent: ' + pendingApproval.length + ' findings');
-    } catch(e) { console.warn('[DAILY] Pending approval digest gagal:', e.message); }
+  var dueDatePassed = false;
+  if (period.tpp_plan_due_date) {
+    var planDue = new Date(period.tpp_plan_due_date); planDue.setHours(0, 0, 0, 0);
+    dueDatePassed = today > planDue;
   }
 
-  // ── 3. OPEN_IMPL correction overdue ───────────────────────
-  var corrOverdue = findings.filter(function(f) {
-    if (f.finding_status !== CONFIG.FINDING_STATUS.OPEN_IMPL) return false;
-    if (!f.due_date_correction) return false;
-    var corrDue = new Date(f.due_date_correction); corrDue.setHours(0, 0, 0, 0);
-    return !f.impl_correction_submitted_at && today > corrDue;
-  });
-  if (corrOverdue.length > 0) {
-    try {
-      notifyCorrectionOverdueDigest(period, corrOverdue, agendas);
-      console.log('[DAILY] Correction overdue digest sent: ' + corrOverdue.length + ' findings');
-    } catch(e) { console.warn('[DAILY] Correction overdue digest gagal:', e.message); }
+  // ── 1a. TPP Plan Due Date reminder — SEBELUM due date (H-7, H-3) ──
+  if (period.tpp_plan_due_date && !dueDatePassed) {
+    var diffDays = Math.round((new Date(period.tpp_plan_due_date) - today) / (1000 * 60 * 60 * 24));
+    if (diffDays === 7 || diffDays === 3) {
+      var openFindingsForReminder = findings.filter(function(f) {
+        return f.finding_status === CONFIG.FINDING_STATUS.OPEN && f._agenda;
+      });
+      try {
+        notifyTppDueDateReminder(period, diffDays, openFindingsForReminder);
+        console.log('[DAILY] TPP due date reminder (H-' + diffDays + ') sent');
+      } catch(e) { console.warn('[DAILY] TPP reminder gagal:', e.message); }
+    }
+  }
+
+  // ── 1b. TPP Plan Overdue reminder — SETELAH due date, Senin wk1/wk3, max 6x ──
+  if (dueDatePassed && _isSecondOrFourthMondayCheck(today)) {
+    var openFindings = findings.filter(function(f) {
+      return f.finding_status === CONFIG.FINDING_STATUS.OPEN && f._agenda;
+    });
+
+    // Filter findings yang masih < 6x reminder, sekaligus update counter
+    var eligibleOpenFindings = [];
+    openFindings.forEach(function(f) {
+      var check = _checkReminderCounter(f);
+      if (check.shouldSend) {
+        eligibleOpenFindings.push(f);
+        try {
+          _updateReminderTracking(period.spreadsheet_id, f.result_id, check.newCount, f.finding_status);
+        } catch(e) { console.warn('[DAILY] Update reminder tracking gagal:', e.message); }
+      }
+    });
+
+    if (eligibleOpenFindings.length > 0) {
+      try {
+        notifyTppOverdueReminder(period, eligibleOpenFindings);
+        console.log('[DAILY] TPP overdue reminder sent: ' + eligibleOpenFindings.length + ' findings');
+      } catch(e) { console.warn('[DAILY] TPP overdue reminder gagal:', e.message); }
+    }
+  }
+
+  // ── 2. Pending approval digest — Senin wk1/wk3, max 6x per level ──
+  if (_isSecondOrFourthMondayCheck(today)) {
+    var approvalStatuses = [
+      CONFIG.FINDING_STATUS.APP_DEPT_HEAD,
+      CONFIG.FINDING_STATUS.APP_AUDITOR,
+      CONFIG.FINDING_STATUS.APP_KOORDINATOR,
+    ];
+    var pendingApproval = findings.filter(function(f) {
+      return approvalStatuses.indexOf(f.finding_status) !== -1 && f._agenda;
+    });
+
+    var eligibleApproval = [];
+    pendingApproval.forEach(function(f) {
+      var check = _checkReminderCounter(f);
+      if (check.shouldSend) {
+        eligibleApproval.push(f);
+        try {
+          _updateReminderTracking(period.spreadsheet_id, f.result_id, check.newCount, f.finding_status);
+        } catch(e) { console.warn('[DAILY] Update reminder tracking gagal:', e.message); }
+      }
+    });
+
+    if (eligibleApproval.length > 0) {
+      try {
+        notifyPendingApprovalDigest(period, eligibleApproval, agendas);
+        console.log('[DAILY] Pending approval digest sent: ' + eligibleApproval.length + ' findings');
+      } catch(e) { console.warn('[DAILY] Pending approval digest gagal:', e.message); }
+    }
+  }
+
+  // ── 3. Correction + Corrective Action gabungan — bulanan, hanya setelah TPP due date lewat ──
+  var isFirstOfMonth = today.getDate() === 1;
+  if (dueDatePassed && isFirstOfMonth) {
+    var openImplFindings = findings.filter(function(f) {
+      return f.finding_status === CONFIG.FINDING_STATUS.OPEN_IMPL && f._agenda &&
+        (!f.impl_correction_submitted_at || !f.impl_submitted_at);
+    });
+    if (openImplFindings.length > 0) {
+      try {
+        notifyCorrectionAndCAReminder(period, openImplFindings);
+        console.log('[DAILY] Correction+CA monthly reminder sent: ' + openImplFindings.length + ' findings');
+      } catch(e) { console.warn('[DAILY] Correction+CA reminder gagal:', e.message); }
+    }
   }
 
   console.log('[DAILY] Selesai.');
