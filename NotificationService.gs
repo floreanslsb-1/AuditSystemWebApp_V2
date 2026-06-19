@@ -667,8 +667,6 @@ function notifyTppAndImplMonthlyReminder(period, openFindings, openImplFindings)
 }
 
 function notifyPendingApprovalDigest(period, findings, agendas) {
-
-function notifyPendingApprovalDigest(period, findings, agendas) {
   var recipientMap = {};
 
   function _addToMap(email, finding) {
