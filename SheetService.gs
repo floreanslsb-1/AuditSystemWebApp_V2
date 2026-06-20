@@ -1438,9 +1438,10 @@ function updateTppPlan(spreadsheetId, resultId, tppData) {
  * Submit bukti Correction — hanya dicatat, tidak trigger approval.
  * Correction masih bisa di-resubmit sampai Corrective Action disubmit.
  */
-function submitCorrectionImpl(spreadsheetId, resultId, agendaId, fotoUrls, keterangan, submittedBy) {
+function submitCorrectionImpl(spreadsheetId, resultId, agendaId, fotoUrls, keterangan, submittedBy, existingFotoUrls) {
   const C = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
-  updateResultField(spreadsheetId, resultId, C.IMPL_CORRECTION_FOTO_URLS,    toCSV(fotoUrls));
+  const allUrls = (existingFotoUrls || []).concat(fotoUrls || []);
+  updateResultField(spreadsheetId, resultId, C.IMPL_CORRECTION_FOTO_URLS,    toCSV(allUrls));
   updateResultField(spreadsheetId, resultId, C.IMPL_CORRECTION_KETERANGAN,   keterangan || '');
   updateResultField(spreadsheetId, resultId, C.IMPL_CORRECTION_SUBMITTED_AT, now());
   updateResultField(spreadsheetId, resultId, C.IMPL_CORRECTION_SUBMITTED_BY, submittedBy);
@@ -1461,9 +1462,10 @@ function submitCorrectionImpl(spreadsheetId, resultId, agendaId, fotoUrls, keter
  * Submit bukti Corrective Action — trigger approval chain.
  * Set finding_status → APP_DEPT_HEAD.
  */
-function submitCorrectiveActionImpl(spreadsheetId, resultId, agendaId, fotoUrls, keterangan, submittedBy) {
+function submitCorrectiveActionImpl(spreadsheetId, resultId, agendaId, fotoUrls, keterangan, submittedBy, existingFotoUrls) {
   const C = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
-  updateResultField(spreadsheetId, resultId, C.IMPL_CORRECTIVE_ACTION_FOTO_URLS,  toCSV(fotoUrls));
+  const allUrls = (existingFotoUrls || []).concat(fotoUrls || []);
+  updateResultField(spreadsheetId, resultId, C.IMPL_CORRECTIVE_ACTION_FOTO_URLS,  toCSV(allUrls));
   updateResultField(spreadsheetId, resultId, C.IMPL_CORRECTIVE_ACTION_KETERANGAN, keterangan || '');
   updateResultField(spreadsheetId, resultId, C.IMPL_SUBMITTED_AT,                 now());
   updateResultField(spreadsheetId, resultId, C.IMPL_SUBMITTED_BY,                 submittedBy);
