@@ -1499,9 +1499,7 @@ function _toggleImplEditMode(res, period, resultId, agendaId, periodId) {
   if (!readView || !editView) return;
   readView.style.display = _implEditMode ? 'none' : 'block';
   editView.style.display = _implEditMode ? 'block' : 'none';
-  if (editBtn) editBtn.innerHTML = _implEditMode
-    ? '<i data-lucide="x" style="width:12px;height:12px"></i> Batal Edit'
-    : '<i data-lucide="pencil" style="width:12px;height:12px"></i> Edit Rencana';
+  if (editBtn) editBtn.style.display = _implEditMode ? 'none' : 'inline-flex';
   lucide.createIcons();
 }
 
@@ -1598,7 +1596,7 @@ async function _renderUploadImplPage(container, task, period) {
         '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">' +
           '<div style="font-size:12px;font-weight:700;color:var(--text-muted);letter-spacing:.06em">RENCANA TPP</div>' +
           '<button class="btn btn-ghost btn-sm" id="impl-tpp-edit-btn" ' +
-            'onclick="_toggleImplEditMode()" style="font-size:11px;gap:4px">' +
+            'onclick="_toggleImplEditMode()" style="font-size:11px;gap:4px;display:' + (_implEditMode ? 'none' : 'inline-flex') + '">' +
             '<i data-lucide="pencil" style="width:12px;height:12px"></i> Edit Rencana' +
           '</button>' +
         '</div>' +
@@ -1624,8 +1622,8 @@ async function _renderUploadImplPage(container, task, period) {
           '<div style="background:var(--surface-2,#f8f9fa);border-radius:8px;padding:12px;margin-bottom:10px">' +
             '<div style="font-size:10px;font-weight:700;color:var(--blue,#3b82f6);letter-spacing:.05em;margin-bottom:8px">CORRECTION</div>' +
             '<div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:start">' +
-              '<textarea class="form-control" id="impl-edit-correction" rows="2" ' +
-                'style="resize:vertical;min-height:unset">' + escHtml(res.correction || '') + '</textarea>' +
+              '<textarea class="form-control" id="impl-edit-correction" rows="3" ' +
+                'style="resize:vertical;min-height:68px">' + escHtml(res.correction || '') + '</textarea>' +
               '<div>' +
                 '<div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;white-space:nowrap">' +
                   'Due Date' + (maxDateCorr ? '<br><span style="color:var(--text-muted)">maks. ' + formatDate(maxDateCorr) + '</span>' : '') +
@@ -1640,8 +1638,8 @@ async function _renderUploadImplPage(container, task, period) {
           '<div style="background:var(--surface-2,#f8f9fa);border-radius:8px;padding:12px;margin-bottom:10px">' +
             '<div style="font-size:10px;font-weight:700;color:var(--purple,#8b5cf6);letter-spacing:.05em;margin-bottom:8px">CORRECTIVE ACTION</div>' +
             '<div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:start">' +
-              '<textarea class="form-control" id="impl-edit-ca" rows="2" ' +
-                'style="resize:vertical;min-height:unset">' + escHtml(res.corrective_action || '') + '</textarea>' +
+              '<textarea class="form-control" id="impl-edit-ca" rows="3" ' +
+                'style="resize:vertical;min-height:68px">' + escHtml(res.corrective_action || '') + '</textarea>' +
               '<div>' +
                 '<div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;white-space:nowrap">' +
                   'Due Date' + (maxDateCA ? '<br><span style="color:var(--text-muted)">maks. ' + formatDate(maxDateCA) + '</span>' : '') +
