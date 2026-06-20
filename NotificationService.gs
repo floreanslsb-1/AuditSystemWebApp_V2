@@ -514,15 +514,14 @@ function notifyTppAndImplMonthlyReminder(period, openFindings, openImplFindings)
 
     var rows = rec.items.map(function(it) {
       var dueLabel = formatDateOnlyWIB(it.dueDate) + (it.isOverdue ? ' (Overdue)' : '');
-      var dueStyle = it.isOverdue
-        ? 'font-size:11px;font-weight:700;color:#f43f5e'
-        : 'font-size:11px;font-weight:400;color:#111';
+      var dueColor = it.isOverdue ? '#f43f5e' : '#111';
+      var dueWeight = it.isOverdue ? '700' : '400';
       return `<tr>
-        <td style="padding:7px 10px;border-bottom:1px solid #eee;font-family:monospace;font-size:11px;color:#888">${escapeHtml(it.finding.result_id || '')}</td>
-        <td style="padding:7px 10px;border-bottom:1px solid #eee;font-weight:600">${escapeHtml(it.ag.dept || '')}</td>
-        <td style="padding:7px 10px;border-bottom:1px solid #eee;font-size:11px;font-weight:600">${escapeHtml(it.jenis)}</td>
-        <td style="padding:7px 10px;border-bottom:1px solid #eee;font-size:12px">${escapeHtml(it.deskripsi)}</td>
-        <td style="padding:7px 10px;border-bottom:1px solid #eee;${dueStyle}">${dueLabel}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #eee;font-family:monospace;font-size:12px;font-weight:400;color:#888">${escapeHtml(it.finding.result_id || '')}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #eee;font-size:12px;font-weight:600;color:#111">${escapeHtml(it.ag.dept || '')}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #eee;font-size:12px;font-weight:600;color:#111">${escapeHtml(it.jenis)}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #eee;font-size:12px;font-weight:400;color:#111">${escapeHtml(it.deskripsi)}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #eee;font-size:12px;font-weight:${dueWeight};color:${dueColor}">${dueLabel}</td>
       </tr>`;
     }).join('');
 
