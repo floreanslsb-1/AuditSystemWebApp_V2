@@ -652,6 +652,7 @@ function _routeAction(action, payload, profile) {
       const urls_sci = (payload.files || []).map(function(f) {
         return uploadFileToDrive(f.base64, f.name, f.mime_type, folder_sci);
       });
+      const existing_sci = (payload.existing_foto_urls || '').split(',').filter(Boolean);
 
       submitCorrectionImpl(
         period_sci.spreadsheet_id,
@@ -659,7 +660,8 @@ function _routeAction(action, payload, profile) {
         payload.agenda_id,
         urls_sci,
         payload.keterangan || '',
-        profile.email
+        profile.email,
+        existing_sci
       );
 
       return { success: true, urls: urls_sci };
@@ -684,6 +686,7 @@ function _routeAction(action, payload, profile) {
       const urls_scai = (payload.files || []).map(function(f) {
         return uploadFileToDrive(f.base64, f.name, f.mime_type, folder_scai);
       });
+      const existing_scai = (payload.existing_foto_urls || '').split(',').filter(Boolean);
 
       submitCorrectiveActionImpl(
         period_scai.spreadsheet_id,
@@ -691,7 +694,8 @@ function _routeAction(action, payload, profile) {
         payload.agenda_id,
         urls_scai,
         payload.keterangan || '',
-        profile.email
+        profile.email,
+        existing_scai
       );
 
       return { success: true, urls: urls_scai };
