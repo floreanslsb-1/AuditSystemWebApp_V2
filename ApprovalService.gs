@@ -128,7 +128,7 @@ function _handleReject({ spreadsheetId, result, agenda, flow, byEmail, komentar 
   // TPP apapun levelnya → OPEN, IMPL apapun levelnya → OPEN_IMPL
   updateResultField(spreadsheetId, result.result_id, C.FINDING_STATUS, flow.reject);
 
-  try { notifyRejected(agenda, result, flow.stage, byEmail, komentar); } catch(e) {}
+  try { notifyRejected(agenda, result, flow.stage, flow.level, byEmail, komentar); } catch(e) {}
 
   return { success: true, rejected: true, rollbackStatus: flow.reject };
 }
