@@ -1372,7 +1372,7 @@ async function _renderIsiTppPage(container, task, period) {
               '<input class="form-control" type="date" id="tpp-due-date-correction" ' +
                 'style="width:130px;font-size:12px;padding:5px 8px" ' +
                 (maxDateCorr ? 'max="' + maxDateCorr + '" ' : '') +
-                'value="' + (existing && existing.due_date_correction ? existing.due_date_correction : '') + '">' +
+                'value="' + toDateInputValue(existing && existing.due_date_correction) + '">' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -1398,7 +1398,7 @@ async function _renderIsiTppPage(container, task, period) {
               '<input class="form-control" type="date" id="tpp-due-date-corrective-action" ' +
                 'style="width:130px;font-size:12px;padding:5px 8px" ' +
                 (maxDateCA ? 'max="' + maxDateCA + '" ' : '') +
-                'value="' + (existing && existing.due_date_corrective_action ? existing.due_date_corrective_action : '') + '">' +
+                'value="' + toDateInputValue(existing && existing.due_date_corrective_action) + '">' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -1633,7 +1633,7 @@ async function _renderUploadImplPage(container, task, period) {
                 '<input class="form-control" type="date" id="impl-edit-due-corr" ' +
                   'style="width:130px;font-size:12px;padding:5px 8px" ' +
                   (maxDateCorr ? 'max="' + maxDateCorr + '" ' : '') +
-                  'value="' + (res.due_date_correction ? formatDate(res.due_date_correction) : '') + '">' +
+                  'value="' + toDateInputValue(res.due_date_correction) + '">' +
               '</div>' +
             '</div>' +
           '</div>' +
@@ -1649,7 +1649,7 @@ async function _renderUploadImplPage(container, task, period) {
                 '<input class="form-control" type="date" id="impl-edit-due-ca" ' +
                   'style="width:130px;font-size:12px;padding:5px 8px" ' +
                   (maxDateCA ? 'max="' + maxDateCA + '" ' : '') +
-                  'value="' + (res.due_date_corrective_action ? formatDate(res.due_date_corrective_action) : '') + '">' +
+                  'value="' + toDateInputValue(res.due_date_corrective_action) + '">' +
               '</div>' +
             '</div>' +
           '</div>' +
