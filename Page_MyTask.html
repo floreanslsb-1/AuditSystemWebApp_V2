@@ -1919,8 +1919,49 @@ async function _submitCorrectiveActionImpl(resultId, agendaId, periodId) {
   try {
     var tppData = await api('GET_TPP_ITEMS', { period_id: periodId, result_id: resultId, agenda_id: agendaId });
     var res = (tppData && tppData[0]) ? tppData[0] : {};
-    var existingUrls = (res.impl_corrective_action_foto_urls || '');
 
+    // Correction belum pernah disubmit — bundling: Correction + CA disubmit sekaligus
+    if (!res.impl_correction_submitted_at) {
+      var corrZone = document.getElementById('impl-correction-zone');
+      var corrFiles = corrZone && corrZone._getFiles ? corrZone._getFiles() : [];
+      var corrSavedContainer = document.getElementById('impl-correction-saved-files');
+      var corrExistingCount = corrSavedContainer ? corrSavedContainer.querySelectorAll('a').length : 0;
+      var corrKetEl = document.getElementById('impl-correction-ket');
+      var corrKeterangan = (corrKetEl || {}).value?.trim() || '';
+
+      if (!corrFiles.length && corrExistingCount === 0) {
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="upload" style="width:13px;height:13px"></i> Submit Corrective Action';
+        lucide.createIcons();
+        return toast('Correction belum disubmit. Upload minimal 1 foto bukti Correction terlebih dahulu.', 'error');
+      }
+      if (!corrKeterangan) {
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="upload" style="width:13px;height:13px"></i> Submit Corrective Action';
+        lucide.createIcons();
+        return toast('Correction belum disubmit. Isi keterangan Correction terlebih dahulu.', 'error');
+      }
+
+      var corrB64files = await filesToBase64(corrFiles);
+      var caB64files    = await filesToBase64(files);
+
+      await api('SUBMIT_CORRECTION_AND_CA_IMPL', {
+        period_id:  periodId,
+        result_id:  resultId,
+        agenda_id:  agendaId,
+        correction_files:      corrB64files,
+        correction_keterangan: corrKeterangan,
+        ca_files:               caB64files,
+        ca_keterangan:          keteranganCa,
+      });
+      clearCache('GET_ALL_FINDINGS_BY_PERIOD');
+      toast('Correction dan Corrective Action berhasil dikirim. Menunggu approval Dept Head.', 'success');
+      navigateTo('mytask');
+      return;
+    }
+
+    // Correction sudah pernah disubmit — submit CA seperti biasa
+    var existingUrls = (res.impl_corrective_action_foto_urls || '');
     var b64files = await filesToBase64(files);
     await api('SUBMIT_CORRECTIVE_ACTION_IMPL', {
       period_id:  periodId,
