@@ -410,6 +410,16 @@ function formatDate(str) {
   var d = new Date(str);
   return isNaN(d) ? str : d.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' });
 }
+// Konversi ke format yyyy-MM-dd untuk value <input type="date"> — beda dari formatDate() yang untuk tampilan baca manusia
+function toDateInputValue(str) {
+  if (!str) return '';
+  var d = new Date(str);
+  if (isNaN(d)) return '';
+  var yyyy = d.getFullYear();
+  var mm   = String(d.getMonth() + 1).padStart(2, '0');
+  var dd   = String(d.getDate()).padStart(2, '0');
+  return yyyy + '-' + mm + '-' + dd;
+}
 function timeAgo(str) {
   if (!str) return '';
   var diff = Date.now() - new Date(str).getTime();
