@@ -17,21 +17,23 @@ function _appLink(page, params) {
 function _findingInfo(result, agenda) {
   return `
     <table style="border-collapse:collapse;width:100%;font-size:13px;margin:16px 0;">
-      <tr><td style="padding:6px;color:#666;width:160px;">Area</td>
-          <td style="padding:6px;font-weight:bold;">${escapeHtml(agenda.dept)}</td></tr>
-      <tr style="background:#f9f9f9;">
-          <td style="padding:6px;color:#666;">Result ID</td>
+      <tr><td style="padding:6px;color:#666;width:160px;">Result ID</td>
           <td style="padding:6px;font-family:monospace;">${escapeHtml(result.result_id || '')}</td></tr>
-      <tr><td style="padding:6px;color:#666;">Check Item</td>
-          <td style="padding:6px;">${escapeHtml(result.check_item || '')}</td></tr>
       <tr style="background:#f9f9f9;">
-          <td style="padding:6px;color:#666;">Standar</td>
-          <td style="padding:6px;">${escapeHtml(result.standar_check_item || '-')}</td></tr>
-      <tr><td style="padding:6px;color:#666;">Deskripsi Temuan</td>
+          <td style="padding:6px;color:#666;">Deskripsi Temuan</td>
           <td style="padding:6px;">${escapeHtml(result.deskripsi_temuan || '')}</td></tr>
+      <tr><td style="padding:6px;color:#666;">Lokasi Temuan</td>
+          <td style="padding:6px;">${escapeHtml(result.lokasi_temuan || '-')}</td></tr>
       <tr style="background:#f9f9f9;">
-          <td style="padding:6px;color:#666;">Status</td>
-          <td style="padding:6px;font-weight:bold;">${escapeHtml(result.status || '')}</td></tr>
+          <td style="padding:6px;color:#666;">Correction</td>
+          <td style="padding:6px;">${escapeHtml(result.correction || '-')}</td></tr>
+      <tr><td style="padding:6px;color:#666;">Due Date Correction</td>
+          <td style="padding:6px;">${formatDateOnlyWIB(result.due_date_correction)}</td></tr>
+      <tr style="background:#f9f9f9;">
+          <td style="padding:6px;color:#666;">Corrective Action</td>
+          <td style="padding:6px;">${escapeHtml(result.corrective_action || '-')}</td></tr>
+      <tr><td style="padding:6px;color:#666;">Due Date Corrective Action</td>
+          <td style="padding:6px;">${formatDateOnlyWIB(result.due_date_corrective_action)}</td></tr>
     </table>`;
 }
 
@@ -224,34 +226,6 @@ function notifyTppDueDateSet(period, dueDate, setByEmail) {
   );
 }
 
-function notifyTppSubmittedToKoordinator(agenda, result) {
-  const koordinators = getAllKoordinators();
-  if (!koordinators.length) return;
-  const period      = getPeriodById(agenda.period_id);
-  const namaPeriode = period ? period.nama_periode : 'IMS';
-  const body = `
-    <p>Auditee area <strong>${escapeHtml(agenda.dept)}</strong> telah mengajukan
-    rencana Tindakan Perbaikan dan Pencegahan (TPP) untuk temuan berikut.</p>
-    ${_findingInfo(result, agenda)}
-    <table style="border-collapse:collapse;width:100%;font-size:13px;">
-      <tr><td style="padding:6px;color:#666;width:160px;">Correction</td>
-          <td style="padding:6px;">${escapeHtml(result.correction || '-')}</td></tr>
-      <tr style="background:#f9f9f9;">
-          <td style="padding:6px;color:#666;">Due Date Correction</td>
-          <td style="padding:6px;">${formatDateOnlyWIB(result.due_date_correction)}</td></tr>
-      <tr><td style="padding:6px;color:#666;">Corrective Action</td>
-          <td style="padding:6px;">${escapeHtml(result.corrective_action || '-')}</td></tr>
-      <tr style="background:#f9f9f9;">
-          <td style="padding:6px;color:#666;">Due Date Corrective Action</td>
-          <td style="padding:6px;">${formatDateOnlyWIB(result.due_date_corrective_action)}</td></tr>
-    </table>
-    <p style="margin-top:16px;">Rencana TPP telah disubmit dan auditee akan segera
-    mengupload bukti implementasi.</p>`;
-  sendEmail(koordinators.map(u => u.email),
-    `INFORMASI — RENCANA TPP DISUBMIT | ${agenda.dept} | Temuan #${result.nomor_persyaratan}.${result.check_item_no}`,
-    emailTemplate(`Rencana TPP Disubmit: ${agenda.dept}`, body));
-}
-
 function notifyTppSubmittedToAuditee(agenda, result) {
   const auditees = parseCSV(agenda.auditee_emails);
   if (!auditees.length) return;
@@ -259,47 +233,23 @@ function notifyTppSubmittedToAuditee(agenda, result) {
     <p>Rencana Tindakan Perbaikan dan Pencegahan (TPP) untuk temuan berikut telah
     berhasil disubmit. Silakan upload bukti implementasi sesuai rencana yang telah dibuat.</p>
     ${_findingInfo(result, agenda)}
-    <table style="border-collapse:collapse;width:100%;font-size:13px;">
-      <tr><td style="padding:6px;color:#666;width:160px;">Correction</td>
-          <td style="padding:6px;">${escapeHtml(result.correction || '-')}</td></tr>
-      <tr style="background:#f9f9f9;">
-          <td style="padding:6px;color:#666;">Due Date Correction</td>
-          <td style="padding:6px;">${formatDateOnlyWIB(result.due_date_correction)}</td></tr>
-      <tr><td style="padding:6px;color:#666;">Corrective Action</td>
-          <td style="padding:6px;">${escapeHtml(result.corrective_action || '-')}</td></tr>
-      <tr style="background:#f9f9f9;">
-          <td style="padding:6px;color:#666;">Due Date Corrective Action</td>
-          <td style="padding:6px;">${formatDateOnlyWIB(result.due_date_corrective_action)}</td></tr>
-    </table>
     <p style="margin-top:16px;">Laksanakan tindakan perbaikan sesuai rencana, kemudian
     upload bukti correction dan corrective action pada sistem.</p>`;
   sendEmail(auditees,
-    `RENCANA TPP DISUBMIT — UPLOAD BUKTI IMPLEMENTASI | Temuan #${result.nomor_persyaratan}.${result.check_item_no}`,
+    `RENCANA TPP DISUBMIT — UPLOAD BUKTI IMPLEMENTASI | Temuan #${result.result_id}`,
     emailTemplate(`Rencana TPP Disubmit: ${agenda.dept}`, body,
       'Upload Bukti di My Task', _appLink('mytask', { result_id: result.result_id })));
 }
 
 function notifyCorrectionSubmitted(agenda, result) {
-  const recipients = [
-    ...parseCSV(agenda.auditee_emails),
-    ...getAllKoordinators().map(function(u) { return u.email; }),
-  ].filter(function(v, i, a) { return v && a.indexOf(v) === i; });
+  const recipients = parseCSV(agenda.auditee_emails);
   if (!recipients.length) return;
   const body = `
     <p>Auditee area <strong>${escapeHtml(agenda.dept)}</strong> telah mengupload
     bukti <strong>Correction</strong> untuk temuan berikut.</p>
     ${_findingInfo(result, agenda)}
-    <table style="border-collapse:collapse;width:100%;font-size:13px;">
-      <tr><td style="padding:6px;color:#666;width:160px;">Correction</td>
-          <td style="padding:6px;">${escapeHtml(result.correction || '-')}</td></tr>
-      <tr style="background:#f9f9f9;">
-          <td style="padding:6px;color:#666;">Due Date Correction</td>
-          <td style="padding:6px;">${formatDateOnlyWIB(result.due_date_correction)}</td></tr>
-      <tr><td style="padding:6px;color:#666;">Disubmit pada</td>
-          <td style="padding:6px;">${formatDatetimeWIB(result.impl_correction_submitted_at)}</td></tr>
-    </table>
     <p style="margin-top:16px;">Bukti correction telah dicatat. Tidak ada approval
-    diperlukan untuk correction. Auditee masih dapat mengupload ulang bukti correction
+    diperlukan untuk correction. Anda masih dapat mengupload ulang bukti correction
     sampai corrective action disubmit.</p>`;
   sendEmail(recipients,
     `INFORMASI — CORRECTION DISUBMIT | ${agenda.dept} | Temuan #${result.result_id}`,
@@ -395,14 +345,30 @@ function notifyFindingClosed(agenda, result) {
       'Lihat Dashboard', _appLink('dashboard')));
 }
 
-function notifyRejected(agenda, result, stage, rejecterEmail, komentar) {
-  const allParties = [
-    ...parseCSV(agenda.auditee_emails),
-    ...parseCSV(agenda.auditor_emails),
-    agenda.dept_head_email,
-  ].filter(function(v, i, a) { return v && a.indexOf(v) === i; });
-  const stageLabel   = stage === 'TPP' ? 'Tindakan Perbaikan dan Pencegahan (TPP)' : 'Implementasi';
-  const stageSubject = stage === 'TPP' ? 'TPP' : 'IMPLEMENTASI';
+function notifyRejected(agenda, result, stage, level, rejecterEmail, komentar) {
+  // Penerima berbeda tergantung siapa yang melakukan reject.
+  // Reject hanya terjadi di tahap Implementasi (DeptHead / Auditor / Koordinator).
+  const koordEmails = getAllKoordinators().map(function(u) { return u.email; });
+  let recipients = [];
+
+  if (level === 'DeptHead') {
+    recipients = [...parseCSV(agenda.auditee_emails), ...koordEmails];
+  } else if (level === 'Auditor') {
+    recipients = [agenda.dept_head_email, ...koordEmails, ...parseCSV(agenda.auditee_emails)];
+  } else if (level === 'Koordinator') {
+    recipients = [
+      ...parseCSV(agenda.auditee_emails),
+      agenda.dept_head_email,
+      ...parseCSV(agenda.auditor_emails),
+      ...koordEmails,
+    ];
+  } else {
+    recipients = [...parseCSV(agenda.auditee_emails), ...parseCSV(agenda.auditor_emails), agenda.dept_head_email, ...koordEmails];
+  }
+  recipients = recipients.filter(function(v, i, a) { return v && a.indexOf(v) === i; });
+
+  const stageLabel   = 'Implementasi';
+  const stageSubject = 'IMPLEMENTASI';
   const body = `
     <p><strong>${escapeHtml(stageLabel)}</strong> untuk temuan berikut telah
     <strong>ditolak</strong> dan perlu diperbaiki sebelum diajukan kembali.</p>
@@ -414,9 +380,9 @@ function notifyRejected(agenda, result, stage, rejecterEmail, komentar) {
           <td style="padding:6px;color:#666;">Alasan Penolakan</td>
           <td style="padding:6px;">${escapeHtml(komentar) || '-'}</td></tr>
     </table>
-    <p style="margin-top:16px;">Auditee dimohon memperbaiki dan mengajukan ulang.
-    Proses approval akan dimulai kembali dari tahap Dept Head.</p>`;
-  sendEmail(allParties,
+    <p style="margin-top:16px;">Auditee dimohon memperbaiki dan mengajukan ulang bukti
+    implementasi. Proses approval akan dimulai kembali dari tahap Dept Head.</p>`;
+  sendEmail(recipients,
     `DITOLAK — ${stageSubject} ${agenda.dept} | Temuan #${result.result_id}`,
     emailTemplate(`${stageLabel} Ditolak`, body,
       'Perbaiki & Ajukan Ulang di My Task', _appLink('mytask', { result_id: result.result_id })));
