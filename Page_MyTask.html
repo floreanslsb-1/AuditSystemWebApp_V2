@@ -1703,10 +1703,10 @@ async function _renderUploadImplPage(container, task, period) {
         '</div>' +
 
         '<div class="form-group" style="margin-bottom:8px">' +
-          '<label class="form-label" style="font-size:12px">Keterangan (opsional)</label>' +
+          '<label class="form-label" style="font-size:12px">Keterangan <span class="required">*</span></label>' +
           '<textarea class="form-control" id="impl-correction-ket" rows="2" ' +
             'style="resize:vertical;min-height:unset" ' +
-            'placeholder="Catatan tindakan correction...">' +
+            'placeholder="Catatan tindakan correction (wajib diisi)...">' +
             escHtml(res.impl_correction_keterangan || '') +
           '</textarea>' +
         '</div>' +
@@ -1763,10 +1763,10 @@ async function _renderUploadImplPage(container, task, period) {
         '</div>' +
 
         '<div class="form-group" style="margin-bottom:8px">' +
-          '<label class="form-label" style="font-size:12px">Keterangan (opsional)</label>' +
+          '<label class="form-label" style="font-size:12px">Keterangan <span class="required">*</span></label>' +
           '<textarea class="form-control" id="impl-ca-ket" rows="2" ' +
             'style="resize:vertical;min-height:unset" ' +
-            'placeholder="Catatan tindakan corrective action...">' +
+            'placeholder="Catatan tindakan corrective action (wajib diisi)...">' +
             escHtml(res.impl_corrective_action_keterangan || '') +
           '</textarea>' +
         '</div>' +
@@ -1862,6 +1862,12 @@ async function _submitCorrectionImpl(resultId, agendaId, periodId) {
     return toast('Upload minimal 1 foto bukti correction.', 'error');
   }
 
+  var ketEl = document.getElementById('impl-correction-ket');
+  var keterangan = (ketEl || {}).value?.trim() || '';
+  if (!keterangan) {
+    return toast('Keterangan correction wajib diisi.', 'error');
+  }
+
   var btn = document.getElementById('impl-correction-btn');
   btn.disabled = true;
   btn.innerHTML = '<div class="spinner" style="width:12px;height:12px;border-width:2px"></div> Mengirim...';
@@ -1877,7 +1883,7 @@ async function _submitCorrectionImpl(resultId, agendaId, periodId) {
       result_id:  resultId,
       agenda_id:  agendaId,
       files:      b64files,
-      keterangan: (document.getElementById('impl-correction-ket') || {}).value?.trim() || '',
+      keterangan: keterangan,
       existing_foto_urls: existingUrls,
     });
     clearCache('GET_ALL_FINDINGS_BY_PERIOD');
@@ -1902,6 +1908,12 @@ async function _submitCorrectiveActionImpl(resultId, agendaId, periodId) {
     return toast('Upload minimal 1 foto bukti corrective action.', 'error');
   }
 
+  var ketCaEl = document.getElementById('impl-ca-ket');
+  var keteranganCa = (ketCaEl || {}).value?.trim() || '';
+  if (!keteranganCa) {
+    return toast('Keterangan corrective action wajib diisi.', 'error');
+  }
+
   var btn = document.getElementById('impl-ca-btn');
   btn.disabled = true;
   btn.innerHTML = '<div class="spinner" style="width:12px;height:12px;border-width:2px"></div> Mengirim...';
@@ -1917,7 +1929,7 @@ async function _submitCorrectiveActionImpl(resultId, agendaId, periodId) {
       result_id:  resultId,
       agenda_id:  agendaId,
       files:      b64files,
-      keterangan: (document.getElementById('impl-ca-ket') || {}).value?.trim() || '',
+      keterangan: keteranganCa,
       existing_foto_urls: existingUrls,
     });
     clearCache('GET_ALL_FINDINGS_BY_PERIOD');
