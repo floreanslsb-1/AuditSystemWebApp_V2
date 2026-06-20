@@ -513,14 +513,16 @@ function notifyTppAndImplMonthlyReminder(period, openFindings, openImplFindings)
     var hasOverdue = rec.items.some(function(it) { return it.isOverdue; });
 
     var rows = rec.items.map(function(it) {
-      var rowStyle  = it.isOverdue ? ' style="color:#f43f5e"' : '';
-      var dueLabel  = formatDateOnlyWIB(it.dueDate) + (it.isOverdue ? ' (Overdue)' : '');
-      return `<tr${rowStyle}>
+      var dueLabel = formatDateOnlyWIB(it.dueDate) + (it.isOverdue ? ' (Overdue)' : '');
+      var dueStyle = it.isOverdue
+        ? 'font-size:11px;font-weight:700;color:#f43f5e'
+        : 'font-size:11px;font-weight:400;color:#111';
+      return `<tr>
         <td style="padding:7px 10px;border-bottom:1px solid #eee;font-family:monospace;font-size:11px;color:#888">${escapeHtml(it.finding.result_id || '')}</td>
         <td style="padding:7px 10px;border-bottom:1px solid #eee;font-weight:600">${escapeHtml(it.ag.dept || '')}</td>
         <td style="padding:7px 10px;border-bottom:1px solid #eee;font-size:11px;font-weight:600">${escapeHtml(it.jenis)}</td>
         <td style="padding:7px 10px;border-bottom:1px solid #eee;font-size:12px">${escapeHtml(it.deskripsi)}</td>
-        <td style="padding:7px 10px;border-bottom:1px solid #eee;font-size:11px;font-weight:${it.isOverdue ? '700' : '400'}">${dueLabel}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #eee;${dueStyle}">${dueLabel}</td>
       </tr>`;
     }).join('');
 
@@ -550,7 +552,7 @@ function notifyTppAndImplMonthlyReminder(period, openFindings, openImplFindings)
 
     sendEmail(
       rec.email,
-      `[BULANAN] ${rec.items.length} Tindak Lanjut Belum Lengkap — ${period.nama_periode}`,
+      `[REMINDER] TINDAK LANJUT TEMUAN AUDIT — ${period.nama_periode}`,
       emailTemplate('Rangkuman Bulanan: Tindak Lanjut Belum Lengkap', body, 'Buka My Task', _appLink('mytask'))
     );
   });
