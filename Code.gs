@@ -701,6 +701,52 @@ function _routeAction(action, payload, profile) {
       return { success: true, urls: urls_scai };
     }
 
+    case 'SUBMIT_CORRECTION_AND_CA_IMPL': {
+      requireAccess(['isAuditee', 'isDeptHead'], profile);
+      const period_scca = getPeriodById(payload.period_id);
+
+      const folder_corr_scca = getOrCreateFolder(
+        'correction',
+        getOrCreateFolder(
+          payload.result_id,
+          getOrCreateFolder(
+            payload.agenda_id,
+            getOrCreateFolder(payload.period_id, getOrCreateFolder(CONFIG.DRIVE_ROOT_FOLDER_NAME))
+          )
+        )
+      );
+      const urls_corr_scca = (payload.correction_files || []).map(function(f) {
+        return uploadFileToDrive(f.base64, f.name, f.mime_type, folder_corr_scca);
+      });
+
+      const folder_ca_scca = getOrCreateFolder(
+        'corrective_action',
+        getOrCreateFolder(
+          payload.result_id,
+          getOrCreateFolder(
+            payload.agenda_id,
+            getOrCreateFolder(payload.period_id, getOrCreateFolder(CONFIG.DRIVE_ROOT_FOLDER_NAME))
+          )
+        )
+      );
+      const urls_ca_scca = (payload.ca_files || []).map(function(f) {
+        return uploadFileToDrive(f.base64, f.name, f.mime_type, folder_ca_scca);
+      });
+
+      submitCorrectionAndCorrectiveActionImpl(
+        period_scca.spreadsheet_id,
+        payload.result_id,
+        payload.agenda_id,
+        urls_corr_scca,
+        payload.correction_keterangan || '',
+        urls_ca_scca,
+        payload.ca_keterangan || '',
+        profile.email
+      );
+
+      return { success: true, correction_urls: urls_corr_scca, ca_urls: urls_ca_scca };
+    }
+
     // ── File Management ───────────────────────────────────────
     case 'GET_DRIVE_IMAGE_BASE64': {
       // Ambil gambar Drive sebagai base64 data URI — server-side untuk bypass firewall
