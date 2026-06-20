@@ -971,7 +971,9 @@ function runDailyReminders() {
   // ── 1. TPP Plan Due Date reminder — H-7 & H-3, BROADCAST ke semua auditee + Koordinator ──
   //      Tidak peduli status submit — semua auditee yang punya temuan Non Comply di periode ini dapat.
   if (period.tpp_plan_due_date && !dueDatePassed) {
-    var diffDays = Math.round((new Date(period.tpp_plan_due_date) - today) / (1000 * 60 * 60 * 24));
+    var planDueNormalized = new Date(period.tpp_plan_due_date);
+    planDueNormalized.setHours(0, 0, 0, 0);
+    var diffDays = Math.round((planDueNormalized - today) / (1000 * 60 * 60 * 24));
     if (diffDays === 7 || diffDays === 3) {
       var allNonComplyFindings = findings.filter(function(f) { return !!f._agenda; });
       try {
@@ -1068,7 +1070,9 @@ function TEST_runDailyRemindersWithFakeDate(fakeDateStr) {
 
   // ── 1. H-7/H-3 broadcast ──
   if (period.tpp_plan_due_date && !dueDatePassed) {
-    var diffDays = Math.round((new Date(period.tpp_plan_due_date) - fakeToday) / (1000 * 60 * 60 * 24));
+    var planDueNormalized = new Date(period.tpp_plan_due_date);
+    planDueNormalized.setHours(0, 0, 0, 0);
+    var diffDays = Math.round((planDueNormalized - fakeToday) / (1000 * 60 * 60 * 24));
     console.log('[TEST] diffDays to tpp_plan_due_date = ' + diffDays);
     if (diffDays === 7 || diffDays === 3) {
       var allNonComplyFindings = findings.filter(function(f) { return !!f._agenda; });
@@ -1122,3 +1126,8 @@ function TEST_runDailyRemindersWithFakeDate(fakeDateStr) {
 
   console.log('[TEST] Selesai.');
 }
+
+// ── Wrapper test tanpa parameter — pilih salah satu di dropdown Run ──
+function TEST_run_H7()      { TEST_runDailyRemindersWithFakeDate('2026-06-19'); } // Test 1: H-7
+function TEST_run_H3()      { TEST_runDailyRemindersWithFakeDate('2026-06-19'); } // Test 2: H-3 (ganti due date dulu)
+function TEST_run_Monthly() { TEST_runDailyRemindersWithFakeDate('2026-07-06'); } // Test 3/4/5: Senin wk1 Juli
