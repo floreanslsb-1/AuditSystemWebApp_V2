@@ -1483,6 +1483,49 @@ function submitCorrectiveActionImpl(spreadsheetId, resultId, agendaId, fotoUrls,
   return { success: true };
 }
 
+/**
+ * Submit Correction + Corrective Action sekaligus (satu bundle) — dipakai saat
+ * auditee submit CA tapi Correction belum pernah disubmit sebelumnya.
+ * Tidak kirim notifikasi Correction terpisah — langsung notifikasi approval implementasi.
+ * Set finding_status → APP_DEPT_HEAD.
+ */
+function submitCorrectionAndCorrectiveActionImpl(
+  spreadsheetId, resultId, agendaId,
+  correctionFotoUrls, correctionKeterangan,
+  caFotoUrls, caKeterangan,
+  submittedBy
+) {
+  const C = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
+  updateResultField(spreadsheetId, resultId, C.IMPL_CORRECTION_FOTO_URLS,    toCSV(correctionFotoUrls || []));
+  updateResultField(spreadsheetId, resultId, C.IMPL_CORRECTION_KETERANGAN,   correctionKeterangan || '');
+  updateResultField(spreadsheetId, resultId, C.IMPL_CORRECTION_SUBMITTED_AT, now());
+  updateResultField(spreadsheetId, resultId, C.IMPL_CORRECTION_SUBMITTED_BY, submittedBy);
+  updateResultField(spreadsheetId, resultId, C.IMPL_CORRECTIVE_ACTION_FOTO_URLS,  toCSV(caFotoUrls || []));
+  updateResultField(spreadsheetId, resultId, C.IMPL_CORRECTIVE_ACTION_KETERANGAN, caKeterangan || '');
+  updateResultField(spreadsheetId, resultId, C.IMPL_SUBMITTED_AT, now());
+  updateResultField(spreadsheetId, resultId, C.IMPL_SUBMITTED_BY, submittedBy);
+  updateResultField(spreadsheetId, resultId, C.FINDING_STATUS, CONFIG.FINDING_STATUS.APP_DEPT_HEAD);
+
+  appendApprovalLog(spreadsheetId, {
+    result_id: resultId, agenda_id: agendaId,
+    stage: 'CORRECTION', level: 'AUDITEE', action: 'SUBMITTED',
+    by_email: submittedBy, skipped: false, skip_reason: '',
+  });
+  appendApprovalLog(spreadsheetId, {
+    result_id: resultId, agenda_id: agendaId,
+    stage: 'IMPL', level: 'AUDITEE', action: 'SUBMITTED',
+    by_email: submittedBy, skipped: false, skip_reason: '',
+  });
+
+  try {
+    const ag  = getAgendaById(agendaId);
+    const res = getAuditResultsByAgenda(spreadsheetId, agendaId).find(function(r) { return r.result_id === resultId; });
+    if (ag && res) notifyImplSubmitted(ag, res);
+  } catch(e) { console.warn('Notifikasi impl submitted (bundle) gagal:', e.message); }
+
+  return { success: true };
+}
+
 // ════════════════════════════════════════════════════════════
 //  REMINDER TRACKING — generik untuk TPP overdue & approval reminder
 // ════════════════════════════════════════════════════════════
