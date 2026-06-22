@@ -555,17 +555,48 @@ function _routeAction(action, payload, profile) {
       const period_tpp = getPeriodById(payload.period_id);
       return submitTpp(
         period_tpp.spreadsheet_id,
-        payload.result_id,   // sebelumnya finding_id
-        payload.agenda_id,   // sebelumnya session_id
-        payload.items,
-        payload.target_date,
+        payload.result_id,
+        payload.agenda_id,
+        {
+          correction:                 payload.correction,
+          due_date_correction:        payload.due_date_correction,
+          corrective_action:          payload.corrective_action,
+          due_date_corrective_action: payload.due_date_corrective_action,
+        },
         profile.email
       );
     }
 
     case 'GET_TPP_ITEMS': {
+      // TPP_ITEMS sheet sudah tidak ada — ambil langsung dari AUDIT_RESULTS
       const period_gti = getPeriodById(payload.period_id);
-      return getTppItemsByResult(period_gti.spreadsheet_id, payload.result_id).map(_sanitizeObj);
+      const result_gti = getAuditResultsByAgenda(period_gti.spreadsheet_id, payload.agenda_id)
+        .find(function(r) { return r.result_id === payload.result_id; });
+      return result_gti ? [_sanitizeObj(result_gti)] : [];
+    }
+
+    case 'NOTIFY_TPP_DUE_DATE_SET': {
+      requireAccess(['isKoordinator'], profile);
+      const period_ntds = getPeriodById(payload.period_id);
+      if (!period_ntds) throw new Error('Periode tidak ditemukan.');
+      try { notifyTppDueDateSet(period_ntds, payload.due_date, profile.email); }
+      catch(e) { console.warn('notifyTppDueDateSet error:', e.message); }
+      return { success: true };
+    }
+
+    case 'UPDATE_TPP_PLAN': {
+      requireAccess(['isAuditee', 'isDeptHead'], profile);
+      const period_utp = getPeriodById(payload.period_id);
+      return updateTppPlan(
+        period_utp.spreadsheet_id,
+        payload.result_id,
+        {
+          correction:                 payload.correction,
+          due_date_correction:        payload.due_date_correction,
+          corrective_action:          payload.corrective_action,
+          due_date_corrective_action: payload.due_date_corrective_action,
+        }
+      );
     }
 
     // ── Approval ──────────────────────────────────────────────
@@ -602,13 +633,80 @@ function _routeAction(action, payload, profile) {
     }
 
     // ── Implementasi ──────────────────────────────────────────
-    case 'SUBMIT_IMPLEMENTATION': {
+    case 'SUBMIT_CORRECTION_IMPL': {
       requireAccess(['isAuditee', 'isDeptHead'], profile);
-      const period_si = getPeriodById(payload.period_id);
+      const period_sci = getPeriodById(payload.period_id);
 
-      // Folder: ROOT / period_id / agenda_id / result_id
-      const folder_si = getOrCreateFolder(
-        'implementation',
+      // Folder: ROOT / period_id / agenda_id / result_id / correction
+      const folder_sci = getOrCreateFolder(
+        'correction',
+        getOrCreateFolder(
+          payload.result_id,
+          getOrCreateFolder(
+            payload.agenda_id,
+            getOrCreateFolder(
+              payload.period_id, getOrCreateFolder(CONFIG.DRIVE_ROOT_FOLDER_NAME))
+          )
+        )
+      );
+      const urls_sci = (payload.files || []).map(function(f) {
+        return uploadFileToDrive(f.base64, f.name, f.mime_type, folder_sci);
+      });
+      const existing_sci = (payload.existing_foto_urls || '').split(',').filter(Boolean);
+
+      submitCorrectionImpl(
+        period_sci.spreadsheet_id,
+        payload.result_id,
+        payload.agenda_id,
+        urls_sci,
+        payload.keterangan || '',
+        profile.email,
+        existing_sci
+      );
+
+      return { success: true, urls: urls_sci };
+    }
+
+    case 'SUBMIT_CORRECTIVE_ACTION_IMPL': {
+      requireAccess(['isAuditee', 'isDeptHead'], profile);
+      const period_scai = getPeriodById(payload.period_id);
+
+      // Folder: ROOT / period_id / agenda_id / result_id / corrective_action
+      const folder_scai = getOrCreateFolder(
+        'corrective_action',
+        getOrCreateFolder(
+          payload.result_id,
+          getOrCreateFolder(
+            payload.agenda_id,
+            getOrCreateFolder(
+              payload.period_id, getOrCreateFolder(CONFIG.DRIVE_ROOT_FOLDER_NAME))
+          )
+        )
+      );
+      const urls_scai = (payload.files || []).map(function(f) {
+        return uploadFileToDrive(f.base64, f.name, f.mime_type, folder_scai);
+      });
+      const existing_scai = (payload.existing_foto_urls || '').split(',').filter(Boolean);
+
+      submitCorrectiveActionImpl(
+        period_scai.spreadsheet_id,
+        payload.result_id,
+        payload.agenda_id,
+        urls_scai,
+        payload.keterangan || '',
+        profile.email,
+        existing_scai
+      );
+
+      return { success: true, urls: urls_scai };
+    }
+
+    case 'SUBMIT_CORRECTION_AND_CA_IMPL': {
+      requireAccess(['isAuditee', 'isDeptHead'], profile);
+      const period_scca = getPeriodById(payload.period_id);
+
+      const folder_corr_scca = getOrCreateFolder(
+        'correction',
         getOrCreateFolder(
           payload.result_id,
           getOrCreateFolder(
@@ -617,34 +715,36 @@ function _routeAction(action, payload, profile) {
           )
         )
       );
-      const urls_si = (payload.files || []).map(function(f) {
-        return uploadFileToDrive(f.base64, f.name, f.mime_type, folder_si);
+      const urls_corr_scca = (payload.correction_files || []).map(function(f) {
+        return uploadFileToDrive(f.base64, f.name, f.mime_type, folder_corr_scca);
       });
 
-      submitTppItemImpl(
-        period_si.spreadsheet_id,
-        payload.tpp_item_id,
-        urls_si,
-        payload.keterangan || '',
+      const folder_ca_scca = getOrCreateFolder(
+        'corrective_action',
+        getOrCreateFolder(
+          payload.result_id,
+          getOrCreateFolder(
+            payload.agenda_id,
+            getOrCreateFolder(payload.period_id, getOrCreateFolder(CONFIG.DRIVE_ROOT_FOLDER_NAME))
+          )
+        )
+      );
+      const urls_ca_scca = (payload.ca_files || []).map(function(f) {
+        return uploadFileToDrive(f.base64, f.name, f.mime_type, folder_ca_scca);
+      });
+
+      submitCorrectionAndCorrectiveActionImpl(
+        period_scca.spreadsheet_id,
+        payload.result_id,
+        payload.agenda_id,
+        urls_corr_scca,
+        payload.correction_keterangan || '',
+        urls_ca_scca,
+        payload.ca_keterangan || '',
         profile.email
       );
 
-      // Cek apakah semua TPP items sudah submit impl → update finding_status
-      if (allTppItemsImplSubmitted(period_si.spreadsheet_id, payload.result_id)) {
-        updateResultField(
-          period_si.spreadsheet_id,
-          payload.result_id,
-          CONFIG.AUDIT_COLS.AUDIT_RESULTS.FINDING_STATUS,
-          CONFIG.FINDING_STATUS.APP_DEPT_HEAD
-        );
-        appendApprovalLog(period_si.spreadsheet_id, {
-          result_id: payload.result_id,
-          agenda_id: payload.agenda_id,
-          stage: 'IMPL', level: 'AUDITEE', action: 'SUBMITTED',
-          by_email: profile.email, skipped: false, skip_reason: '',
-        });
-      }
-      return { success: true, urls: urls_si };
+      return { success: true, correction_urls: urls_corr_scca, ca_urls: urls_ca_scca };
     }
 
     // ── File Management ───────────────────────────────────────
@@ -668,6 +768,22 @@ function _routeAction(action, payload, profile) {
       if (!period_ufu || !period_ufu.spreadsheet_id) throw new Error('Periode tidak ditemukan.');
       updateAuditResultFotoUrls(period_ufu.spreadsheet_id, payload.result_id, payload.foto_urls);
       return { success: true };
+    }
+
+    case 'GET_HASIL_AUDIT': {
+      const period_ha = payload.period_id ? getPeriodById(payload.period_id) : getActivePeriod();
+      if (!period_ha || !period_ha.spreadsheet_id) return [];
+      const findings_ha = getAllFindingsByPeriod(period_ha.spreadsheet_id, period_ha.period_id);
+      const agendas_ha  = getCachedAgendasByPeriod(period_ha.period_id);
+      return findings_ha
+        .filter(function(f) { return f.status === CONFIG.RESULT_STATUS.NON_COMPLY; })
+        .map(function(f) {
+          var ag = agendas_ha.find(function(a) { return a.agenda_id === f.agenda_id; });
+          return _sanitizeObj(Object.assign({}, f, {
+            dept:     ag ? ag.dept     : '',
+            kategori: ag ? ag.kategori : '',
+          }));
+        });
     }
 
     // ── Dashboard ─────────────────────────────────────────────
@@ -726,9 +842,6 @@ function _getDashboardData(profile, periodId) {
       total:                findings.length,
       pending_verification: findings.filter(f => f.finding_status === fs.PENDING_VERIFICATION).length,
       open:                 findings.filter(f => f.finding_status === fs.OPEN).length,
-      tpp_or_dept_head:     findings.filter(f => f.finding_status === fs.TPP_OR_DEPT_HEAD).length,
-      tpp_or_auditor:       findings.filter(f => f.finding_status === fs.TPP_OR_AUDITOR).length,
-      tpp_or_koordinator:   findings.filter(f => f.finding_status === fs.TPP_OR_KOORDINATOR).length,
       open_impl:            findings.filter(f => f.finding_status === fs.OPEN_IMPL).length,
       app_dept_head:        findings.filter(f => f.finding_status === fs.APP_DEPT_HEAD).length,
       app_auditor:          findings.filter(f => f.finding_status === fs.APP_AUDITOR).length,
@@ -757,7 +870,6 @@ function _emptySummary() {
     total: 0,
     pending_verification: 0,
     open: 0,
-    tpp_or_dept_head: 0, tpp_or_auditor: 0, tpp_or_koordinator: 0,
     open_impl: 0,
     app_dept_head: 0, app_auditor: 0, app_koordinator: 0,
     closed: 0,
@@ -833,3 +945,247 @@ function testInitDataFlat() {
 function jsonStr(data) {
   return JSON.stringify(data);
 }
+
+// ════════════════════════════════════════════════════════════
+//  DAILY DIGEST REMINDER — dipanggil oleh time-based trigger harian
+//  Setup trigger manual di GAS Editor:
+//    Triggers → Add Trigger
+//    Function : runDailyReminders
+//    Event    : Time-driven → Day timer → 08:00 - 09:00 WIB
+//
+//  Yang dicek setiap hari:
+//  1. TPP Plan Due Date reminder      — H-7 dan H-3 dari tpp_plan_due_date,
+//                                        broadcast ke SEMUA auditee + Koordinator
+//                                        (terlepas status submit, karena bersifat broadcast)
+//  2. Reminder bulanan OPEN+OPEN_IMPL — Senin minggu ke-1 tiap bulan, TANPA limit,
+//                                        terus terkirim sampai temuan CLOSED atau
+//                                        periode tidak lagi ACTIVE
+//  3. Pending approval digest         — Senin minggu ke-1 & ke-3, maksimal 6x per status
+// ════════════════════════════════════════════════════════════
+
+/**
+ * True jika `date` adalah Senin minggu ke-1 dalam bulan berjalan.
+ */
+function _isFirstMonday(date) {
+  if (date.getDay() !== 1) return false; // bukan Senin sama sekali
+
+  var firstOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
+  var firstMonday  = new Date(firstOfMonth);
+  var offsetToMon  = (8 - firstOfMonth.getDay()) % 7; // 0 kalau tgl 1 sudah Senin
+  firstMonday.setDate(1 + offsetToMon);
+
+  var diffWeeks  = Math.round((date - firstMonday) / (7 * 24 * 60 * 60 * 1000));
+  var weekNumber = diffWeeks + 1; // Senin pertama = minggu ke-1
+
+  return weekNumber === 1;
+}
+
+/**
+ * True jika `date` adalah Senin minggu ke-1 ATAU minggu ke-3 dalam bulan berjalan.
+ * "Minggu ke-N" dihitung dari Senin pertama bulan tersebut sebagai minggu ke-1.
+ */
+function _isFirstOrThirdMonday(date) {
+  if (date.getDay() !== 1) return false; // bukan Senin sama sekali
+
+  var firstOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
+  var firstMonday  = new Date(firstOfMonth);
+  var offsetToMon  = (8 - firstOfMonth.getDay()) % 7; // 0 kalau tgl 1 sudah Senin
+  firstMonday.setDate(1 + offsetToMon);
+
+  var diffWeeks  = Math.round((date - firstMonday) / (7 * 24 * 60 * 60 * 1000));
+  var weekNumber = diffWeeks + 1; // Senin pertama = minggu ke-1
+
+  return weekNumber === 1 || weekNumber === 3;
+}
+
+function runDailyReminders() {
+  var today  = new Date(); today.setHours(0, 0, 0, 0);
+  var period = getActivePeriod();
+  if (!period || !period.spreadsheet_id) {
+    console.log('[DAILY] Tidak ada periode aktif.');
+    return;
+  }
+
+  console.log('[DAILY] Menjalankan reminder untuk periode: ' + period.period_id);
+
+  var findings = [], agendas = [];
+  try {
+    findings = getAllFindingsByPeriod(period.spreadsheet_id, period.period_id);
+    agendas  = getCachedAgendasByPeriod(period.period_id);
+    findings.forEach(function(f) {
+      f._agenda = agendas.find(function(a) { return a.agenda_id === f.agenda_id; });
+    });
+  } catch(e) {
+    console.warn('[DAILY] Gagal ambil findings:', e.message);
+    return;
+  }
+
+  var dueDatePassed = false;
+  if (period.tpp_plan_due_date) {
+    var planDue = new Date(period.tpp_plan_due_date); planDue.setHours(0, 0, 0, 0);
+    dueDatePassed = today > planDue;
+  }
+
+  // ── 1. TPP Plan Due Date reminder — H-7 & H-3, BROADCAST ke semua auditee + Koordinator ──
+  //      Tidak peduli status submit — semua auditee yang punya temuan Non Comply di periode ini dapat.
+  if (period.tpp_plan_due_date && !dueDatePassed) {
+    var planDueNormalized = new Date(period.tpp_plan_due_date);
+    planDueNormalized.setHours(0, 0, 0, 0);
+    var diffDays = Math.round((planDueNormalized - today) / (1000 * 60 * 60 * 24));
+    if (diffDays === 7 || diffDays === 3) {
+      var allNonComplyFindings = findings.filter(function(f) { return !!f._agenda; });
+      try {
+        notifyTppDueDateReminder(period, diffDays, allNonComplyFindings);
+        console.log('[DAILY] TPP due date reminder (H-' + diffDays + ') sent (broadcast)');
+      } catch(e) { console.warn('[DAILY] TPP reminder gagal:', e.message); }
+    }
+  }
+
+  // ── 2. Reminder bulanan gabungan OPEN + OPEN_IMPL — Senin wk1, TANPA limit ──
+  //      OPEN      : hanya setelah TPP plan due date lewat (belum isi rencana TPP)
+  //      OPEN_IMPL : selalu, terlepas due date, untuk yang belum lengkap correction/CA
+  //      Terus terkirim sampai temuan berubah status atau periode tidak ACTIVE lagi.
+  if (_isFirstMonday(today)) {
+    var openFindingsMonthly = dueDatePassed
+      ? findings.filter(function(f) { return f.finding_status === CONFIG.FINDING_STATUS.OPEN && f._agenda; })
+      : [];
+    var openImplFindingsMonthly = findings.filter(function(f) {
+      return f.finding_status === CONFIG.FINDING_STATUS.OPEN_IMPL && f._agenda &&
+        (!f.impl_correction_submitted_at || !f.impl_submitted_at);
+    });
+
+    if (openFindingsMonthly.length > 0 || openImplFindingsMonthly.length > 0) {
+      try {
+        notifyTppAndImplMonthlyReminder(period, openFindingsMonthly, openImplFindingsMonthly);
+        console.log('[DAILY] Monthly OPEN+OPEN_IMPL reminder sent: ' +
+          openFindingsMonthly.length + ' OPEN, ' + openImplFindingsMonthly.length + ' OPEN_IMPL');
+      } catch(e) { console.warn('[DAILY] Monthly OPEN+OPEN_IMPL reminder gagal:', e.message); }
+    }
+  }
+
+  // ── 3. Pending approval digest — Senin wk1/wk3, max 6x per level ──
+  if (_isFirstOrThirdMonday(today)) {
+    var approvalStatuses = [
+      CONFIG.FINDING_STATUS.APP_DEPT_HEAD,
+      CONFIG.FINDING_STATUS.APP_AUDITOR,
+      CONFIG.FINDING_STATUS.APP_KOORDINATOR,
+    ];
+    var pendingApproval = findings.filter(function(f) {
+      return approvalStatuses.indexOf(f.finding_status) !== -1 && f._agenda;
+    });
+
+    var eligibleApproval = [];
+    pendingApproval.forEach(function(f) {
+      var check = _checkReminderCounter(f);
+      if (check.shouldSend) {
+        eligibleApproval.push(f);
+        try {
+          _updateReminderTracking(period.spreadsheet_id, f.result_id, check.newCount, f.finding_status);
+        } catch(e) { console.warn('[DAILY] Update reminder tracking gagal:', e.message); }
+      }
+    });
+
+    if (eligibleApproval.length > 0) {
+      try {
+        notifyPendingApprovalDigest(period, eligibleApproval, agendas);
+        console.log('[DAILY] Pending approval digest sent: ' + eligibleApproval.length + ' findings');
+      } catch(e) { console.warn('[DAILY] Pending approval digest gagal:', e.message); }
+    }
+  }
+
+  console.log('[DAILY] Selesai.');
+}
+
+// ════════════════════════════════════════════════════════════
+//  TEST HELPER — simulasi runDailyReminders dengan tanggal palsu
+//  HAPUS setelah testing selesai. Jalankan manual dari GAS Editor.
+// ════════════════════════════════════════════════════════════
+function TEST_runDailyRemindersWithFakeDate(fakeDateStr) {
+  // fakeDateStr format: 'YYYY-MM-DD', contoh '2026-06-22' untuk simulasi Senin
+  var fakeToday = new Date(fakeDateStr); fakeToday.setHours(0, 0, 0, 0);
+  console.log('[TEST] Simulasi runDailyReminders dengan today = ' + fakeToday.toDateString() +
+    ' (hari: ' + ['Min','Sen','Sel','Rab','Kam','Jum','Sab'][fakeToday.getDay()] + ')');
+
+  var period = getActivePeriod();
+  if (!period || !period.spreadsheet_id) {
+    console.log('[TEST] Tidak ada periode aktif.');
+    return;
+  }
+
+  var findings = getAllFindingsByPeriod(period.spreadsheet_id, period.period_id);
+  var agendas  = getCachedAgendasByPeriod(period.period_id);
+  findings.forEach(function(f) {
+    f._agenda = agendas.find(function(a) { return a.agenda_id === f.agenda_id; });
+  });
+
+  var dueDatePassed = false;
+  if (period.tpp_plan_due_date) {
+    var planDue = new Date(period.tpp_plan_due_date); planDue.setHours(0, 0, 0, 0);
+    dueDatePassed = fakeToday > planDue;
+  }
+  console.log('[TEST] tpp_plan_due_date=' + period.tpp_plan_due_date + ' dueDatePassed=' + dueDatePassed);
+  console.log('[TEST] isFirstMonday=' + _isFirstMonday(fakeToday) + ' isFirstOrThirdMonday=' + _isFirstOrThirdMonday(fakeToday));
+
+  // ── 1. H-7/H-3 broadcast ──
+  if (period.tpp_plan_due_date && !dueDatePassed) {
+    var planDueNormalized = new Date(period.tpp_plan_due_date);
+    planDueNormalized.setHours(0, 0, 0, 0);
+    var diffDays = Math.round((planDueNormalized - fakeToday) / (1000 * 60 * 60 * 24));
+    console.log('[TEST] diffDays to tpp_plan_due_date = ' + diffDays);
+    if (diffDays === 7 || diffDays === 3) {
+      var allNonComplyFindings = findings.filter(function(f) { return !!f._agenda; });
+      notifyTppDueDateReminder(period, diffDays, allNonComplyFindings);
+      console.log('[TEST] ✅ H-' + diffDays + ' broadcast reminder sent: ' + allNonComplyFindings.length + ' findings');
+    } else {
+      console.log('[TEST] ⏭ Skip H-7/H-3 (diffDays tidak match)');
+    }
+  } else {
+    console.log('[TEST] ⏭ Skip H-7/H-3 (due date sudah lewat atau belum diset)');
+  }
+
+  // ── 2. Reminder bulanan OPEN+OPEN_IMPL ──
+  if (_isFirstMonday(fakeToday)) {
+    var openFindingsMonthly = dueDatePassed
+      ? findings.filter(function(f) { return f.finding_status === CONFIG.FINDING_STATUS.OPEN && f._agenda; })
+      : [];
+    var openImplFindingsMonthly = findings.filter(function(f) {
+      return f.finding_status === CONFIG.FINDING_STATUS.OPEN_IMPL && f._agenda &&
+        (!f.impl_correction_submitted_at || !f.impl_submitted_at);
+    });
+    console.log('[TEST] OPEN monthly=' + openFindingsMonthly.length + ' OPEN_IMPL monthly=' + openImplFindingsMonthly.length);
+    if (openFindingsMonthly.length > 0 || openImplFindingsMonthly.length > 0) {
+      notifyTppAndImplMonthlyReminder(period, openFindingsMonthly, openImplFindingsMonthly);
+      console.log('[TEST] ✅ Monthly OPEN+OPEN_IMPL reminder sent');
+    }
+  } else {
+    console.log('[TEST] ⏭ Skip monthly reminder (bukan Senin wk1)');
+  }
+
+  // ── 3. Approval digest ──
+  if (_isFirstOrThirdMonday(fakeToday)) {
+    var approvalStatuses = [
+      CONFIG.FINDING_STATUS.APP_DEPT_HEAD,
+      CONFIG.FINDING_STATUS.APP_AUDITOR,
+      CONFIG.FINDING_STATUS.APP_KOORDINATOR,
+    ];
+    var pendingApproval = findings.filter(function(f) {
+      return approvalStatuses.indexOf(f.finding_status) !== -1 && f._agenda;
+    });
+    console.log('[TEST] pendingApproval=' + pendingApproval.length);
+    // NOTE: counter check di-skip di test helper supaya tidak mengubah reminder_count asli.
+    // Kalau mau test counter/limit 6x juga, panggil notifyPendingApprovalDigest langsung manual.
+    if (pendingApproval.length > 0) {
+      notifyPendingApprovalDigest(period, pendingApproval, agendas);
+      console.log('[TEST] ✅ Approval digest sent (counter TIDAK di-update di test ini)');
+    }
+  } else {
+    console.log('[TEST] ⏭ Skip approval digest (bukan Senin wk1/wk3)');
+  }
+
+  console.log('[TEST] Selesai.');
+}
+
+// ── Wrapper test tanpa parameter — pilih salah satu di dropdown Run ──
+function TEST_run_H7()      { TEST_runDailyRemindersWithFakeDate('2026-06-19'); } // Test 1: H-7
+function TEST_run_H3()      { TEST_runDailyRemindersWithFakeDate('2026-06-19'); } // Test 2: H-3 (ganti due date dulu)
+function TEST_run_Monthly() { TEST_runDailyRemindersWithFakeDate('2026-07-06'); } // Test 3/4/5: Senin wk1 Juli
