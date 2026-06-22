@@ -317,7 +317,7 @@ function emailTemplate(title, body, ctaLabel = '', ctaUrl = '') {
        </div>`
     : '';
   return `
-    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#333;">
+    <div style="font-family:Arial,sans-serif;max-width:900px;margin:0 auto;color:#333;">
       <div style="background:#1F3864;padding:18px 24px;">
         <div style="color:#fff;font-size:16px;font-weight:bold;margin-bottom:4px;">Audit System</div>
         <div style="color:rgba(255,255,255,.65);font-size:12px;">Integrated Management System</div>
