@@ -317,7 +317,7 @@ function emailTemplate(title, body, ctaLabel = '', ctaUrl = '') {
        </div>`
     : '';
   return `
-    <div style="font-family:Arial,sans-serif;max-width:900px;margin:0 auto;color:#333;">
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#333;">
       <div style="background:#1F3864;padding:18px 24px;">
         <div style="color:#fff;font-size:16px;font-weight:bold;margin-bottom:4px;">Audit System</div>
         <div style="color:rgba(255,255,255,.65);font-size:12px;">Integrated Management System</div>
@@ -470,5 +470,28 @@ function getDriveFileBase64(fileUrl) {
   } catch(e) {
     Logger.log('[getDriveFileBase64] gagal: ' + e.message + ' url=' + fileUrl);
     return null;
+  }
+}
+
+/**
+ * Hapus file dari Google Drive berdasarkan URL-nya.
+ * Mendukung format:
+ *   https://drive.google.com/uc?export=view&id=FILE_ID
+ *   https://drive.google.com/file/d/FILE_ID/view
+ * @param {string} fileUrl
+ */
+function deleteDriveFile(fileUrl) {
+  try {
+    var fileId = null;
+    var m1 = fileUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    var m2 = fileUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (m1) fileId = m1[1];
+    else if (m2) fileId = m2[1];
+    if (!fileId) throw new Error('File ID tidak ditemukan dari URL: ' + fileUrl);
+    DriveApp.getFileById(fileId).setTrashed(true);
+    Logger.log('[deleteDriveFile] berhasil hapus fileId=' + fileId);
+  } catch(e) {
+    Logger.log('[deleteDriveFile] gagal: ' + e.message + ' url=' + fileUrl);
+    throw e;
   }
 }
