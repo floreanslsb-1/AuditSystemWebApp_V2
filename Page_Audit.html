@@ -1519,22 +1519,31 @@ async function _deleteSavedFoto(url, idx, gKey, resultId, agendaId, periodId, pr
   try { await api('DELETE_DRIVE_FILE', { file_url: url }); }
   catch(e) { toast('Gagal hapus file: ' + e.message, 'error'); return; }
 
-  // Update draft foto_urls — pakai resultId langsung
-  var existing = _draftGetItem(gKey, resultId) || {};
-  var urls = String(existing.foto_urls || '').split(',').filter(Boolean);
-  urls = urls.filter(function(u) { return u !== url; });
-  _draftSetItem(gKey, resultId, { foto_urls: urls.join(',') });
-
-  // Update snapshot
+  // Update snapshot DULU — jadi sumber kebenaran URL yang tersisa
   var snapKey = prefix === 'ff' ? '_ffExistingSavedUrls' : '_efExistingSavedUrls';
   if (window[snapKey]) window[snapKey] = window[snapKey].filter(function(u) { return u !== url; });
+  var remainingUrls = (window[snapKey] || []).join(',');
+
+  // Update draft pakai remainingUrls (bukan dari existing draft yang bisa kosong)
+  _draftSetItem(gKey, resultId, { foto_urls: remainingUrls });
+
+  // Persist ke sheet segera — tidak menunggu batch save
+  try {
+    await api('UPDATE_FINDING_FOTO_URLS', {
+      period_id: periodId,
+      result_id: resultId,
+      foto_urls: remainingUrls,
+    });
+  } catch(e) {
+    console.warn('[_deleteSavedFoto] gagal update sheet foto_urls:', e.message);
+    // Non-fatal — Drive sudah terhapus, sheet akan sync saat save audit berikutnya
+  }
 
   // Update DOM
   var savedContainer = document.getElementById(prefix + '-saved-files');
   if (savedContainer) {
     var items = Array.from(savedContainer.querySelectorAll(':scope > div'));
     if (items[idx]) items[idx].remove();
-    // Update hint
     var hint = document.getElementById(prefix + '-upload-hint');
     var zone = document.getElementById(prefix + '-upload-zone');
     if (hint && zone) {
@@ -1543,14 +1552,14 @@ async function _deleteSavedFoto(url, idx, gKey, resultId, agendaId, periodId, pr
       hint.textContent = (remaining + pendingCount) > 0 ? '' : '(wajib upload minimal 1 foto)';
     }
   }
-  // Update findingMap di renderCtx
+  // Update findingMap
   if (window._auditRenderCtx && window._auditRenderCtx.findingMap) {
     if (resultId && window._auditRenderCtx.findingMap[resultId]) {
-      var _fm = window._auditRenderCtx.findingMap[resultId];
-      _fm.foto_urls = (_fm.foto_urls || '').split(',').filter(Boolean)
-        .filter(function(u) { return u !== url; }).join(',');
+      window._auditRenderCtx.findingMap[resultId].foto_urls = remainingUrls;
     }
   }
+  // Repaint card di belakang modal agar thumbnail ikut hilang
+  if (gKey) _repaintGroupItems(gKey);
   toast('Foto dihapus.', 'success');
 }
 
