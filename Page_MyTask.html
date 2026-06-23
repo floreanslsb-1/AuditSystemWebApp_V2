@@ -1574,6 +1574,15 @@ async function _saveImplTppEdit(res, periodEndDate, resultId, agendaId, periodId
       return toast('Due date corrective action melebihi batas maksimal (' + formatDate(maxCA.toISOString().split('T')[0]) + ').', 'error');
   }
 
+  // Validasi tanggal tidak boleh di masa lalu
+  var today = new Date(); today.setHours(0,0,0,0);
+  if (new Date(dueDateCorr) < today) return toast('Due date correction tidak boleh di masa lalu.', 'error');
+  if (new Date(dueDateCA)   < today) return toast('Due date corrective action tidak boleh di masa lalu.', 'error');
+
+  // Validasi urutan logis
+  if (new Date(dueDateCorr) > new Date(dueDateCA))
+    return toast('Due date correction harus lebih awal atau sama dengan due date corrective action.', 'error');
+
   var ok = await showConfirm({
     title:       'Simpan Perubahan Rencana TPP?',
     message:     'Perubahan correction, corrective action, dan due date akan disimpan.',
