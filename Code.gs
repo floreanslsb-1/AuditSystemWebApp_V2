@@ -652,7 +652,8 @@ function _routeAction(action, payload, profile) {
         )
       );
       const urls_sci = (payload.files || []).map(function(f) {
-        return uploadFileToDrive(f.base64, f.name, f.mime_type, folder_sci);
+        var url = uploadFileToDrive(f.base64, f.name, f.mime_type, folder_sci);
+        return url + '::' + (f.name || '');
       });
       const existing_sci = (payload.existing_foto_urls || '').split(',').filter(Boolean);
 
@@ -686,7 +687,8 @@ function _routeAction(action, payload, profile) {
         )
       );
       const urls_scai = (payload.files || []).map(function(f) {
-        return uploadFileToDrive(f.base64, f.name, f.mime_type, folder_scai);
+        var url = uploadFileToDrive(f.base64, f.name, f.mime_type, folder_scai);
+        return url + '::' + (f.name || '');
       });
       const existing_scai = (payload.existing_foto_urls || '').split(',').filter(Boolean);
 
@@ -718,7 +720,8 @@ function _routeAction(action, payload, profile) {
         )
       );
       const urls_corr_scca = (payload.correction_files || []).map(function(f) {
-        return uploadFileToDrive(f.base64, f.name, f.mime_type, folder_corr_scca);
+        var url = uploadFileToDrive(f.base64, f.name, f.mime_type, folder_corr_scca);
+        return url + '::' + (f.name || '');
       });
 
       const folder_ca_scca = getOrCreateFolder(
@@ -732,7 +735,8 @@ function _routeAction(action, payload, profile) {
         )
       );
       const urls_ca_scca = (payload.ca_files || []).map(function(f) {
-        return uploadFileToDrive(f.base64, f.name, f.mime_type, folder_ca_scca);
+        var url = uploadFileToDrive(f.base64, f.name, f.mime_type, folder_ca_scca);
+        return url + '::' + (f.name || '');
       });
 
       submitCorrectionAndCorrectiveActionImpl(
