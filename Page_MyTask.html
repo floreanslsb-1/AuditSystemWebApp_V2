@@ -1677,9 +1677,10 @@ function _buildImplUploadForm(jenis, resultId, agendaId, periodId, existingFotoU
 
   return savedFilesHtml +
     '<div style="margin-bottom:10px">' +
-      '<label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">' +
-        (isSubmitted ? 'Tambah / Ganti Bukti' : 'Bukti Implementasi') + ' <span class="required">*</span>' +
-      '</label>' +
+      '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em;margin-bottom:6px">' +
+        (isSubmitted ? 'TAMBAH / GANTI BUKTI' : 'BUKTI IMPLEMENTASI') +
+        ' <span class="required">*</span>' +
+      '</div>' +
       '<div class="upload-zone" id="impl-' + jenis + '-zone" style="min-height:56px;padding:10px 16px">' +
         '<i data-lucide="upload" style="width:16px;height:16px;opacity:.3;margin-bottom:3px"></i>' +
         '<div class="upload-text" style="font-size:12px">Klik atau drag file bukti (foto, PDF, dokumen)</div>' +
@@ -1687,9 +1688,9 @@ function _buildImplUploadForm(jenis, resultId, agendaId, periodId, existingFotoU
       '<div class="upload-previews" id="impl-' + jenis + '-preview" style="margin-top:6px"></div>' +
     '</div>' +
     '<div style="margin-bottom:10px">' +
-      '<label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:2px">' +
-        'Keterangan <span class="required">*</span>' +
-      '</label>' +
+      '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em;margin-bottom:4px">' +
+        'KETERANGAN <span class="required">*</span>' +
+      '</div>' +
       '<div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Jelaskan setiap file yang diupload.</div>' +
       '<textarea class="form-control" id="impl-' + jenis + '-ket" rows="2" ' +
           'style="resize:vertical;font-size:12px" ' +
@@ -1884,7 +1885,10 @@ async function _renderUploadImplPage(container, task, period) {
       '<div class="card mb-16" style="overflow:hidden">' +
         '<div style="background:var(--primary,#1F3864);padding:10px 16px;display:flex;align-items:center;justify-content:space-between">' +
           '<div style="display:flex;align-items:center;gap:10px">' +
-            '<span style="color:#fff;font-size:13px;font-weight:700">Bukti Correction</span>' +
+            '<span style="display:inline-flex;align-items:center;gap:6px">' +
+              '<span style="background:#f59e0b;color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:3px;letter-spacing:.05em">CORRECTION</span>' +
+              '<span style="color:#fff;font-size:13px;font-weight:700">Bukti Implementasi</span>' +
+            '</span>' +
             (hasCorrSubmitted
               ? '<span style="font-size:11px;color:rgba(255,255,255,.75)">✓ Disubmit ' + formatDate(res.impl_correction_submitted_at) + '</span>'
               : '<span style="font-size:12px;color:rgba(255,255,255,.55)">Belum disubmit</span>') +
@@ -1935,7 +1939,10 @@ async function _renderUploadImplPage(container, task, period) {
       '<div class="card mb-16" style="overflow:hidden">' +
         '<div style="background:var(--primary,#1F3864);padding:10px 16px;display:flex;align-items:center;justify-content:space-between">' +
           '<div style="display:flex;align-items:center;gap:10px">' +
-            '<span style="color:#fff;font-size:13px;font-weight:700">Bukti Corrective Action</span>' +
+            '<span style="display:inline-flex;align-items:center;gap:6px">' +
+              '<span style="background:#8b5cf6;color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:3px;letter-spacing:.05em">CORRECTIVE ACTION</span>' +
+              '<span style="color:#fff;font-size:13px;font-weight:700">Bukti Implementasi</span>' +
+            '</span>' +
             (hasCASubmitted
               ? '<span style="font-size:11px;color:rgba(255,255,255,.75)">✓ Disubmit ' + formatDate(res.impl_submitted_at) + '</span>'
               : '<span style="font-size:12px;color:rgba(255,255,255,.55)">Belum disubmit</span>') +
@@ -1954,9 +1961,10 @@ async function _renderUploadImplPage(container, task, period) {
               '<div style="margin-bottom:8px">' +
                 '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em;margin-bottom:4px">BUKTI IMPLEMENTASI</div>' +
                 '<div style="display:flex;flex-wrap:wrap;gap:5px">' +
-                  caFotoUrls.split(',').filter(Boolean).map(function(url, i) {
-                    return '<a href="' + escHtml(url) + '" target="_blank" class="btn btn-outline btn-sm" style="font-size:11px">' +
-                      '<i data-lucide="file" style="width:11px;height:11px"></i> Bukti ' + (i+1) + '</a>';
+                  caFotoUrls.split(',').filter(Boolean).map(function(entry, i) {
+                    var url = _fotoUrl(entry); var label = _fotoLabel(entry, i);
+                    return '<a href="' + escHtml(url) + '" target="_blank" class="btn btn-outline btn-sm" style="font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escHtml(label) + '">' +
+                      '<i data-lucide="file" style="width:11px;height:11px;flex-shrink:0"></i> ' + escHtml(label) + '</a>';
                   }).join('') +
                 '</div>' +
               '</div>' +
