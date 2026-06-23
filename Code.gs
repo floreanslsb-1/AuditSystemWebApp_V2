@@ -533,10 +533,12 @@ function _routeAction(action, payload, profile) {
       );
       // Upload foto baru per item (kalau ada), gabungkan dengan existing_foto_urls
       const updates_vf = (payload.updates || []).map(function(upd) {
-        if (!upd.new_files || !upd.new_files.length) return upd;
-        var uploadedUrls = upd.new_files.map(function(f) {
-          return uploadFileToDrive(f.base64, f.name, f.mime_type, folder_vf);
-        });
+        if (upd.existing_foto_urls === undefined) return upd; // unchanged finding — tidak ada foto field
+        var uploadedUrls = (upd.new_files && upd.new_files.length)
+          ? upd.new_files.map(function(f) {
+              return uploadFileToDrive(f.base64, f.name, f.mime_type, folder_vf);
+            })
+          : [];
         var existingUrls = (upd.existing_foto_urls || '').split(',').filter(Boolean);
         var allUrls      = existingUrls.concat(uploadedUrls);
         return Object.assign({}, upd, { foto_urls: allUrls.join(','), new_files: [] });
@@ -767,6 +769,22 @@ function _routeAction(action, payload, profile) {
       const period_ufu = getPeriodById(payload.period_id);
       if (!period_ufu || !period_ufu.spreadsheet_id) throw new Error('Periode tidak ditemukan.');
       updateAuditResultFotoUrls(period_ufu.spreadsheet_id, payload.result_id, payload.foto_urls);
+      return { success: true };
+    }
+
+    case 'UPDATE_IMPL_FOTO_URLS': {
+      // Update foto URLs implementasi tanpa side effect (no approval trigger, no notification)
+      requireAccess(['isAuditee', 'isDeptHead'], profile);
+      const period_uifu = getPeriodById(payload.period_id);
+      if (!period_uifu || !period_uifu.spreadsheet_id) throw new Error('Periode tidak ditemukan.');
+      const C_uifu = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
+      const colMap = {
+        'impl_correction_foto_urls':        C_uifu.IMPL_CORRECTION_FOTO_URLS,
+        'impl_corrective_action_foto_urls': C_uifu.IMPL_CORRECTIVE_ACTION_FOTO_URLS,
+      };
+      const col = colMap[payload.field];
+      if (!col && col !== 0) throw new Error('Field tidak dikenal: ' + payload.field);
+      updateResultField(period_uifu.spreadsheet_id, payload.result_id, col, payload.foto_urls);
       return { success: true };
     }
 
