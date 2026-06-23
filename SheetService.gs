@@ -1473,7 +1473,7 @@ function submitCorrectionImpl(spreadsheetId, resultId, agendaId, fotoUrls, keter
   try {
     const ag  = getAgendaById(agendaId);
     const res = getAuditResultsByAgenda(spreadsheetId, agendaId).find(function(r) { return r.result_id === resultId; });
-    if (ag && res) notifyCorrectionSubmitted(ag, res);
+    if (ag && res && !existingFotoUrls.length) notifyCorrectionSubmitted(ag, res);
   } catch(e) { console.warn('Notifikasi correction submitted gagal:', e.message); }
   return { success: true };
 }
