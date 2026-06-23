@@ -1032,6 +1032,13 @@ function _verifClickVerifikasi() {
   if (!ctx) return;
   var findings = window._verifFindings || [];
 
+  // Disable tombol "Verifikasi Semua" selama proses preview/encoding
+  var verifBtn = document.getElementById('verif-submit-btn');
+  if (verifBtn) {
+    verifBtn.disabled = true;
+    verifBtn.innerHTML = '<div class="spinner" style="width:13px;height:13px;border-width:2px"></div> Mempersiapkan...';
+  }
+
   // Pisahkan: yang diubah (ada draft) vs tidak diubah
   var changedFindings = findings.filter(function(f) { return _verifHasDraft(f.result_id); });
   var unchangedCount  = findings.length - changedFindings.length;
@@ -1155,7 +1162,9 @@ function _verifClickVerifikasi() {
       '<p style="font-size:13px;margin-bottom:16px">Periksa ringkasan perubahan sebelum menyimpan ke sistem:</p>' +
       previewHtml,
     footer:
-      '<button class="btn btn-outline" onclick="closeModal(\'verif-preview-modal\')">Kembali</button>' +
+      '<button class="btn btn-outline" onclick="closeModal(\'verif-preview-modal\');var b=document.getElementById(\'verif-submit-btn\');if(b){b.disabled=false;b.innerHTML=\'<i data-lucide=&quot;shield-check&quot; style=&quot;width:14px;height:14px&quot;></i> Verifikasi Semua\';lucide.createIcons(b);}">' +
+        'Kembali' +
+      '</button>' +
       '<button class="btn btn-primary" id="verif-confirm-btn" ' +
         'onclick="singleClick(this,function(){ _verifConfirmSubmit() })">' +
         '<i data-lucide="shield-check" style="width:13px;height:13px"></i> Konfirmasi & Simpan' +
@@ -1552,7 +1561,8 @@ function _toggleCAEditMode() {
   lucide.createIcons();
 }
 
-async function _saveImplTppEdit(res, periodEndDate, resultId, agendaId, periodId) {
+async function _saveImplTppEdit(periodEndDate, resultId, agendaId, periodId) {
+  var res = window._implCurrentRes || {};
   var correction       = (document.getElementById('impl-edit-correction') || {}).value?.trim();
   var dueDateCorr      = (document.getElementById('impl-edit-due-corr') || {}).value;
   var correctiveAction = (document.getElementById('impl-edit-ca') || {}).value?.trim();
@@ -1591,7 +1601,14 @@ async function _saveImplTppEdit(res, periodEndDate, resultId, agendaId, periodId
   if (!ok) return;
 
   var btn = document.getElementById('impl-tpp-save-btn');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<div class="spinner" style="width:12px;height:12px;border-width:2px"></div>'; }
+  var _tppEditFields = ['impl-edit-correction', 'impl-edit-due-corr', 'impl-edit-ca', 'impl-edit-due-ca'];
+  if (btn) { btn.disabled = true; btn.innerHTML = '<div class="spinner" style="width:12px;height:12px;border-width:2px"></div> Menyimpan...'; }
+  _tppEditFields.forEach(function(id) { var el = document.getElementById(id); if (el) el.disabled = true; });
+
+  function _restoreTppForm() {
+    if (btn) { btn.disabled = false; btn.innerHTML = 'Simpan'; }
+    _tppEditFields.forEach(function(id) { var el = document.getElementById(id); if (el) el.disabled = false; });
+  }
 
   try {
     await api('UPDATE_TPP_PLAN', {
@@ -1611,18 +1628,36 @@ async function _saveImplTppEdit(res, periodEndDate, resultId, agendaId, periodId
     if (task) _renderUploadImplPage(document.getElementById('page-content'), task, window._myTaskPeriod);
   } catch(err) {
     toast(err.message, 'error');
-    if (btn) { btn.disabled = false; btn.innerHTML = 'Simpan'; }
+    _restoreTppForm();
   }
+}
+
+// Parse entry foto_urls: bisa "url" (lama) atau "url::namafile" (baru)
+function _parseFotoEntry(entry) {
+  var idx = entry.indexOf('::');
+  if (idx === -1) return { url: entry, name: '' };
+  return { url: entry.substring(0, idx), name: entry.substring(idx + 2) };
+}
+
+function _fotoLabel(entry, i) {
+  var parsed = _parseFotoEntry(entry);
+  return parsed.name ? parsed.name : ('Bukti ' + (i + 1));
+}
+
+function _fotoUrl(entry) {
+  return _parseFotoEntry(entry).url;
 }
 
 function _buildImplUploadForm(jenis, resultId, agendaId, periodId, existingFotoUrls, existingKeterangan, isSubmitted) {
   var fotoArr = (existingFotoUrls || '').split(',').filter(Boolean);
   var savedFilesHtml = fotoArr.length
     ? '<div id="impl-' + jenis + '-saved-files" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">' +
-        fotoArr.map(function(url, i) {
+        fotoArr.map(function(entry, i) {
+          var url  = _fotoUrl(entry);
+          var label = _fotoLabel(entry, i);
           return '<div style="position:relative;display:inline-flex">' +
-            '<a href="' + escHtml(url) + '" target="_blank" class="btn btn-outline btn-sm" style="font-size:11px;padding-right:24px">' +
-              '<i data-lucide="file" style="width:11px;height:11px"></i> Bukti ' + (i+1) +
+            '<a href="' + escHtml(url) + '" target="_blank" class="btn btn-outline btn-sm" style="font-size:11px;padding-right:24px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escHtml(label) + '">' +
+              '<i data-lucide="file" style="width:11px;height:11px;flex-shrink:0"></i> ' + escHtml(label) +
             '</a>' +
             '<button type="button" ' +
                 'onclick="event.stopPropagation();_markImplFotoDeletedEdit(\'' + escAttr(url) + '\',\'' + jenis + '\',this)" ' +
@@ -1691,10 +1726,11 @@ function _cancelImplEdit(jenis) {
 
   var savedContainer = document.getElementById('impl-' + jenis + '-saved-files');
   if (savedContainer) {
-    savedContainer.innerHTML = fotoArr.map(function(url, i) {
+    savedContainer.innerHTML = fotoArr.map(function(entry, i) {
+      var url = _fotoUrl(entry); var label = _fotoLabel(entry, i);
       return '<div style="position:relative;display:inline-flex">' +
-        '<a href="' + escHtml(url) + '" target="_blank" class="btn btn-outline btn-sm" style="font-size:11px;padding-right:24px">' +
-          '<i data-lucide="file" style="width:11px;height:11px"></i> Bukti ' + (i+1) +
+        '<a href="' + escHtml(url) + '" target="_blank" class="btn btn-outline btn-sm" style="font-size:11px;padding-right:24px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escHtml(label) + '">' +
+          '<i data-lucide="file" style="width:11px;height:11px;flex-shrink:0"></i> ' + escHtml(label) +
         '</a>' +
         '<button type="button" ' +
             'onclick="event.stopPropagation();_markImplFotoDeletedEdit(\'' + escAttr(url) + '\',\'' + jenis + '\',this)" ' +
@@ -1832,7 +1868,7 @@ async function _renderUploadImplPage(container, task, period) {
           '<div style="display:flex;justify-content:flex-end;gap:8px">' +
             '<button class="btn btn-outline btn-sm" onclick="_toggleImplEditMode()">Batal</button>' +
             '<button class="btn btn-primary btn-sm" id="impl-tpp-save-btn" ' +
-                'onclick="singleClick(this,function(){ _saveImplTppEdit(' + JSON.stringify(res) + ',\'' + (period.tanggal_selesai || '') + '\',\'' + task.result_id + '\',\'' + task.agenda_id + '\',\'' + period.period_id + '\') })">' +
+                'onclick="singleClick(this,function(){ _saveImplTppEdit(\'' + (period.tanggal_selesai || '') + '\',\'' + task.result_id + '\',\'' + task.agenda_id + '\',\'' + period.period_id + '\') })">' +
               'Simpan' +
             '</button>' +
           '</div>' +
@@ -1867,9 +1903,10 @@ async function _renderUploadImplPage(container, task, period) {
               '<div style="margin-bottom:8px">' +
                 '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em;margin-bottom:4px">BUKTI IMPLEMENTASI</div>' +
                 '<div style="display:flex;flex-wrap:wrap;gap:5px">' +
-                  corrFotoUrls.split(',').filter(Boolean).map(function(url, i) {
-                    return '<a href="' + escHtml(url) + '" target="_blank" class="btn btn-outline btn-sm" style="font-size:11px">' +
-                      '<i data-lucide="file" style="width:11px;height:11px"></i> Bukti ' + (i+1) + '</a>';
+                  corrFotoUrls.split(',').filter(Boolean).map(function(entry, i) {
+                    var url = _fotoUrl(entry); var label = _fotoLabel(entry, i);
+                    return '<a href="' + escHtml(url) + '" target="_blank" class="btn btn-outline btn-sm" style="font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escHtml(label) + '">' +
+                      '<i data-lucide="file" style="width:11px;height:11px;flex-shrink:0"></i> ' + escHtml(label) + '</a>';
                   }).join('') +
                 '</div>' +
               '</div>' +
