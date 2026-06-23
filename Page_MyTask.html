@@ -1777,6 +1777,9 @@ async function _renderUploadImplPage(container, task, period) {
       result_id: task.result_id,
     });
     var f   = task.finding;
+    // Read-only saat sedang dalam approval chain atau sudah CLOSED
+    var isLocked = ['APP_DEPT_HEAD','APP_AUDITOR','APP_KOORDINATOR','CLOSED','OVERDUE']
+      .indexOf(f.finding_status) !== -1;
     var res = (tppData && tppData[0]) ? tppData[0] : {};
     window._implCurrentRes = res;
     _implPendingDeletes = { correction: [], ca: [] };
@@ -1798,10 +1801,12 @@ async function _renderUploadImplPage(container, task, period) {
       '<div class="card mb-16" style="overflow:hidden">' +
         '<div style="background:var(--primary,#1F3864);padding:10px 16px;display:flex;align-items:center;justify-content:space-between">' +
           '<div style="color:#fff;font-size:13px;font-weight:700">Rencana Tindakan Perbaikan dan Pencegahan</div>' +
-          '<button class="btn btn-ghost btn-sm" id="impl-tpp-edit-btn" onclick="_toggleImplEditMode()" ' +
-              'style="font-size:11px;gap:4px;color:rgba(255,255,255,.8);border-color:rgba(255,255,255,.3)">' +
-            '<i data-lucide="pencil" style="width:11px;height:11px"></i> Edit Rencana' +
-          '</button>' +
+          (!isLocked
+            ? '<button class="btn btn-ghost btn-sm" id="impl-tpp-edit-btn" onclick="_toggleImplEditMode()" ' +
+                'style="font-size:11px;gap:4px;color:rgba(255,255,255,.8);border-color:rgba(255,255,255,.3)">' +
+                '<i data-lucide="pencil" style="width:11px;height:11px"></i> Edit Rencana' +
+              '</button>'
+            : '') +
         '</div>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--surface-2,#f8f9fa);border-bottom:1px solid var(--border)">' +
           '<div style="padding:7px 14px;border-right:1px solid var(--border)">' +
@@ -1897,7 +1902,7 @@ async function _renderUploadImplPage(container, task, period) {
               ? '<span style="font-size:11px;color:rgba(255,255,255,.75)">✓ Disubmit ' + formatDate(res.impl_correction_submitted_at) + '</span>'
               : '<span style="font-size:12px;color:rgba(255,255,255,.55)">Belum disubmit</span>') +
           '</div>' +
-          (hasCorrSubmitted
+          (hasCorrSubmitted && !isLocked
             ? '<button class="btn btn-ghost btn-sm" id="impl-corr-edit-btn" onclick="_toggleCorrEditMode()" ' +
                 'style="font-size:11px;gap:4px;color:rgba(255,255,255,.8);border-color:rgba(255,255,255,.3)">' +
                 '<i data-lucide="pencil" style="width:11px;height:11px"></i> Edit' +
@@ -1948,7 +1953,7 @@ async function _renderUploadImplPage(container, task, period) {
               ? '<span style="font-size:11px;color:rgba(255,255,255,.75)">✓ Disubmit ' + formatDate(res.impl_submitted_at) + '</span>'
               : '<span style="font-size:12px;color:rgba(255,255,255,.55)">Belum disubmit</span>') +
           '</div>' +
-          (hasCASubmitted
+          (hasCASubmitted && !isLocked
             ? '<button class="btn btn-ghost btn-sm" id="impl-ca-edit-btn" onclick="_toggleCAEditMode()" ' +
                 'style="font-size:11px;gap:4px;color:rgba(255,255,255,.8);border-color:rgba(255,255,255,.3)">' +
                 '<i data-lucide="pencil" style="width:11px;height:11px"></i> Edit' +
