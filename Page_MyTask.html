@@ -1691,17 +1691,16 @@ function _buildImplUploadForm(jenis, resultId, agendaId, periodId, existingFotoU
       '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em;margin-bottom:4px">' +
         'KETERANGAN <span class="required">*</span>' +
       '</div>' +
-      '<div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Jelaskan setiap file yang diupload.</div>' +
       '<textarea class="form-control" id="impl-' + jenis + '-ket" rows="2" ' +
           'style="resize:vertical;font-size:12px" ' +
-          'placeholder="Contoh: 1. Bukti mutasi personil, 2. Struktur organisasi dari HR...">' +
+          'placeholder="Jelaskan setiap file yang diupload. Contoh: 1. Bukti daftar hadir sosialisasi kebijakan, 2. dll">' +
         escHtml(existingKeterangan || '') +
       '</textarea>' +
     '</div>' +
     '<div style="display:flex;align-items:center;justify-content:' + (jenis === 'ca' ? 'space-between' : 'flex-end') + ';gap:8px">' +
       (jenis === 'ca'
         ? '<span style="font-size:11px;color:var(--text-muted)">' +
-            '<i data-lucide="info" style="width:11px;height:11px;vertical-align:middle"></i> Submit CA akan memulai proses approval.' +
+            '<i data-lucide="info" style="width:11px;height:11px;vertical-align:middle"></i> Submit Corrective Action akan memulai proses approval.' +
           '</span>'
         : '') +
       '<div style="display:flex;gap:8px">' +
@@ -2504,10 +2503,22 @@ function _renderApprovalHistory(log, stage) {
             // Baris pertama: label aksi + badge stage
             '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
               '<span style="font-size:12px;font-weight:600">' + _actionLabel(l) + '</span>' +
-              '<span style="font-size:10px;background:var(--surface-2,#f3f4f6);' +
-                  'color:var(--text-muted);padding:1px 6px;border-radius:4px">' +
-                escHtml(l.stage || '') +
-              '</span>' +
+              (function() {
+                var stageClassMap = {
+                  'CORRECTION':   'badge-correction',
+                  'IMPL':         'badge-corrective-action',
+                  'TPP':          'badge-slate',
+                  'VERIFICATION': 'badge-amber',
+                };
+                var cls = stageClassMap[l.stage] || 'badge-slate';
+                var stageLabel = {
+                  'CORRECTION':   'Correction',
+                  'IMPL':         'Corrective Action',
+                  'TPP':          'TPP',
+                  'VERIFICATION': 'Verifikasi',
+                }[l.stage] || escHtml(l.stage || '');
+                return '<span class="badge ' + cls + '" style="font-size:10px">' + stageLabel + '</span>';
+              })() +
               (isSkipped ? '<span class="badge badge-amber" style="font-size:10px">Skip</span>' : '') +
             '</div>' +
 
