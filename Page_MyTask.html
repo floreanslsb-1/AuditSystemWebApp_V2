@@ -1447,6 +1447,29 @@ async function _submitTpp(resultId, agendaId, periodId) {
   if (!correctiveAction) return toast('Corrective Action wajib diisi.', 'error');
   if (!dueDateCA)        return toast('Due date corrective action wajib diisi.', 'error');
 
+  // Validasi tanggal tidak boleh di masa lalu
+  var today = new Date(); today.setHours(0,0,0,0);
+  if (new Date(dueDateCorr) < today) return toast('Due date correction tidak boleh di masa lalu.', 'error');
+  if (new Date(dueDateCA)   < today) return toast('Due date corrective action tidak boleh di masa lalu.', 'error');
+
+  // Validasi urutan logis
+  if (new Date(dueDateCorr) > new Date(dueDateCA))
+    return toast('Due date correction harus lebih awal atau sama dengan due date corrective action.', 'error');
+
+  // Validasi max date
+  if (period) {
+    var _pd = App.activePeriod || {};
+    var _endDate = _pd.tanggal_selesai ? new Date(_pd.tanggal_selesai) : null;
+    if (_endDate) {
+      var _maxCorr = new Date(_endDate); _maxCorr.setMonth(_maxCorr.getMonth() + 3);
+      var _maxCA   = new Date(_endDate); _maxCA.setFullYear(_maxCA.getFullYear() + 1);
+      if (new Date(dueDateCorr) > _maxCorr)
+        return toast('Due date correction melebihi batas maksimal (' + formatDate(_maxCorr.toISOString().split('T')[0]) + ').', 'error');
+      if (new Date(dueDateCA) > _maxCA)
+        return toast('Due date corrective action melebihi batas maksimal (' + formatDate(_maxCA.toISOString().split('T')[0]) + ').', 'error');
+    }
+  }
+
   var btn      = document.getElementById('tpp-submit-btn');
   btn.disabled = true;
   btn.innerHTML = '<div class="spinner" style="width:13px;height:13px;border-width:2px"></div> Mengirim...';
@@ -2035,7 +2058,7 @@ async function _submitCorrectionImpl(resultId, agendaId, periodId) {
   } catch(err) {
     toast(err.message, 'error');
     btn.disabled = false;
-    btn.innerHTML = '<i data-lucide="upload" style="width:12px;height:12px"></i> Submit Correction Ulang';
+    btn.innerHTML = '<i data-lucide="upload" style="width:12px;height:12px"></i> ' + (window._implCurrentRes && window._implCurrentRes.impl_correction_submitted_at ? 'Submit Correction Ulang' : 'Submit Correction');
     if (zone)  { zone.style.pointerEvents = ''; zone.style.opacity = ''; }
     if (ketEl)   ketEl.disabled = false;
     lucide.createIcons();
@@ -2071,7 +2094,7 @@ async function _submitCorrectiveActionImpl(resultId, agendaId, periodId) {
 
   function _restoreCaForm() {
     btn.disabled = false;
-    btn.innerHTML = '<i data-lucide="upload" style="width:13px;height:13px"></i> Submit Corrective Action';
+    btn.innerHTML = '<i data-lucide="upload" style="width:13px;height:13px"></i> ' + (window._implCurrentRes && window._implCurrentRes.impl_submitted_at ? 'Submit Corrective Action Ulang' : 'Submit Corrective Action');
     if (zone) { zone.style.pointerEvents = ''; zone.style.opacity = ''; }
     if (ketCaElLock) ketCaElLock.disabled = false;
     if (corrZoneLock) { corrZoneLock.style.pointerEvents = ''; corrZoneLock.style.opacity = ''; }
