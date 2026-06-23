@@ -1497,7 +1497,7 @@ function _toggleImplEditMode(res, period, resultId, agendaId, periodId) {
   var editView  = document.getElementById('impl-tpp-edit');
   var editBtn   = document.getElementById('impl-tpp-edit-btn');
   if (!readView || !editView) return;
-  readView.style.display = _implEditMode ? 'none' : 'block';
+  readView.style.display = _implEditMode ? 'none' : 'flex';
   editView.style.display = _implEditMode ? 'block' : 'none';
   if (editBtn) editBtn.style.display = _implEditMode ? 'none' : 'inline-flex';
   lucide.createIcons();
@@ -1588,201 +1588,273 @@ async function _renderUploadImplPage(container, task, period) {
 
     var historyHtml = _renderApprovalHistory(log);
 
-    // ── Rencana TPP — read-only + edit toggle ─────────────────
-    var tppCard =
-      '<div class="card mb-16"><div class="card-body" style="padding:14px 16px">' +
+    // ── 1. Identity + TPP Plan — satu tabel terpadu ──────────
+    var identityCard =
+      '<div class="card mb-16" style="overflow:hidden">' +
 
-        // Header
-        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">' +
-          '<div style="font-size:12px;font-weight:700;color:var(--text-muted);letter-spacing:.06em">RENCANA TPP</div>' +
+        // Header bar
+        '<div style="background:var(--primary,#1F3864);padding:10px 16px;' +
+            'display:flex;align-items:center;justify-content:space-between">' +
+          '<div style="color:#fff;font-size:13px;font-weight:700">' +
+            'Rencana Tindakan Perbaikan dan Pencegahan' +
+          '</div>' +
           '<button class="btn btn-ghost btn-sm" id="impl-tpp-edit-btn" ' +
-            'onclick="_toggleImplEditMode()" style="font-size:11px;gap:4px;display:' + (_implEditMode ? 'none' : 'inline-flex') + '">' +
-            '<i data-lucide="pencil" style="width:12px;height:12px"></i> Edit Rencana' +
+              'onclick="_toggleImplEditMode()" ' +
+              'style="font-size:11px;gap:4px;color:rgba(255,255,255,.8);' +
+                'border-color:rgba(255,255,255,.3)">' +
+            '<i data-lucide="pencil" style="width:11px;height:11px"></i> Edit Rencana' +
           '</button>' +
         '</div>' +
 
-        // Read view
-        '<div id="impl-tpp-read">' +
-          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
-            '<div>' +
-              '<div style="font-size:10px;font-weight:700;color:var(--blue,#3b82f6);letter-spacing:.05em;margin-bottom:4px">CORRECTION</div>' +
-              '<div style="font-size:13px;margin-bottom:6px">' + escHtml(res.correction || '-') + '</div>' +
-              '<div style="font-size:11px;color:var(--text-muted)">Due: <strong>' + formatDate(res.due_date_correction || '') + '</strong></div>' +
-            '</div>' +
-            '<div>' +
-              '<div style="font-size:10px;font-weight:700;color:var(--purple,#8b5cf6);letter-spacing:.05em;margin-bottom:4px">CORRECTIVE ACTION</div>' +
-              '<div style="font-size:13px;margin-bottom:6px">' + escHtml(res.corrective_action || '-') + '</div>' +
-              '<div style="font-size:11px;color:var(--text-muted)">Due: <strong>' + formatDate(res.due_date_corrective_action || '') + '</strong></div>' +
-            '</div>' +
+        // Meta strip — NO. DOKUMEN | PERIODE AUDIT | DEPT/AREA
+        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;' +
+            'background:var(--surface-2,#f8f9fa);border-bottom:1px solid var(--border)">' +
+          '<div style="padding:7px 14px;border-right:1px solid var(--border)">' +
+            '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em">NO. DOKUMEN</div>' +
+            '<div style="font-size:12px;font-weight:600;font-family:monospace">' + escHtml(f ? f.result_id : '-') + '</div>' +
+          '</div>' +
+          '<div style="padding:7px 14px;border-right:1px solid var(--border)">' +
+            '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em">PERIODE AUDIT</div>' +
+            '<div style="font-size:12px;font-weight:600">' + escHtml(period.nama_periode || '-') + '</div>' +
+          '</div>' +
+          '<div style="padding:7px 14px">' +
+            '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em">DEPT / AREA</div>' +
+            '<div style="font-size:12px;font-weight:600">' + escHtml(task.agenda ? task.agenda.dept : '-') + '</div>' +
           '</div>' +
         '</div>' +
 
-        // Edit view (hidden by default)
-        '<div id="impl-tpp-edit" style="display:none">' +
-          '<div style="background:var(--surface-2,#f8f9fa);border-radius:8px;padding:12px;margin-bottom:10px">' +
-            '<div style="font-size:10px;font-weight:700;color:var(--blue,#3b82f6);letter-spacing:.05em;margin-bottom:8px">CORRECTION</div>' +
-            '<div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:start">' +
-              '<textarea class="form-control" id="impl-edit-correction" rows="3" ' +
-                'style="resize:vertical;min-height:68px">' + escHtml(res.correction || '') + '</textarea>' +
-              '<div>' +
-                '<div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;white-space:nowrap">' +
-                  'Due Date' + (maxDateCorr ? '<br><span style="color:var(--text-muted)">maks. ' + formatDate(maxDateCorr) + '</span>' : '') +
+        // Info temuan — DESKRIPSI | LOKASI + FOTO
+        '<div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--border)">' +
+          '<div style="padding:10px 14px;border-right:1px solid var(--border)">' +
+            '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em;margin-bottom:3px">DESKRIPSI KETIDAKSESUAIAN</div>' +
+            '<div style="font-size:13px">' + escHtml(f ? f.deskripsi_temuan : '-') + '</div>' +
+          '</div>' +
+          '<div style="padding:10px 14px">' +
+            '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em;margin-bottom:3px">LOKASI</div>' +
+            '<div style="font-size:13px;margin-bottom:8px">' + escHtml(f ? f.lokasi_temuan || '-' : '-') + '</div>' +
+            '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em;margin-bottom:4px">BUKTI FOTO</div>' +
+            (f && f.foto_urls
+              ? '<div style="display:flex;flex-wrap:wrap;gap:5px">' +
+                  f.foto_urls.split(',').filter(Boolean).map(function(url, i) {
+                    return '<a href="' + escHtml(url) + '" target="_blank" ' +
+                      'class="btn btn-outline btn-sm" style="font-size:11px">' +
+                      '<i data-lucide="image" style="width:11px;height:11px"></i> Foto ' + (i + 1) + '</a>';
+                  }).join('') +
+                '</div>'
+              : '<span style="font-size:12px;color:var(--text-muted)">-</span>') +
+          '</div>' +
+        '</div>' +
+
+        // TPP Plan — READ VIEW
+        '<div id="impl-tpp-read" style="display:flex">' +
+          '<div style="flex:1;padding:10px 14px;border-right:1px solid var(--border)">' +
+            '<div style="font-size:10px;font-weight:700;color:var(--blue,#3b82f6);letter-spacing:.05em;margin-bottom:3px">CORRECTION</div>' +
+            '<div style="font-size:13px;margin-bottom:4px">' + escHtml(res.correction || '-') + '</div>' +
+            '<div style="font-size:11px;color:var(--text-muted)">Due: <strong>' + formatDate(res.due_date_correction || '') + '</strong></div>' +
+          '</div>' +
+          '<div style="flex:1;padding:10px 14px">' +
+            '<div style="font-size:10px;font-weight:700;color:var(--purple,#8b5cf6);letter-spacing:.05em;margin-bottom:3px">CORRECTIVE ACTION</div>' +
+            '<div style="font-size:13px;margin-bottom:4px">' + escHtml(res.corrective_action || '-') + '</div>' +
+            '<div style="font-size:11px;color:var(--text-muted)">Due: <strong>' + formatDate(res.due_date_corrective_action || '') + '</strong></div>' +
+          '</div>' +
+        '</div>' +
+
+        // TPP Plan — EDIT VIEW (hidden)
+        '<div id="impl-tpp-edit" style="display:none;padding:12px 14px;border-top:1px solid var(--border);background:var(--surface-2,#f8f9fa)">' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">' +
+            '<div>' +
+              '<div style="font-size:10px;font-weight:700;color:var(--blue,#3b82f6);letter-spacing:.05em;margin-bottom:6px">CORRECTION</div>' +
+              '<div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start">' +
+                '<textarea class="form-control" id="impl-edit-correction" rows="2" ' +
+                    'style="resize:vertical;min-height:56px;font-size:12px">' +
+                  escHtml(res.correction || '') +
+                '</textarea>' +
+                '<div>' +
+                  '<div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;white-space:nowrap">' +
+                    'Due Date' +
+                    (maxDateCorr ? '<br><span style="color:var(--text-muted)">maks. ' + formatDate(maxDateCorr) + '</span>' : '') +
+                  '</div>' +
+                  '<input class="form-control" type="date" id="impl-edit-due-corr" ' +
+                      'style="width:120px;font-size:11px;padding:4px 6px" ' +
+                      (maxDateCorr ? 'max="' + maxDateCorr + '" ' : '') +
+                      'value="' + toDateInputValue(res.due_date_correction) + '">' +
                 '</div>' +
-                '<input class="form-control" type="date" id="impl-edit-due-corr" ' +
-                  'style="width:130px;font-size:12px;padding:5px 8px" ' +
-                  (maxDateCorr ? 'max="' + maxDateCorr + '" ' : '') +
-                  'value="' + toDateInputValue(res.due_date_correction) + '">' +
               '</div>' +
             '</div>' +
-          '</div>' +
-          '<div style="background:var(--surface-2,#f8f9fa);border-radius:8px;padding:12px;margin-bottom:10px">' +
-            '<div style="font-size:10px;font-weight:700;color:var(--purple,#8b5cf6);letter-spacing:.05em;margin-bottom:8px">CORRECTIVE ACTION</div>' +
-            '<div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:start">' +
-              '<textarea class="form-control" id="impl-edit-ca" rows="3" ' +
-                'style="resize:vertical;min-height:68px">' + escHtml(res.corrective_action || '') + '</textarea>' +
-              '<div>' +
-                '<div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;white-space:nowrap">' +
-                  'Due Date' + (maxDateCA ? '<br><span style="color:var(--text-muted)">maks. ' + formatDate(maxDateCA) + '</span>' : '') +
+            '<div>' +
+              '<div style="font-size:10px;font-weight:700;color:var(--purple,#8b5cf6);letter-spacing:.05em;margin-bottom:6px">CORRECTIVE ACTION</div>' +
+              '<div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start">' +
+                '<textarea class="form-control" id="impl-edit-ca" rows="2" ' +
+                    'style="resize:vertical;min-height:56px;font-size:12px">' +
+                  escHtml(res.corrective_action || '') +
+                '</textarea>' +
+                '<div>' +
+                  '<div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;white-space:nowrap">' +
+                    'Due Date' +
+                    (maxDateCA ? '<br><span style="color:var(--text-muted)">maks. ' + formatDate(maxDateCA) + '</span>' : '') +
+                  '</div>' +
+                  '<input class="form-control" type="date" id="impl-edit-due-ca" ' +
+                      'style="width:120px;font-size:11px;padding:4px 6px" ' +
+                      (maxDateCA ? 'max="' + maxDateCA + '" ' : '') +
+                      'value="' + toDateInputValue(res.due_date_corrective_action) + '">' +
                 '</div>' +
-                '<input class="form-control" type="date" id="impl-edit-due-ca" ' +
-                  'style="width:130px;font-size:12px;padding:5px 8px" ' +
-                  (maxDateCA ? 'max="' + maxDateCA + '" ' : '') +
-                  'value="' + toDateInputValue(res.due_date_corrective_action) + '">' +
               '</div>' +
             '</div>' +
           '</div>' +
           '<div style="display:flex;justify-content:flex-end;gap:8px">' +
             '<button class="btn btn-outline btn-sm" onclick="_toggleImplEditMode()">Batal</button>' +
             '<button class="btn btn-primary btn-sm" id="impl-tpp-save-btn" ' +
-              'onclick="singleClick(this,function(){ _saveImplTppEdit(' +
-                JSON.stringify(res) + ',\'' + (period.tanggal_selesai || '') + '\',\'' +
-                task.result_id + '\',\'' + task.agenda_id + '\',\'' + period.period_id + '\') })">' +
+                'onclick="singleClick(this,function(){ _saveImplTppEdit(' +
+                  JSON.stringify(res) + ',\'' + (period.tanggal_selesai || '') + '\',\'' +
+                  task.result_id + '\',\'' + task.agenda_id + '\',\'' + period.period_id + '\') })">' +
               'Simpan' +
             '</button>' +
           '</div>' +
         '</div>' +
 
-      '</div></div>';
+      '</div>';
 
-    // ── Correction upload ─────────────────────────────────────
+    // ── 2. Correction upload (compact) ────────────────────────
     var hasCorrSubmitted = !!res.impl_correction_submitted_at;
     var correctionHtml =
-      '<div class="card mb-16"><div class="card-body" style="padding:14px 16px">' +
-        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">' +
+      '<div class="card mb-10"><div class="card-body" style="padding:12px 16px">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">' +
           '<span class="badge badge-blue" style="font-size:10px">Correction</span>' +
           (hasCorrSubmitted
             ? '<span class="badge badge-emerald" style="font-size:10px">✓ Disubmit ' + formatDate(res.impl_correction_submitted_at) + '</span>'
             : '<span style="font-size:11px;color:var(--text-muted)">Belum disubmit</span>') +
         '</div>' +
 
-        // Keterangan existing
-        (res.impl_correction_keterangan
-          ? '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;padding:8px 10px;' +
-              'background:var(--bg);border-radius:6px;border-left:2px solid var(--blue,#3b82f6)">' +
-              escHtml(res.impl_correction_keterangan) +
-            '</div>'
-          : '') +
-
-        // Bukti sebelumnya — dengan tombol hapus per foto
-        '<div class="upload-previews" id="impl-correction-saved-files" style="margin-bottom:12px">' +
+        // Existing fotos — compact chips
+        '<div id="impl-correction-saved-files" style="display:flex;flex-wrap:wrap;gap:6px;' +
+            (hasCorrSubmitted && res.impl_correction_foto_urls ? 'margin-bottom:10px' : '') + '">' +
           (hasCorrSubmitted && res.impl_correction_foto_urls
             ? res.impl_correction_foto_urls.split(',').filter(Boolean).map(function(url, i) {
-                return '<div class="upload-preview" style="position:relative">' +
-                  '<a href="' + escHtml(url) + '" target="_blank" class="btn btn-outline btn-sm" style="width:100%;justify-content:flex-start">' +
-                    '<i data-lucide="image" style="width:12px;height:12px"></i> Bukti ' + (i+1) +
+                return '<div style="position:relative;display:inline-flex">' +
+                  '<a href="' + escHtml(url) + '" target="_blank" ' +
+                      'class="btn btn-outline btn-sm" style="font-size:11px;padding-right:22px">' +
+                    '<i data-lucide="image" style="width:11px;height:11px"></i> Bukti ' + (i+1) +
                   '</a>' +
                   '<button type="button" class="upload-remove" ' +
-                    'onclick="_deleteImplFoto(\'' + escAttr(url) + '\',\'correction\',\'' +
-                      task.result_id + '\',\'' + task.agenda_id + '\',\'' + period.period_id + '\')" ' +
-                    'title="Hapus foto">✕</button>' +
+                      'onclick="_deleteImplFoto(\'' + escAttr(url) + '\',\'correction\',\'' +
+                        task.result_id + '\',\'' + task.agenda_id + '\',\'' + period.period_id + '\',this)" ' +
+                      'title="Hapus" ' +
+                      'style="position:absolute;top:-5px;right:-5px;width:16px;height:16px;' +
+                        'border-radius:50%;background:var(--rose,#f43f5e);border:1.5px solid #fff;' +
+                        'color:#fff;cursor:pointer;display:flex;align-items:center;' +
+                        'justify-content:center;font-size:9px;padding:0;line-height:1">✕</button>' +
                 '</div>';
               }).join('')
             : '') +
         '</div>' +
 
-        '<div class="form-group" style="margin-bottom:8px">' +
-          '<label class="form-label" style="font-size:12px">Keterangan <span class="required">*</span></label>' +
-          '<textarea class="form-control" id="impl-correction-ket" rows="2" ' +
-            'style="resize:vertical;min-height:unset" ' +
-            'placeholder="Catatan tindakan correction (wajib diisi)...">' +
-            escHtml(res.impl_correction_keterangan || '') +
-          '</textarea>' +
+        // Keterangan + Upload side by side
+        '<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px">' +
+          '<div style="flex:1">' +
+            '<label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:3px">' +
+              'Keterangan <span class="required">*</span>' +
+            '</label>' +
+            '<textarea class="form-control" id="impl-correction-ket" rows="2" ' +
+                'style="resize:none;font-size:12px" ' +
+                'placeholder="Catatan tindakan correction...">' +
+              escHtml(res.impl_correction_keterangan || '') +
+            '</textarea>' +
+          '</div>' +
+          '<div style="flex:1">' +
+            '<label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:3px">' +
+              'Bukti Foto <span class="required">*</span>' +
+            '</label>' +
+            '<div class="upload-zone" id="impl-correction-zone" style="min-height:52px;padding:8px 12px">' +
+              '<i data-lucide="camera" style="width:14px;height:14px;opacity:.3;margin-bottom:2px"></i>' +
+              '<div class="upload-text" style="font-size:11px">' +
+                (hasCorrSubmitted ? 'Upload ulang bukti' : 'Klik atau drag foto') +
+              '</div>' +
+            '</div>' +
+            '<div class="upload-previews" id="impl-correction-preview" style="margin-top:4px"></div>' +
+          '</div>' +
         '</div>' +
-        '<div class="upload-zone" id="impl-correction-zone">' +
-          '<i data-lucide="camera" style="width:24px;height:24px;opacity:.3;margin-bottom:6px"></i>' +
-          '<div class="upload-text">' + (hasCorrSubmitted ? 'Upload ulang bukti correction' : 'Upload foto/dokumen bukti correction') + '</div>' +
+        '<div style="display:flex;justify-content:flex-end">' +
+          '<button class="btn btn-primary btn-sm" id="impl-correction-btn" ' +
+              'onclick="singleClick(this,function(){ _submitCorrectionImpl(\'' +
+                task.result_id + '\',\'' + task.agenda_id + '\',\'' + period.period_id + '\') })">' +
+            '<i data-lucide="upload" style="width:12px;height:12px"></i> ' +
+            (hasCorrSubmitted ? 'Upload Ulang' : 'Submit Correction') +
+          '</button>' +
         '</div>' +
-        '<div class="upload-previews" id="impl-correction-preview"></div>' +
-        '<button class="btn btn-primary btn-sm" id="impl-correction-btn" style="margin-top:10px" ' +
-          'onclick="singleClick(this,function(){ _submitCorrectionImpl(\'' +
-            task.result_id + '\',\'' + task.agenda_id + '\',\'' + period.period_id + '\') })">' +
-          '<i data-lucide="upload" style="width:13px;height:13px"></i> ' +
-          (hasCorrSubmitted ? 'Upload Ulang' : 'Submit Correction') +
-        '</button>' +
       '</div></div>';
 
-    // ── Corrective Action upload ───────────────────────────────
+    // ── 3. Corrective Action upload (compact) ─────────────────
     var hasCASubmitted = !!res.impl_submitted_at;
     var correctiveActionHtml =
-      '<div class="card mb-16"><div class="card-body" style="padding:14px 16px">' +
-        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">' +
+      '<div class="card mb-16"><div class="card-body" style="padding:12px 16px">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">' +
           '<span class="badge badge-purple" style="font-size:10px">Corrective Action</span>' +
           (hasCASubmitted
             ? '<span class="badge badge-emerald" style="font-size:10px">✓ Disubmit ' + formatDate(res.impl_submitted_at) + '</span>'
             : '<span style="font-size:11px;color:var(--text-muted)">Belum disubmit</span>') +
         '</div>' +
 
-        // Keterangan existing
-        (res.impl_corrective_action_keterangan
-          ? '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;padding:8px 10px;' +
-              'background:var(--bg);border-radius:6px;border-left:2px solid var(--purple,#8b5cf6)">' +
-              escHtml(res.impl_corrective_action_keterangan) +
-            '</div>'
-          : '') +
-
-        // Bukti sebelumnya — dengan tombol hapus per foto
-        '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px" id="impl-ca-saved-files">' +
+        // Existing fotos — compact chips
+        '<div id="impl-ca-saved-files" style="display:flex;flex-wrap:wrap;gap:6px;' +
+            (hasCASubmitted && res.impl_corrective_action_foto_urls ? 'margin-bottom:10px' : '') + '">' +
           (hasCASubmitted && res.impl_corrective_action_foto_urls
             ? res.impl_corrective_action_foto_urls.split(',').filter(Boolean).map(function(url, i) {
-                return '<span style="position:relative;display:inline-block">' +
-                  '<a href="' + escHtml(url) + '" target="_blank" class="btn btn-outline btn-sm" style="padding-right:22px">' +
-                    '<i data-lucide="image" style="width:12px;height:12px"></i> Bukti ' + (i+1) +
+                return '<div style="position:relative;display:inline-flex">' +
+                  '<a href="' + escHtml(url) + '" target="_blank" ' +
+                      'class="btn btn-outline btn-sm" style="font-size:11px;padding-right:22px">' +
+                    '<i data-lucide="image" style="width:11px;height:11px"></i> Bukti ' + (i+1) +
                   '</a>' +
                   '<button type="button" ' +
-                    'onclick="event.stopPropagation();event.preventDefault();_deleteImplFoto(\'' + escAttr(url) + '\',\'ca\',\'' +
-                      task.result_id + '\',\'' + task.agenda_id + '\',\'' + period.period_id + '\')" ' +
-                    'title="Hapus foto" ' +
-                    'style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;' +
-                      'background:var(--rose,#f43f5e);border:2px solid #fff;color:#fff;cursor:pointer;' +
-                      'display:flex;align-items:center;justify-content:center;font-size:10px;padding:0;line-height:1">✕</button>' +
-                '</span>';
+                      'onclick="event.stopPropagation();event.preventDefault();' +
+                        '_deleteImplFoto(\'' + escAttr(url) + '\',\'ca\',\'' +
+                        task.result_id + '\',\'' + task.agenda_id + '\',\'' + period.period_id + '\',this)" ' +
+                      'title="Hapus" ' +
+                      'style="position:absolute;top:-5px;right:-5px;width:16px;height:16px;' +
+                        'border-radius:50%;background:var(--rose,#f43f5e);border:1.5px solid #fff;' +
+                        'color:#fff;cursor:pointer;display:flex;align-items:center;' +
+                        'justify-content:center;font-size:9px;padding:0;line-height:1">✕</button>' +
+                '</div>';
               }).join('')
             : '') +
         '</div>' +
 
-        '<div class="form-group" style="margin-bottom:8px">' +
-          '<label class="form-label" style="font-size:12px">Keterangan <span class="required">*</span></label>' +
-          '<textarea class="form-control" id="impl-ca-ket" rows="2" ' +
-            'style="resize:vertical;min-height:unset" ' +
-            'placeholder="Catatan tindakan corrective action (wajib diisi)...">' +
-            escHtml(res.impl_corrective_action_keterangan || '') +
-          '</textarea>' +
+        // Keterangan + Upload side by side
+        '<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px">' +
+          '<div style="flex:1">' +
+            '<label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:3px">' +
+              'Keterangan <span class="required">*</span>' +
+            '</label>' +
+            '<textarea class="form-control" id="impl-ca-ket" rows="2" ' +
+                'style="resize:none;font-size:12px" ' +
+                'placeholder="Catatan tindakan corrective action...">' +
+              escHtml(res.impl_corrective_action_keterangan || '') +
+            '</textarea>' +
+          '</div>' +
+          '<div style="flex:1">' +
+            '<label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:3px">' +
+              'Bukti Foto <span class="required">*</span>' +
+            '</label>' +
+            '<div class="upload-zone" id="impl-ca-zone" style="min-height:52px;padding:8px 12px">' +
+              '<i data-lucide="camera" style="width:14px;height:14px;opacity:.3;margin-bottom:2px"></i>' +
+              '<div class="upload-text" style="font-size:11px">' +
+                (hasCASubmitted ? 'Upload ulang bukti' : 'Klik atau drag foto') +
+              '</div>' +
+            '</div>' +
+            '<div class="upload-previews" id="impl-ca-preview" style="margin-top:4px"></div>' +
+          '</div>' +
         '</div>' +
-        '<div class="upload-zone" id="impl-ca-zone">' +
-          '<i data-lucide="camera" style="width:24px;height:24px;opacity:.3;margin-bottom:6px"></i>' +
-          '<div class="upload-text">' + (hasCASubmitted ? 'Upload ulang bukti corrective action' : 'Upload foto/dokumen bukti corrective action') + '</div>' +
+        '<div style="display:flex;align-items:center;justify-content:space-between">' +
+          '<span style="font-size:11px;color:var(--text-muted)">' +
+            '<i data-lucide="info" style="width:11px;height:11px;vertical-align:middle"></i> ' +
+            'Submit CA akan memulai proses approval.' +
+          '</span>' +
+          '<button class="btn btn-primary btn-sm" id="impl-ca-btn" ' +
+              'onclick="singleClick(this,function(){ _submitCorrectiveActionImpl(\'' +
+                task.result_id + '\',\'' + task.agenda_id + '\',\'' + period.period_id + '\') })">' +
+            '<i data-lucide="upload" style="width:12px;height:12px"></i> ' +
+            (hasCASubmitted ? 'Upload Ulang & Submit Ulang' : 'Submit Corrective Action') +
+          '</button>' +
         '</div>' +
-        '<div class="upload-previews" id="impl-ca-preview"></div>' +
-        '<div style="font-size:11px;color:var(--text-muted);margin-top:8px;margin-bottom:6px">' +
-          '<i data-lucide="info" style="width:11px;height:11px;vertical-align:middle"></i> ' +
-          'Submit corrective action akan memulai proses approval (Dept Head → Auditor → Koordinator).' +
-        '</div>' +
-        '<button class="btn btn-primary btn-sm" id="impl-ca-btn" ' +
-          'onclick="singleClick(this,function(){ _submitCorrectiveActionImpl(\'' +
-            task.result_id + '\',\'' + task.agenda_id + '\',\'' + period.period_id + '\') })">' +
-          '<i data-lucide="upload" style="width:13px;height:13px"></i> ' +
-          (hasCASubmitted ? 'Upload Ulang & Submit Ulang' : 'Submit Corrective Action') +
-        '</button>' +
       '</div></div>';
 
     container.innerHTML =
@@ -1790,7 +1862,7 @@ async function _renderUploadImplPage(container, task, period) {
         'Upload Implementasi — ' + escHtml(task.agenda ? task.agenda.dept : ''),
         ''
       ) +
-      tppCard +
+      identityCard +
       correctionHtml +
       correctiveActionHtml +
       historyHtml;
@@ -1809,44 +1881,55 @@ async function _renderUploadImplPage(container, task, period) {
 // State foto existing yang sudah dihapus (belum di-submit ulang) — per result_id, per jenis
 var _implDeletedFotos = { correction: {}, ca: {} };
 
-async function _deleteImplFoto(url, jenis, resultId, agendaId, periodId) {
+async function _deleteImplFoto(url, jenis, resultId, agendaId, periodId, btnEl) {
   var ok = await showConfirm({
     title: 'Hapus Foto', message: 'Hapus foto bukti ini?',
-    detail: 'File akan dihapus permanen dari sistem.', confirmText: 'Hapus', danger: true,
+    detail: 'File akan dihapus dari sistem.', confirmText: 'Hapus', danger: true,
   });
   if (!ok) return;
 
-  try { await api('DELETE_DRIVE_FILE', { file_url: url }); }
-  catch(e) { toast('Gagal hapus file: ' + e.message, 'error'); return; }
+  // Lock seluruh card Correction/CA terkait selama proses hapus berlangsung
+  var card = btnEl ? btnEl.closest('.card') : null;
+  var allButtonsInCard = card ? Array.from(card.querySelectorAll('button, .upload-remove')) : [];
+  allButtonsInCard.forEach(function(b) { b.disabled = true; b.style.pointerEvents = 'none'; b.style.opacity = '0.5'; });
+  if (btnEl) {
+    btnEl.style.opacity = '1';
+    btnEl.innerHTML = '<div class="spinner" style="width:10px;height:10px;border-width:2px;margin:auto"></div>';
+  }
 
-  // Update server: foto_urls minus yang dihapus, panggil ulang dengan existing tersisa
+  function _restoreButtons() {
+    allButtonsInCard.forEach(function(b) { b.disabled = false; b.style.pointerEvents = ''; b.style.opacity = ''; });
+  }
+
+  // 1. Hapus dari Drive
+  try { await api('DELETE_DRIVE_FILE', { file_url: url }); }
+  catch(e) { toast('Gagal hapus file: ' + e.message, 'error'); _restoreButtons(); if (btnEl) btnEl.innerHTML = '✕'; return; }
+
+  // 2. Update foto_urls di sheet — TANPA trigger approval/notifikasi
+  var field = jenis === 'correction'
+    ? 'impl_correction_foto_urls'
+    : 'impl_corrective_action_foto_urls';
   try {
     var tppData = await api('GET_TPP_ITEMS', { period_id: periodId, result_id: resultId, agenda_id: agendaId });
     var res = (tppData && tppData[0]) ? tppData[0] : {};
-    var field = jenis === 'correction' ? 'impl_correction_foto_urls' : 'impl_corrective_action_foto_urls';
-    var remainingUrls = (res[field] || '').split(',').filter(Boolean).filter(function(u) { return u !== url; });
-
-    if (jenis === 'correction') {
-      await api('SUBMIT_CORRECTION_IMPL', {
-        period_id: periodId, result_id: resultId, agenda_id: agendaId,
-        files: [], keterangan: res.impl_correction_keterangan || '',
-        existing_foto_urls: remainingUrls.join(','),
-      });
-    } else {
-      await api('SUBMIT_CORRECTIVE_ACTION_IMPL', {
-        period_id: periodId, result_id: resultId, agenda_id: agendaId,
-        files: [], keterangan: res.impl_corrective_action_keterangan || '',
-        existing_foto_urls: remainingUrls.join(','),
-      });
-    }
+    var remainingUrls = (res[field] || '').split(',').filter(Boolean)
+      .filter(function(u) { return u !== url; });
+    await api('UPDATE_IMPL_FOTO_URLS', {
+      period_id: periodId,
+      result_id: resultId,
+      field:     field,
+      foto_urls: remainingUrls.join(','),
+    });
   } catch(e) {
     toast('Gagal update data setelah hapus foto: ' + e.message, 'error');
+    _restoreButtons();
+    if (btnEl) btnEl.innerHTML = '✕';
     return;
   }
 
   clearCache('GET_ALL_FINDINGS_BY_PERIOD');
   toast('Foto berhasil dihapus.', 'success');
-  var task = window._myTaskList[window._myTaskReturnIdx];
+  var task = window._myTaskList && window._myTaskList[window._myTaskReturnIdx];
   if (task) _renderUploadImplPage(document.getElementById('page-content'), task, window._myTaskPeriod);
 }
 
@@ -1867,8 +1950,11 @@ async function _submitCorrectionImpl(resultId, agendaId, periodId) {
   }
 
   var btn = document.getElementById('impl-correction-btn');
+  var ketElLock = document.getElementById('impl-correction-ket');
   btn.disabled = true;
   btn.innerHTML = '<div class="spinner" style="width:12px;height:12px;border-width:2px"></div> Mengirim...';
+  if (zone) { zone.style.pointerEvents = 'none'; zone.style.opacity = '0.5'; }
+  if (ketElLock) ketElLock.disabled = true;
 
   try {
     var tppData = await api('GET_TPP_ITEMS', { period_id: periodId, result_id: resultId, agenda_id: agendaId });
@@ -1892,6 +1978,8 @@ async function _submitCorrectionImpl(resultId, agendaId, periodId) {
     toast(err.message, 'error');
     btn.disabled = false;
     btn.innerHTML = '<i data-lucide="upload" style="width:13px;height:13px"></i> Submit Correction';
+    if (zone) { zone.style.pointerEvents = ''; zone.style.opacity = ''; }
+    if (ketElLock) ketElLock.disabled = false;
     lucide.createIcons();
   }
 }
@@ -1913,8 +2001,25 @@ async function _submitCorrectiveActionImpl(resultId, agendaId, periodId) {
   }
 
   var btn = document.getElementById('impl-ca-btn');
+  var ketCaElLock = document.getElementById('impl-ca-ket');
+  var corrZoneLock = document.getElementById('impl-correction-zone');
+  var corrKetElLock = document.getElementById('impl-correction-ket');
   btn.disabled = true;
   btn.innerHTML = '<div class="spinner" style="width:12px;height:12px;border-width:2px"></div> Mengirim...';
+  if (zone) { zone.style.pointerEvents = 'none'; zone.style.opacity = '0.5'; }
+  if (ketCaElLock) ketCaElLock.disabled = true;
+  if (corrZoneLock) { corrZoneLock.style.pointerEvents = 'none'; corrZoneLock.style.opacity = '0.5'; }
+  if (corrKetElLock) corrKetElLock.disabled = true;
+
+  function _restoreCaForm() {
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="upload" style="width:13px;height:13px"></i> Submit Corrective Action';
+    if (zone) { zone.style.pointerEvents = ''; zone.style.opacity = ''; }
+    if (ketCaElLock) ketCaElLock.disabled = false;
+    if (corrZoneLock) { corrZoneLock.style.pointerEvents = ''; corrZoneLock.style.opacity = ''; }
+    if (corrKetElLock) corrKetElLock.disabled = false;
+    lucide.createIcons();
+  }
 
   try {
     var tppData = await api('GET_TPP_ITEMS', { period_id: periodId, result_id: resultId, agenda_id: agendaId });
@@ -1930,15 +2035,11 @@ async function _submitCorrectiveActionImpl(resultId, agendaId, periodId) {
       var corrKeterangan = (corrKetEl || {}).value?.trim() || '';
 
       if (!corrFiles.length && corrExistingCount === 0) {
-        btn.disabled = false;
-        btn.innerHTML = '<i data-lucide="upload" style="width:13px;height:13px"></i> Submit Corrective Action';
-        lucide.createIcons();
+        _restoreCaForm();
         return toast('Correction belum disubmit. Upload minimal 1 foto bukti Correction terlebih dahulu.', 'error');
       }
       if (!corrKeterangan) {
-        btn.disabled = false;
-        btn.innerHTML = '<i data-lucide="upload" style="width:13px;height:13px"></i> Submit Corrective Action';
-        lucide.createIcons();
+        _restoreCaForm();
         return toast('Correction belum disubmit. Isi keterangan Correction terlebih dahulu.', 'error');
       }
 
@@ -1976,9 +2077,7 @@ async function _submitCorrectiveActionImpl(resultId, agendaId, periodId) {
     navigateTo('mytask');
   } catch(err) {
     toast(err.message, 'error');
-    btn.disabled = false;
-    btn.innerHTML = '<i data-lucide="upload" style="width:13px;height:13px"></i> Submit Corrective Action';
-    lucide.createIcons();
+    _restoreCaForm();
   }
 }
 
