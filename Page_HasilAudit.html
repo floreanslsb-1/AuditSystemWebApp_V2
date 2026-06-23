@@ -367,32 +367,19 @@ function _renderHasilAuditData(container, findings, selectedId, period) {
               'color:var(--text-muted);border-bottom:1px solid var(--border);white-space:nowrap;' +
               'border-right:2px solid var(--border)">Status Temuan</th>' +
             // Correction group
-            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
-              'color:var(--blue,#3b82f6);border-bottom:1px solid var(--border);background:rgba(59,130,246,.04)">Correction</th>' +
-            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
-              'color:var(--blue,#3b82f6);border-bottom:1px solid var(--border);background:rgba(59,130,246,.04);white-space:nowrap">Status</th>' +
-            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
-              'color:var(--blue,#3b82f6);border-bottom:1px solid var(--border);background:rgba(59,130,246,.04);white-space:nowrap">Due Date</th>' +
-            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
-              'color:var(--blue,#3b82f6);border-bottom:1px solid var(--border);background:rgba(59,130,246,.04);white-space:nowrap">Aktual Submit</th>' +
-            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
-              'color:var(--blue,#3b82f6);border-bottom:1px solid var(--border);background:rgba(59,130,246,.04)">Bukti</th>' +
-            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
-              'color:var(--blue,#3b82f6);border-bottom:1px solid var(--border);background:rgba(59,130,246,.04);' +
-              'border-right:2px solid var(--border)">Keterangan</th>' +
+            '<th class="th-correction" style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;border-bottom:1px solid var(--border)">Correction</th>' +
+            '<th class="th-correction" style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;border-bottom:1px solid var(--border);white-space:nowrap">Status</th>' +
+            '<th class="th-correction" style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;border-bottom:1px solid var(--border);white-space:nowrap">Due Date</th>' +
+            '<th class="th-correction" style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;border-bottom:1px solid var(--border);white-space:nowrap">Aktual Submit</th>' +
+            '<th class="th-correction" style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;border-bottom:1px solid var(--border)">Bukti</th>' +
+            '<th class="th-correction" style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;border-bottom:1px solid var(--border);border-right:2px solid var(--border)">Keterangan</th>' +
             // Corrective Action group
-            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
-              'color:var(--purple,#8b5cf6);border-bottom:1px solid var(--border);background:rgba(139,92,246,.04)">Corrective Action</th>' +
-            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
-              'color:var(--purple,#8b5cf6);border-bottom:1px solid var(--border);background:rgba(139,92,246,.04);white-space:nowrap">Status</th>' +
-            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
-              'color:var(--purple,#8b5cf6);border-bottom:1px solid var(--border);background:rgba(139,92,246,.04);white-space:nowrap">Due Date</th>' +
-            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
-              'color:var(--purple,#8b5cf6);border-bottom:1px solid var(--border);background:rgba(139,92,246,.04);white-space:nowrap">Aktual Submit</th>' +
-            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
-              'color:var(--purple,#8b5cf6);border-bottom:1px solid var(--border);background:rgba(139,92,246,.04)">Bukti</th>' +
-            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
-              'color:var(--purple,#8b5cf6);border-bottom:1px solid var(--border);background:rgba(139,92,246,.04)">Keterangan</th>' +
+            '<th class="th-corrective-action" style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;border-bottom:1px solid var(--border)">Corrective Action</th>' +
+            '<th class="th-corrective-action" style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;border-bottom:1px solid var(--border);white-space:nowrap">Status</th>' +
+            '<th class="th-corrective-action" style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;border-bottom:1px solid var(--border);white-space:nowrap">Due Date</th>' +
+            '<th class="th-corrective-action" style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;border-bottom:1px solid var(--border);white-space:nowrap">Aktual Submit</th>' +
+            '<th class="th-corrective-action" style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;border-bottom:1px solid var(--border)">Bukti</th>' +
+            '<th class="th-corrective-action" style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;border-bottom:1px solid var(--border)">Keterangan</th>' +
           '</tr>' +
         '</thead>' +
         '<tbody id="ha-tbody">' + rows + '</tbody>' +
