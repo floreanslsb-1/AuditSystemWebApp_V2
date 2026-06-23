@@ -1698,16 +1698,21 @@ function _buildImplUploadForm(jenis, resultId, agendaId, periodId, existingFotoU
         escHtml(existingKeterangan || '') +
       '</textarea>' +
     '</div>' +
-    '<div style="display:flex;' + (jenis === 'ca' ? 'align-items:center;justify-content:space-between' : 'justify-content:flex-end') + ';gap:8px">' +
+    '<div style="display:flex;align-items:center;justify-content:' + (jenis === 'ca' ? 'space-between' : 'flex-end') + ';gap:8px">' +
       (jenis === 'ca'
         ? '<span style="font-size:11px;color:var(--text-muted)">' +
             '<i data-lucide="info" style="width:11px;height:11px;vertical-align:middle"></i> Submit CA akan memulai proses approval.' +
           '</span>'
         : '') +
-      '<button class="btn btn-primary btn-sm" id="impl-' + jenis + '-btn" ' +
-          'onclick="singleClick(this,function(){ ' + submitFn + '(\'' + resultId + '\',\'' + agendaId + '\',\'' + periodId + '\') })">' +
-        '<i data-lucide="upload" style="width:12px;height:12px"></i> ' + btnLabel +
-      '</button>' +
+      '<div style="display:flex;gap:8px">' +
+        (isSubmitted
+          ? '<button class="btn btn-outline btn-sm" onclick="_cancelImplEdit(\'' + jenis + '\')">Batal</button>'
+          : '') +
+        '<button class="btn btn-primary btn-sm" id="impl-' + jenis + '-btn" ' +
+            'onclick="singleClick(this,function(){ ' + submitFn + '(\'' + resultId + '\',\'' + agendaId + '\',\'' + periodId + '\') })">' +
+          '<i data-lucide="upload" style="width:12px;height:12px"></i> ' + btnLabel +
+        '</button>' +
+      '</div>' +
     '</div>';
 }
 
@@ -1886,7 +1891,7 @@ async function _renderUploadImplPage(container, task, period) {
         '<div style="background:var(--primary,#1F3864);padding:10px 16px;display:flex;align-items:center;justify-content:space-between">' +
           '<div style="display:flex;align-items:center;gap:10px">' +
             '<span style="display:inline-flex;align-items:center;gap:6px">' +
-              '<span style="background:#f59e0b;color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:3px;letter-spacing:.05em">CORRECTION</span>' +
+              '<span class="badge badge-correction">CORRECTION</span>' +
               '<span style="color:#fff;font-size:13px;font-weight:700">Bukti Implementasi</span>' +
             '</span>' +
             (hasCorrSubmitted
@@ -1921,9 +1926,6 @@ async function _renderUploadImplPage(container, task, period) {
             '</div>' +
             '<div id="impl-corr-edit" style="display:none">' +
               _buildImplUploadForm('correction', task.result_id, task.agenda_id, period.period_id, corrFotoUrls, corrKet, true) +
-              '<div style="display:flex;justify-content:flex-end;margin-top:8px">' +
-                '<button class="btn btn-outline btn-sm" onclick="_cancelImplEdit(\'correction\')" style="margin-right:8px">Batal</button>' +
-              '</div>' +
             '</div>'
           : _buildImplUploadForm('correction', task.result_id, task.agenda_id, period.period_id, '', '', false)
         ) +
@@ -1940,7 +1942,7 @@ async function _renderUploadImplPage(container, task, period) {
         '<div style="background:var(--primary,#1F3864);padding:10px 16px;display:flex;align-items:center;justify-content:space-between">' +
           '<div style="display:flex;align-items:center;gap:10px">' +
             '<span style="display:inline-flex;align-items:center;gap:6px">' +
-              '<span style="background:#8b5cf6;color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:3px;letter-spacing:.05em">CORRECTIVE ACTION</span>' +
+              '<span class="badge badge-corrective-action">CORRECTIVE ACTION</span>' +
               '<span style="color:#fff;font-size:13px;font-weight:700">Bukti Implementasi</span>' +
             '</span>' +
             (hasCASubmitted
@@ -1975,9 +1977,6 @@ async function _renderUploadImplPage(container, task, period) {
             '</div>' +
             '<div id="impl-ca-edit" style="display:none">' +
               _buildImplUploadForm('ca', task.result_id, task.agenda_id, period.period_id, caFotoUrls, caKet, true) +
-              '<div style="display:flex;justify-content:flex-end;margin-top:8px">' +
-                '<button class="btn btn-outline btn-sm" onclick="_cancelImplEdit(\'ca\')" style="margin-right:8px">Batal</button>' +
-              '</div>' +
             '</div>'
           : _buildImplUploadForm('ca', task.result_id, task.agenda_id, period.period_id, '', '', false)
         ) +
