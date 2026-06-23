@@ -2030,7 +2030,7 @@ async function _deleteImplFoto(url, jenis, resultId, agendaId, periodId, btnEl) 
     var tppData = await api('GET_TPP_ITEMS', { period_id: periodId, result_id: resultId, agenda_id: agendaId });
     var res = (tppData && tppData[0]) ? tppData[0] : {};
     var remainingUrls = (res[field] || '').split(',').filter(Boolean)
-      .filter(function(u) { return u !== url; });
+      .filter(function(u) { return _fotoUrl(u) !== url; });
     await api('UPDATE_IMPL_FOTO_URLS', {
       period_id: periodId,
       result_id: resultId,
@@ -2083,7 +2083,7 @@ async function _submitCorrectionImpl(resultId, agendaId, periodId) {
 
     // Existing dari server dikurangi yang dihapus
     var existingUrls = (res.impl_correction_foto_urls || '').split(',').filter(Boolean)
-      .filter(function(u) { return pendingDels.indexOf(u) === -1; })
+      .filter(function(u) { return pendingDels.indexOf(_fotoUrl(u)) === -1; })
       .join(',');
 
     var b64files = await filesToBase64(files);
@@ -2195,7 +2195,7 @@ async function _submitCorrectiveActionImpl(resultId, agendaId, periodId) {
       catch(e) { console.warn('[submitCAImpl] delete gagal (non-fatal):', e.message); }
     }
     var existingUrls = (res.impl_corrective_action_foto_urls || '').split(',').filter(Boolean)
-      .filter(function(u) { return pendingDelsCa.indexOf(u) === -1; })
+      .filter(function(u) { return pendingDelsCa.indexOf(_fotoUrl(u)) === -1; })
       .join(',');
     _implPendingDeletes.ca = [];
     var b64files = await filesToBase64(files);
