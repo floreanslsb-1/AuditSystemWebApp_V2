@@ -82,6 +82,7 @@ function updateAuditResultFotoUrls(spreadsheetId, resultId, fotoUrls) {
   for (var i = 0; i < ids.length; i++) {
     if (String(ids[i][0]) === String(resultId)) {
       sheet.getRange(i + 3, 16).setValue(fotoUrls); // col 16 = foto_urls
+      invalidateAuditResultsCache(spreadsheetId);
       return;
     }
   }
@@ -877,6 +878,7 @@ function resetAgendaData(spreadsheetId, agendaId) {
   _deleteRowsByColValue(spreadsheetId,
     CONFIG.AUDIT_SHEETS.APPROVAL_LOG,
     CONFIG.AUDIT_COLS.APPROVAL_LOG.AGENDA_ID, agendaId);
+  invalidateAuditResultsCache(spreadsheetId);
   const agendaForReset = getAgendaById(agendaId);
   if (agendaForReset) invalidateAgendasCache(agendaForReset.period_id);
   updateAgenda(agendaId, { status: CONFIG.AGENDA_STATUS.PLANNED, started_by: '', started_at: '' });
@@ -1020,6 +1022,39 @@ const AUDIT_RESULT_HEADERS = [
   'reminder_count','reminder_status_snapshot',
 ];
 
+// ── Cache key untuk AUDIT_RESULTS per spreadsheet ────────────
+var AUDIT_RESULTS_CACHE_TTL = 120; // 2 menit
+
+function _getAuditResultsCacheKey(spreadsheetId) {
+  return 'AUDIT_RESULTS_' + spreadsheetId;
+}
+
+function _getCachedAuditResults(spreadsheetId) {
+  try {
+    var cached = CacheService.getScriptCache().get(_getAuditResultsCacheKey(spreadsheetId));
+    if (cached) return JSON.parse(cached);
+  } catch(e) {}
+  return null;
+}
+
+function _setCachedAuditResults(spreadsheetId, data) {
+  try {
+    var str = JSON.stringify(data);
+    // ScriptCache max 100KB per key — skip kalau terlalu besar
+    if (str.length < 90000) {
+      CacheService.getScriptCache().put(
+        _getAuditResultsCacheKey(spreadsheetId), str, AUDIT_RESULTS_CACHE_TTL
+      );
+    }
+  } catch(e) {}
+}
+
+function invalidateAuditResultsCache(spreadsheetId) {
+  try {
+    CacheService.getScriptCache().remove(_getAuditResultsCacheKey(spreadsheetId));
+  } catch(e) {}
+}
+
 function getAuditResultsByAgenda(spreadsheetId, agendaId) {
   const sheet = _getAuditSheet(spreadsheetId, CONFIG.AUDIT_SHEETS.AUDIT_RESULTS);
   if (sheet.getLastRow() < 3) return [];
@@ -1036,19 +1071,26 @@ function getAuditResultsByAgenda(spreadsheetId, agendaId) {
 }
 
 function getAuditResultsByPeriod(spreadsheetId, periodId) {
-  const sheet = _getAuditSheet(spreadsheetId, CONFIG.AUDIT_SHEETS.AUDIT_RESULTS);
-  if (sheet.getLastRow() < 3) return [];
-  const data = sheet.getRange(3, 1, sheet.getLastRow() - 2, AUDIT_RESULT_HEADERS.length).getValues();
-  const C    = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
-  const results = [];
-  data.forEach(function(row, i) {
-    if (row[0] === '') return;
-    if (periodId && String(row[C.PERIOD_ID]) !== String(periodId)) return;
-    const obj = { _rowIndex: i + 3 };
-    AUDIT_RESULT_HEADERS.forEach(function(h, j) { obj[h] = row[j]; });
-    results.push(obj);
+  // Coba ambil dari cache dulu
+  var cached = _getCachedAuditResults(spreadsheetId);
+  if (!cached) {
+    const sheet = _getAuditSheet(spreadsheetId, CONFIG.AUDIT_SHEETS.AUDIT_RESULTS);
+    if (sheet.getLastRow() < 3) return [];
+    const data = sheet.getRange(3, 1, sheet.getLastRow() - 2, AUDIT_RESULT_HEADERS.length).getValues();
+    const C    = CONFIG.AUDIT_COLS.AUDIT_RESULTS;
+    cached = [];
+    data.forEach(function(row, i) {
+      if (row[0] === '') return;
+      const obj = { _rowIndex: i + 3 };
+      AUDIT_RESULT_HEADERS.forEach(function(h, j) { obj[h] = row[j]; });
+      cached.push(obj);
+    });
+    _setCachedAuditResults(spreadsheetId, cached);
+  }
+  if (!periodId) return cached;
+  return cached.filter(function(r) {
+    return String(r.period_id) === String(periodId);
   });
-  return results;
 }
 
 // Ambil hanya Non Comply / OFI untuk satu agenda (tampilan verifikasi)
@@ -1178,6 +1220,7 @@ const _status  = String(status == null ? '' : status);
     }
   }
 
+  invalidateAuditResultsCache(reg.spreadsheet_id);
   return { result_id: result.result_id, status: _status };
 }
 
@@ -1194,6 +1237,7 @@ function updateResultField(spreadsheetId, resultId, colIndex, value) {
   data.forEach((row, i) => { if (row[0] === resultId) rowIndex = i + 3; });
   if (rowIndex < 0) throw new Error('Result tidak ditemukan: ' + resultId);
   _updateCell(sheet, rowIndex, colIndex + 1, value);
+  invalidateAuditResultsCache(spreadsheetId);
   return { success: true };
 }
 
@@ -1319,6 +1363,7 @@ function verifyFindings(spreadsheetId, agendaId, updates, verifiedBy) {
       _updateCell(sheet, result._rowIndex, C.SAVED_AT          + 1, now());
     }
   });
+  invalidateAuditResultsCache(spreadsheetId);
   // Catat event VERIFIED di APPROVAL_LOG per temuan yang di-verifikasi
   updates.forEach(function(upd) {
     if (upd.final_status !== CONFIG.RESULT_STATUS.COMPLY) {
