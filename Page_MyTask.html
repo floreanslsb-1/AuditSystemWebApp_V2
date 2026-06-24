@@ -1567,28 +1567,6 @@ function _toggleAllImplEditMode() {
 }
 
 function _toggleImplEditMode() { _toggleAllImplEditMode(); }
-function _toggleCorrEditMode() {
-  var readEl = document.getElementById('impl-corr-read');
-  var editEl = document.getElementById('impl-corr-edit');
-  var editBtn = document.getElementById('impl-corr-edit-btn');
-  var isEdit = editEl && editEl.style.display !== 'none';
-  if (readEl)  readEl.style.display  = isEdit ? 'flex'  : 'none';
-  if (editEl)  editEl.style.display  = isEdit ? 'none'  : 'block';
-  if (editBtn) editBtn.style.display = isEdit ? 'inline-flex' : 'none';
-  if (!isEdit) setupUploadZone('impl-correction-zone', 'impl-correction-preview');
-  lucide.createIcons();
-}
-function _toggleCAEditMode() {
-  var readEl = document.getElementById('impl-ca-read');
-  var editEl = document.getElementById('impl-ca-edit');
-  var editBtn = document.getElementById('impl-ca-edit-btn');
-  var isEdit = editEl && editEl.style.display !== 'none';
-  if (readEl)  readEl.style.display  = isEdit ? 'flex'  : 'none';
-  if (editEl)  editEl.style.display  = isEdit ? 'none'  : 'block';
-  if (editBtn) editBtn.style.display = isEdit ? 'inline-flex' : 'none';
-  if (!isEdit) setupUploadZone('impl-ca-zone', 'impl-ca-preview');
-  lucide.createIcons();
-}
 
 function _toggleCorrEditMode() {
   _implSectionEditMode.correction = !_implSectionEditMode.correction;
@@ -1818,6 +1796,42 @@ function _cancelImplEdit(jenis) {
   lucide.createIcons();
 }
 
+// ── Global helpers untuk render tindak lanjut (dipakai di upload impl & approval) ──
+
+function _iRow(label, valueHtml, first) {
+  return '<div style="display:flex;align-items:baseline;gap:10px;padding:8px 0;' + (first ? '' : 'border-top:0.5px solid var(--border)') + '">' +
+    '<span style="font-size:12px;color:var(--text-muted);width:130px;flex-shrink:0">' + label + '</span>' +
+    '<div style="flex:1;min-width:0">' + valueHtml + '</div>' +
+  '</div>';
+}
+
+function _buktiBtnHtml(fotoUrls) {
+  var entries = (fotoUrls || '').split(',').filter(Boolean);
+  if (!entries.length) return '<span style="font-size:12px;color:var(--text-muted)">Belum ada bukti.</span>';
+  return entries.map(function(entry, i) {
+    var url = _fotoUrl(entry); var label = _fotoLabel(entry, i);
+    return '<button onclick="event.stopPropagation();_openFotoLightbox(\'' + escAttr(url) + '\',\'' + escAttr(label) + '\')" ' +
+      'class="btn btn-outline btn-sm" style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escHtml(label) + '">' +
+      '<i data-lucide="file" style="width:11px;height:11px;flex-shrink:0"></i> ' + escHtml(label) + '</button>';
+  }).join('');
+}
+
+function _sectionReadHtml(idPrefix, tindakanText, fotoUrls, keterangan, submitAt, dueDate) {
+  return '<div id="' + idPrefix + '-read" style="display:flex">' +
+    '<div style="flex:2;min-width:0;padding:10px 16px">' +
+      _iRow('Tindakan', '<span style="font-size:13px;color:var(--text);line-height:1.6">' + escHtml(tindakanText || '-') + '</span>', true) +
+      _iRow('Bukti Implementasi', '<div style="display:flex;flex-wrap:wrap;gap:5px">' + _buktiBtnHtml(fotoUrls) + '</div>') +
+      _iRow('Keterangan Bukti', '<span style="font-size:13px;color:var(--text);line-height:1.6;white-space:pre-wrap">' + escHtml(keterangan || '-') + '</span>') +
+    '</div>' +
+    '<div style="flex:1;min-width:0;padding:10px 16px;border-left:0.5px solid var(--border)">' +
+      _iRow('Due Date', '<span style="font-size:13px;color:var(--text)">' + formatDate(dueDate || '') + '</span>', true) +
+      _iRow('Tanggal Submit', submitAt
+        ? '<span style="font-size:13px;color:var(--text)">' + formatDate(submitAt) + '</span>'
+        : '<span style="font-size:12px;color:var(--text-muted)">Belum disubmit</span>') +
+    '</div>' +
+  '</div>';
+}
+
 async function _renderUploadImplPage(container, task, period) {
   _implEditMode = false;
   _implSectionEditMode = { correction: false, ca: false };
@@ -1924,50 +1938,7 @@ async function _renderUploadImplPage(container, task, period) {
     var caFotoUrls       = res.impl_corrective_action_foto_urls || '';
     var caKet            = res.impl_corrective_action_keterangan || '';
 
-    // ── Global helpers untuk render tindak lanjut (dipakai di upload impl & approval) ──
-
-function _iRow(label, valueHtml, first) {
-  return '<div style="display:flex;align-items:baseline;gap:10px;padding:8px 0;' + (first ? '' : 'border-top:0.5px solid var(--border)') + '">' +
-    '<span style="font-size:12px;color:var(--text-muted);width:130px;flex-shrink:0">' + label + '</span>' +
-    '<div style="flex:1;min-width:0">' + valueHtml + '</div>' +
-  '</div>';
-}
-
-function _buktiBtnHtml(fotoUrls) {
-  var entries = (fotoUrls || '').split(',').filter(Boolean);
-  if (!entries.length) return '<span style="font-size:12px;color:var(--text-muted)">Belum ada bukti.</span>';
-  return entries.map(function(entry, i) {
-    var url = _fotoUrl(entry); var label = _fotoLabel(entry, i);
-    return '<button onclick="event.stopPropagation();_openFotoLightbox(\'' + escAttr(url) + '\',\'' + escAttr(label) + '\')" ' +
-      'class="btn btn-outline btn-sm" style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escHtml(label) + '">' +
-      '<i data-lucide="file" style="width:11px;height:11px;flex-shrink:0"></i> ' + escHtml(label) + '</button>';
-  }).join('');
-}
-
-function _sectionReadHtml(idPrefix, tindakanText, fotoUrls, keterangan, submitAt, dueDate) {
-  return '<div id="' + idPrefix + '-read" style="display:flex">' +
-    '<div style="flex:2;min-width:0;padding:10px 16px">' +
-      _iRow('Tindakan', '<span style="font-size:13px;color:var(--text);line-height:1.6">' + escHtml(tindakanText || '-') + '</span>', true) +
-      _iRow('Bukti Implementasi', '<div style="display:flex;flex-wrap:wrap;gap:5px">' + _buktiBtnHtml(fotoUrls) + '</div>') +
-      _iRow('Keterangan Bukti', '<span style="font-size:13px;color:var(--text);line-height:1.6;white-space:pre-wrap">' + escHtml(keterangan || '-') + '</span>') +
-    '</div>' +
-    '<div style="flex:1;min-width:0;padding:10px 16px;border-left:0.5px solid var(--border)">' +
-      _iRow('Due Date', '<span style="font-size:13px;color:var(--text)">' + formatDate(dueDate || '') + '</span>', true) +
-      _iRow('Tanggal Submit', submitAt
-        ? '<span style="font-size:13px;color:var(--text)">' + formatDate(submitAt) + '</span>'
-        : '<span style="font-size:12px;color:var(--text-muted)">Belum disubmit</span>') +
-    '</div>' +
-  '</div>';
-}
-      var entries = (fotoUrls || '').split(',').filter(Boolean);
-      if (!entries.length) return '<span style="font-size:12px;color:var(--text-muted)">Belum ada bukti.</span>';
-      return entries.map(function(entry, i) {
-        var url = _fotoUrl(entry); var label = _fotoLabel(entry, i);
-        return '<button onclick="event.stopPropagation();_openFotoLightbox(\'' + escAttr(url) + '\',\'' + escAttr(label) + '\')" ' +
-          'class="btn btn-outline btn-sm" style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escHtml(label) + '">' +
-          '<i data-lucide="file" style="width:11px;height:11px;flex-shrink:0"></i> ' + escHtml(label) + '</button>';
-      }).join('');
-    };
+    // (_iRow, _buktiBtnHtml, _sectionReadHtml sudah didefinisikan sebagai global di atas)
 
     // Helper: render saved files dengan delete button (edit mode)
     var _savedFilesEditHtml = function(fotoUrls, jenis) {
@@ -1985,25 +1956,6 @@ function _sectionReadHtml(idPrefix, tindakanText, fotoUrls, keterangan, submitAt
               'style="position:absolute;top:-4px;right:-4px;width:15px;height:15px;border-radius:50%;background:var(--rose,#f43f5e);border:1.5px solid #fff;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:9px;padding:0;z-index:1">✕</button>' +
           '</div>';
         }).join('') +
-      '</div>';
-    };
-
-    // Helper: satu section (correction atau CA) — read mode
-    var _sectionReadHtml = function(idPrefix, tindakanText, fotoUrls, keterangan, submitAt, dueDate) {
-      return '<div id="' + idPrefix + '-read" style="display:flex">' +
-        // Kolom kiri (flex:2)
-        '<div style="flex:2;min-width:0;padding:10px 16px">' +
-          _iRow('Tindakan', '<span style="font-size:13px;color:var(--text);line-height:1.6">' + escHtml(tindakanText || '-') + '</span>', true) +
-          _iRow('Bukti Implementasi', '<div style="display:flex;flex-wrap:wrap;gap:5px">' + _buktiBtnHtml(fotoUrls) + '</div>') +
-          _iRow('Keterangan Bukti', '<span style="font-size:13px;color:var(--text);line-height:1.6;white-space:pre-wrap">' + escHtml(keterangan || '-') + '</span>') +
-        '</div>' +
-        // Kolom kanan (flex:1)
-        '<div style="flex:1;min-width:0;padding:10px 16px;border-left:0.5px solid var(--border)">' +
-          _iRow('Due Date', '<span style="font-size:13px;color:var(--text)">' + formatDate(dueDate || '') + '</span>', true) +
-          _iRow('Tanggal Submit', submitAt
-            ? '<span style="font-size:13px;color:var(--text)">' + formatDate(submitAt) + '</span>'
-            : '<span style="font-size:12px;color:var(--text-muted)">Belum disubmit</span>') +
-        '</div>' +
       '</div>';
     };
 
@@ -2207,7 +2159,6 @@ async function _validateAndSubmitImpl(jenis, resultId, agendaId, periodId, maxDa
 
   var today = new Date(); today.setHours(0,0,0,0);
   var due   = new Date(dueVal);
-  if (due < today) return toast('Due date tidak boleh di masa lalu.', 'error');
   if (maxDateStr) {
     var max = new Date(maxDateStr);
     if (due > max) return toast('Due date melebihi batas maksimal (' + formatDate(maxDateStr) + ').', 'error');
@@ -2621,8 +2572,7 @@ async function _renderApprovalPage(container, task, period) {
       _subPageHeader(
         (isTPP ? 'Approval TPP' : 'Approval Tindak Lanjut Temuan') +
           ' — ' + escHtml(task.agenda ? task.agenda.dept : ''),
-        '#' + (f ? f.nomor_persyaratan + '.' + f.check_item_no : '') +
-        ' · ' + escHtml(f ? f.deskripsi_temuan : '')
+        ''
       ) +
 
       detailTemuan +
