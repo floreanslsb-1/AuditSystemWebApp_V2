@@ -2712,14 +2712,25 @@ function _renderApprovalHistory(log, stage) {
 
   // Label per action + stage
   var _actionLabel = function(l) {
-    if (l.action === 'VERIFIED')   return 'Diverifikasi';
-    if (l.action === 'APPROVED')   return 'Disetujui';
-    if (l.action === 'REJECTED')   return 'Ditolak';
+    if (l.action === 'VERIFIED')   return 'Temuan Diverifikasi';
+    if (l.action === 'APPROVED') {
+      if (l.stage === 'IMPL') return 'Tindak Lanjut Temuan Disetujui';
+      if (l.stage === 'TPP')  return 'Rencana TPP Disetujui';
+      return 'Disetujui';
+    }
+    if (l.action === 'REJECTED') {
+      if (l.stage === 'IMPL') return 'Tindak Lanjut Temuan Ditolak';
+      if (l.stage === 'TPP')  return 'Rencana TPP Ditolak';
+      return 'Ditolak';
+    }
+    if (l.action === 'CLOSED')    return 'Temuan Ditutup';
     if (l.action === 'SUBMITTED') {
       if (l.stage === 'CORRECTION') return 'Bukti Correction Disubmit';
-      if (l.stage === 'IMPL')       return 'Bukti Impl. Disubmit';
-      return 'TPP Disubmit';
+      if (l.stage === 'IMPL')       return 'Bukti Corrective Action Disubmit';
+      if (l.stage === 'TPP')        return 'Rencana TPP Disubmit';
+      return 'Disubmit';
     }
+    if (l.action === 'ROUTING') return 'Diteruskan ke Approval';
     return l.action;
   };
 
