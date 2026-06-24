@@ -305,8 +305,8 @@ function _routeAction(action, payload, profile) {
 
       // Update field lain di AUDIT_AGENDA
       const agUpdates = {};
-      if (payload.auditor_emails  !== undefined) agUpdates.auditor_emails  = payload.auditor_emails;
-      if (payload.lead_auditor    !== undefined) agUpdates.lead_auditor    = payload.lead_auditor;
+      if (payload.auditor_emails  != null) agUpdates.auditor_emails  = payload.auditor_emails;
+      if (payload.lead_auditor    != null) agUpdates.lead_auditor    = payload.lead_auditor;
       if (Object.keys(agUpdates).length) updateAgenda(payload.agenda_id, agUpdates);
       return { success: true };
     }
