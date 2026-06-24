@@ -232,25 +232,20 @@ function _renderMyTask(container, tasks, period) {
                 '<th style="width:48px"></th>'
               : sectionTasks[0] && sectionTasks[0].type === 'UPLOAD_IMPL'
               ? '<th style="width:40px;text-align:center">No</th>' +
-                '<th style="width:140px">Result ID</th>' +
-                '<th style="width:110px">Dept / Bagian</th>' +
+                '<th style="width:130px">Result ID</th>' +
+                '<th style="width:100px">Dept / Bagian</th>' +
                 '<th>Deskripsi Temuan</th>' +
-                '<th style="width:110px">Lokasi</th>' +
-                '<th>Correction</th>' +
-                '<th style="width:130px">Due Correction</th>' +
-                '<th>Corrective Action</th>' +
-                '<th style="width:130px">Due Corrective Action</th>' +
+                '<th style="width:100px">Lokasi</th>' +
+                '<th style="width:140px">Status Correction</th>' +
+                '<th style="width:150px">Status Corrective Action</th>' +
                 '<th style="width:48px"></th>'
               : sectionTasks[0] && sectionTasks[0].type === 'APPROVAL_IMPL'
               ? '<th style="width:40px;text-align:center">No</th>' +
-                '<th style="width:140px">Result ID</th>' +
-                '<th style="width:110px">Dept / Bagian</th>' +
+                '<th style="width:130px">Result ID</th>' +
+                '<th style="width:100px">Dept / Bagian</th>' +
                 '<th>Deskripsi Temuan</th>' +
-                '<th style="width:110px">Lokasi</th>' +
-                '<th>Correction</th>' +
-                '<th style="width:130px">Due Correction</th>' +
-                '<th>Corrective Action</th>' +
-                '<th style="width:130px">Due Corrective Action</th>' +
+                '<th style="width:100px">Lokasi</th>' +
+                '<th style="width:140px">Due Date</th>' +
                 '<th style="width:48px"></th>'
               : '<th>Detail</th>' +
                 '<th style="width:150px">Area</th>' +
@@ -342,61 +337,68 @@ function _renderMyTask(container, tasks, period) {
                   '<td><i data-lucide="chevron-right" style="width:14px;height:14px;color:var(--text-muted)"></i></td>' +
                 '</tr>';
               } else if (t.type === 'UPLOAD_IMPL') {
-                var implIdx   = sectionTasks.indexOf(t);
-                var fi        = t.finding || {};
-                var today_ui  = new Date(); today_ui.setHours(0,0,0,0);
-                var corrDue_ui = fi.due_date_correction ? new Date(fi.due_date_correction) : null;
-                var caDue_ui   = fi.due_date_corrective_action ? new Date(fi.due_date_corrective_action) : null;
-                var corrOverdue_ui = corrDue_ui && !fi.impl_correction_submitted_at &&
-                  today_ui > new Date(corrDue_ui.getFullYear(), corrDue_ui.getMonth(), corrDue_ui.getDate());
-                var caOverdue_ui   = caDue_ui && !fi.impl_submitted_at &&
-                  today_ui > new Date(caDue_ui.getFullYear(), caDue_ui.getMonth(), caDue_ui.getDate());
+                var implIdx  = sectionTasks.indexOf(t);
+                var fi       = t.finding || {};
+                var today_ui = new Date(); today_ui.setHours(0,0,0,0);
+
+                // Helper: hitung status per jenis (correction / CA)
+                var _implStatus = function(dueStr, submittedAt) {
+                  var due = dueStr ? new Date(dueStr) : null;
+                  var dueDay = due ? new Date(due.getFullYear(), due.getMonth(), due.getDate()) : null;
+                  var isOverdue = dueDay && today_ui > dueDay;
+
+                  if (submittedAt) {
+                    // Sudah submit — cek apakah overdue saat submit
+                    var submitDate = new Date(submittedAt);
+                    submitDate.setHours(0,0,0,0);
+                    var submitOverdue = dueDay && submitDate > dueDay;
+                    if (submitOverdue) {
+                      return { text: 'Submitted (Overdue)', color: 'var(--rose,#f43f5e)' };
+                    }
+                    return { text: 'Submitted', color: 'var(--text)' };
+                  }
+                  if (!due) return { text: '—', color: 'var(--text-muted)' };
+                  if (isOverdue) {
+                    return { text: 'Overdue', color: 'var(--rose,#f43f5e)' };
+                  }
+                  var diffDays = Math.ceil((dueDay - today_ui) / 86400000);
+                  if (diffDays === 0) return { text: 'Due hari ini', color: 'var(--amber,#f59e0b)' };
+                  return { text: 'Due in ' + diffDays + ' hari', color: 'var(--text)' };
+                };
+
+                var corrStatus = _implStatus(fi.due_date_correction,          fi.impl_correction_submitted_at);
+                var caStatus   = _implStatus(fi.due_date_corrective_action,    fi.impl_submitted_at);
 
                 return '<tr style="cursor:pointer" onclick="_openTaskDetail(' + globalIdx + ')" ' +
                   'onmouseover="this.style.background=\'var(--bg)\'" ' +
                   'onmouseout="this.style.background=\'\'">' +
                   '<td style="text-align:center;font-size:12px;color:var(--text-muted);font-weight:600">' + (implIdx + 1) + '</td>' +
                   '<td class="td-mono" style="font-size:11px">' + escHtml(t.result_id || '') + '</td>' +
-                  '<td class="text-sm">' + areaName + '</td>' +
-                  '<td style="font-size:12px">' +
-                    '<div style="font-weight:500">' + escHtml(fi.deskripsi_temuan || '—') + '</div>' +
-                  '</td>' +
+                  '<td style="font-size:12px;font-weight:600">' + areaName + '</td>' +
+                  '<td style="font-size:12px">' + escHtml(fi.deskripsi_temuan || '—') + '</td>' +
                   '<td style="font-size:12px;color:var(--text-muted)">' + escHtml(fi.lokasi_temuan || '—') + '</td>' +
-                  '<td style="font-size:12px">' + escHtml(fi.correction || '—') + '</td>' +
-                  '<td style="font-size:12px' + (corrOverdue_ui ? ';color:var(--rose,#f43f5e);font-weight:700' : '') + '">' +
-                    formatDate(fi.due_date_correction || '') + (corrOverdue_ui ? ' (Overdue)' : '') +
-                  '</td>' +
-                  '<td style="font-size:12px">' + escHtml(fi.corrective_action || '—') + '</td>' +
-                  '<td style="font-size:12px' + (caOverdue_ui ? ';color:var(--rose,#f43f5e);font-weight:700' : '') + '">' +
-                    formatDate(fi.due_date_corrective_action || '') + (caOverdue_ui ? ' (Overdue)' : '') +
-                  '</td>' +
+                  '<td style="font-size:12px;color:' + corrStatus.color + '">' + corrStatus.text + '</td>' +
+                  '<td style="font-size:12px;color:' + caStatus.color + '">' + caStatus.text + '</td>' +
                   '<td><i data-lucide="chevron-right" style="width:14px;height:14px;color:var(--text-muted)"></i></td>' +
                 '</tr>';
               } else {
-                var fi = t.finding || {};
+                var fi       = t.finding || {};
                 var today_ap = new Date(); today_ap.setHours(0,0,0,0);
-                var corrDue_ap = fi.due_date_correction ? new Date(fi.due_date_correction) : null;
-                var caDue_ap   = fi.due_date_corrective_action ? new Date(fi.due_date_corrective_action) : null;
-                var corrLate_ap = corrDue_ap && !fi.impl_correction_submitted_at &&
-                  today_ap > new Date(corrDue_ap.getFullYear(), corrDue_ap.getMonth(), corrDue_ap.getDate());
-                var caLate_ap = caDue_ap && !fi.impl_submitted_at &&
-                  today_ap > new Date(caDue_ap.getFullYear(), caDue_ap.getMonth(), caDue_ap.getDate());
+                var caDue_ap = fi.due_date_corrective_action ? new Date(fi.due_date_corrective_action) : null;
+                var caDueDay = caDue_ap ? new Date(caDue_ap.getFullYear(), caDue_ap.getMonth(), caDue_ap.getDate()) : null;
+                var caOverdue_ap = caDueDay && today_ap > caDueDay;
                 var rowNo_ap = sectionTasks.indexOf(t) + 1;
                 return '<tr style="cursor:pointer" onclick="_openTaskDetail(' + globalIdx + ')" ' +
                   'onmouseover="this.style.background=\'var(--bg)\'" ' +
                   'onmouseout="this.style.background=\'\'">' +
-                  '<td style="text-align:center;color:var(--text-muted);font-size:12px">' + rowNo_ap + '</td>' +
-                  '<td style="font-family:monospace;font-size:11px;color:var(--text-muted);white-space:nowrap">' + escHtml(t.result_id || '') + '</td>' +
+                  '<td style="text-align:center;font-size:12px;color:var(--text-muted)">' + rowNo_ap + '</td>' +
+                  '<td class="td-mono" style="font-size:11px">' + escHtml(t.result_id || '') + '</td>' +
                   '<td style="font-size:12px;font-weight:600">' + areaName + '</td>' +
-                  '<td style="font-size:12px">' + escHtml(fi.deskripsi_temuan || '-') + '</td>' +
-                  '<td style="font-size:12px;color:var(--text-muted)">' + escHtml(fi.lokasi_temuan || '-') + '</td>' +
-                  '<td style="font-size:12px">' + escHtml(fi.correction || '-') + '</td>' +
-                  '<td style="font-size:12px;white-space:nowrap' + (corrLate_ap ? ';color:var(--rose,#f43f5e);font-weight:700' : '') + '">' +
-                    formatDate(fi.due_date_correction || '') + (corrLate_ap ? '<br><span style="font-size:10px">(Overdue)</span>' : '') +
-                  '</td>' +
-                  '<td style="font-size:12px">' + escHtml(fi.corrective_action || '-') + '</td>' +
-                  '<td style="font-size:12px;white-space:nowrap' + (caLate_ap ? ';color:var(--rose,#f43f5e);font-weight:700' : '') + '">' +
-                    formatDate(fi.due_date_corrective_action || '') + (caLate_ap ? '<br><span style="font-size:10px">(Overdue)</span>' : '') +
+                  '<td style="font-size:12px">' + escHtml(fi.deskripsi_temuan || '—') + '</td>' +
+                  '<td style="font-size:12px;color:var(--text-muted)">' + escHtml(fi.lokasi_temuan || '—') + '</td>' +
+                  '<td style="font-size:12px' + (caOverdue_ap ? ';color:var(--rose,#f43f5e);font-weight:600' : '') + ';white-space:nowrap">' +
+                    formatDate(fi.due_date_corrective_action || '') +
+                    (caOverdue_ap ? '<br><span style="font-size:10px">Overdue</span>' : '') +
                   '</td>' +
                   '<td><i data-lucide="chevron-right" style="width:14px;height:14px;color:var(--text-muted)"></i></td>' +
                 '</tr>';
@@ -1922,16 +1924,41 @@ async function _renderUploadImplPage(container, task, period) {
     var caFotoUrls       = res.impl_corrective_action_foto_urls || '';
     var caKet            = res.impl_corrective_action_keterangan || '';
 
-    // Helper: satu row label-value (sama style di read dan edit)
-    var _iRow = function(label, valueHtml, first) {
-      return '<div style="display:flex;align-items:baseline;gap:10px;padding:8px 0;' + (first ? '' : 'border-top:0.5px solid var(--border)') + '">' +
-        '<span style="font-size:12px;color:var(--text-muted);width:130px;flex-shrink:0">' + label + '</span>' +
-        '<div style="flex:1;min-width:0">' + valueHtml + '</div>' +
-      '</div>';
-    };
+    // ── Global helpers untuk render tindak lanjut (dipakai di upload impl & approval) ──
 
-    // Helper: render tombol bukti
-    var _buktiBtnHtml = function(fotoUrls) {
+function _iRow(label, valueHtml, first) {
+  return '<div style="display:flex;align-items:baseline;gap:10px;padding:8px 0;' + (first ? '' : 'border-top:0.5px solid var(--border)') + '">' +
+    '<span style="font-size:12px;color:var(--text-muted);width:130px;flex-shrink:0">' + label + '</span>' +
+    '<div style="flex:1;min-width:0">' + valueHtml + '</div>' +
+  '</div>';
+}
+
+function _buktiBtnHtml(fotoUrls) {
+  var entries = (fotoUrls || '').split(',').filter(Boolean);
+  if (!entries.length) return '<span style="font-size:12px;color:var(--text-muted)">Belum ada bukti.</span>';
+  return entries.map(function(entry, i) {
+    var url = _fotoUrl(entry); var label = _fotoLabel(entry, i);
+    return '<button onclick="event.stopPropagation();_openFotoLightbox(\'' + escAttr(url) + '\',\'' + escAttr(label) + '\')" ' +
+      'class="btn btn-outline btn-sm" style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escHtml(label) + '">' +
+      '<i data-lucide="file" style="width:11px;height:11px;flex-shrink:0"></i> ' + escHtml(label) + '</button>';
+  }).join('');
+}
+
+function _sectionReadHtml(idPrefix, tindakanText, fotoUrls, keterangan, submitAt, dueDate) {
+  return '<div id="' + idPrefix + '-read" style="display:flex">' +
+    '<div style="flex:2;min-width:0;padding:10px 16px">' +
+      _iRow('Tindakan', '<span style="font-size:13px;color:var(--text);line-height:1.6">' + escHtml(tindakanText || '-') + '</span>', true) +
+      _iRow('Bukti Implementasi', '<div style="display:flex;flex-wrap:wrap;gap:5px">' + _buktiBtnHtml(fotoUrls) + '</div>') +
+      _iRow('Keterangan Bukti', '<span style="font-size:13px;color:var(--text);line-height:1.6;white-space:pre-wrap">' + escHtml(keterangan || '-') + '</span>') +
+    '</div>' +
+    '<div style="flex:1;min-width:0;padding:10px 16px;border-left:0.5px solid var(--border)">' +
+      _iRow('Due Date', '<span style="font-size:13px;color:var(--text)">' + formatDate(dueDate || '') + '</span>', true) +
+      _iRow('Tanggal Submit', submitAt
+        ? '<span style="font-size:13px;color:var(--text)">' + formatDate(submitAt) + '</span>'
+        : '<span style="font-size:12px;color:var(--text-muted)">Belum disubmit</span>') +
+    '</div>' +
+  '</div>';
+}
       var entries = (fotoUrls || '').split(',').filter(Boolean);
       if (!entries.length) return '<span style="font-size:12px;color:var(--text-muted)">Belum ada bukti.</span>';
       return entries.map(function(entry, i) {
@@ -2570,58 +2597,27 @@ async function _renderApprovalPage(container, task, period) {
         '</div>' +
       '</div>';
 
-    // ── Tabel 2: Tindak Lanjut Temuan (hanya untuk APPROVAL_IMPL) ──
-    var _buktiFotoHtml = function(fotoUrls) {
-      if (!fotoUrls) return '<span style="font-size:12px;color:var(--text-muted)">Belum ada bukti.</span>';
-      var entries = fotoUrls.split(',').filter(Boolean);
-      if (!entries.length) return '<span style="font-size:12px;color:var(--text-muted)">Belum ada bukti.</span>';
-      return entries.map(function(entry, i) {
-        var url = _fotoUrl(entry); var label = _fotoLabel(entry, i);
-        return '<button onclick="event.stopPropagation();_openFotoLightbox(\'' + escAttr(url) + '\',\'' + escAttr(label) + '\')" ' +
-          'class="btn btn-outline btn-sm" style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escHtml(label) + '">' +
-          '<i data-lucide="file" style="width:11px;height:11px;flex-shrink:0"></i> ' + escHtml(label) + '</button>';
-      }).join('');
-    };
-
-    var _tindakSection = function(badgeClass, badgeLabel, accentColor, dueDate, isiText, fotoUrls, keterangan, isLast) {
-      return '<div' + (isLast ? '' : ' style="border-bottom:0.5px solid var(--border)"') + '>' +
-        // Sub-header dengan left accent
-        '<div style="display:flex;align-items:center;gap:8px;padding:10px 16px;' +
-            'background:var(--surface-2,#f8f9fa);border-left:3px solid ' + accentColor + ';' +
-            (isLast ? '' : '') + '">' +
-          '<span class="badge ' + badgeClass + '">' + badgeLabel + '</span>' +
-          '<span style="font-size:12px;color:var(--text-muted)">Due: <strong style="color:var(--text)">' + formatDate(dueDate || '') + '</strong></span>' +
-        '</div>' +
-        // Isi tindakan
-        '<div style="padding:12px 16px 0">' +
-          '<div style="font-size:13px;color:var(--text);line-height:1.6">' + escHtml(isiText || '-') + '</div>' +
-        '</div>' +
-        // Bukti + Keterangan sejajar
-        '<div style="display:flex;gap:0;padding:10px 0;margin:0 16px;border-top:0.5px solid var(--border);margin-top:10px">' +
-          '<div style="flex:1;min-width:0;padding-right:16px">' +
-            '<div style="display:flex;flex-wrap:wrap;gap:5px">' + _buktiFotoHtml(fotoUrls) + '</div>' +
-          '</div>' +
-          '<div style="flex:1;min-width:0;border-left:0.5px solid var(--border);padding-left:16px">' +
-            '<div style="font-size:13px;color:var(--text);line-height:1.6;white-space:pre-wrap">' + escHtml(keterangan || '-') + '</div>' +
-          '</div>' +
-        '</div>' +
-        '<div style="height:12px"></div>' +
-      '</div>';
-    };
-
     var tindakLanjutHtml = !isTPP
       ? '<div class="card mb-16" style="overflow:hidden">' +
           '<div style="background:var(--primary,#1F3864);padding:10px 16px">' +
             '<span style="color:#fff;font-size:13px;font-weight:700">Tindak Lanjut Temuan</span>' +
           '</div>' +
-          _tindakSection('badge-correction', 'CORRECTION', 'var(--blue,#3b82f6)',
-            res.due_date_correction, res.correction,
-            res.impl_correction_foto_urls, res.impl_correction_keterangan, false) +
-          _tindakSection('badge-corrective-action', 'CORRECTIVE ACTION', 'var(--purple,#8b5cf6)',
-            res.due_date_corrective_action, res.corrective_action,
-            res.impl_corrective_action_foto_urls, res.impl_corrective_action_keterangan, true) +
+          // Correction section
+          '<div style="border-bottom:0.5px solid var(--border)">' +
+            '<div style="display:flex;align-items:center;gap:8px;padding:10px 16px;background:var(--surface-2,#f8f9fa);border-left:3px solid var(--blue,#3b82f6)">' +
+              '<span class="badge badge-correction">CORRECTION</span>' +
+            '</div>' +
+            _sectionReadHtml('apr-corr', res.correction, res.impl_correction_foto_urls, res.impl_correction_keterangan, res.impl_correction_submitted_at, res.due_date_correction) +
+          '</div>' +
+          // Corrective Action section
+          '<div>' +
+            '<div style="display:flex;align-items:center;gap:8px;padding:10px 16px;background:var(--surface-2,#f8f9fa);border-left:3px solid var(--purple,#8b5cf6)">' +
+              '<span class="badge badge-corrective-action">CORRECTIVE ACTION</span>' +
+            '</div>' +
+            _sectionReadHtml('apr-ca', res.corrective_action, res.impl_corrective_action_foto_urls, res.impl_corrective_action_keterangan, res.impl_submitted_at, res.due_date_corrective_action) +
+          '</div>' +
         '</div>'
-      : contentHtml; // APPROVAL_TPP tetap pakai contentHtml lama
+      : contentHtml;
 
     container.innerHTML =
       _subPageHeader(
