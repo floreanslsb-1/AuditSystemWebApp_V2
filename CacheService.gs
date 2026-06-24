@@ -54,11 +54,17 @@ function _setCacheMetaRow(cacheKey, invalidated) {
   const sheet = _getMasterSheet(CONFIG.SHEETS.CACHE_META);
   if (sheet.getLastRow() >= 4) {
     const data = sheet.getRange(4, 1, sheet.getLastRow() - 3, 4).getValues();
-    const idx  = data.findIndex(r => r[0] === cacheKey);
-    if (idx !== -1) {
-      const rowIndex = idx + 4;
-      sheet.getRange(rowIndex, 2).setValue(now());
-      sheet.getRange(rowIndex, 3).setValue(invalidated);
+    // Hapus duplikat — ambil semua index yang match, hapus dari bawah ke atas
+    const matchIdxs = [];
+    data.forEach(function(r, i) { if (r[0] === cacheKey) matchIdxs.push(i + 4); });
+    if (matchIdxs.length > 0) {
+      // Update row pertama
+      sheet.getRange(matchIdxs[0], 2).setValue(now());
+      sheet.getRange(matchIdxs[0], 3).setValue(invalidated);
+      // Hapus duplikat dari bawah ke atas
+      for (var i = matchIdxs.length - 1; i >= 1; i--) {
+        sheet.deleteRow(matchIdxs[i]);
+      }
       return;
     }
   }
