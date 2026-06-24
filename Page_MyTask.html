@@ -2385,6 +2385,117 @@ async function _renderApprovalPage(container, task, period) {
           '</div>' +
         '</div>';
 
+    // ── Tabel 1: Detail Temuan ────────────────────────────────
+    var detailTemuan =
+      '<div class="card mb-16" style="overflow:hidden">' +
+        '<div style="background:var(--primary,#1F3864);padding:10px 16px">' +
+          '<span style="color:#fff;font-size:13px;font-weight:700">Detail Temuan</span>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--surface-2,#f8f9fa);border-bottom:1px solid var(--border)">' +
+          '<div style="padding:8px 14px;border-right:1px solid var(--border)">' +
+            '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em">RESULT ID</div>' +
+            '<div style="font-size:12px;font-weight:600;font-family:monospace">' + escHtml(f ? f.result_id : '-') + '</div>' +
+          '</div>' +
+          '<div style="padding:8px 14px;border-right:1px solid var(--border)">' +
+            '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em">PERIODE AUDIT</div>' +
+            '<div style="font-size:12px;font-weight:600">' + escHtml(period.nama_periode || '-') + '</div>' +
+          '</div>' +
+          '<div style="padding:8px 14px">' +
+            '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em">DEPT / AREA</div>' +
+            '<div style="font-size:12px;font-weight:600">' + escHtml(task.agenda ? task.agenda.dept : '-') + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--border)">' +
+          '<div style="padding:10px 14px;border-right:1px solid var(--border)">' +
+            '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em;margin-bottom:4px">DESKRIPSI KETIDAKSESUAIAN</div>' +
+            '<div style="font-size:13px">' + escHtml(f ? f.deskripsi_temuan : '-') + '</div>' +
+          '</div>' +
+          '<div style="padding:10px 14px">' +
+            '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em;margin-bottom:4px">LOKASI</div>' +
+            '<div style="font-size:13px;margin-bottom:10px">' + escHtml(f ? f.lokasi_temuan || '-' : '-') + '</div>' +
+            '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em;margin-bottom:4px">BUKTI FOTO</div>' +
+            (f && f.foto_urls
+              ? '<div style="display:flex;flex-wrap:wrap;gap:5px">' +
+                  f.foto_urls.split(',').filter(Boolean).map(function(url, i) {
+                    return '<a href="' + escHtml(url) + '" target="_blank" class="btn btn-outline btn-sm" style="font-size:11px">' +
+                      '<i data-lucide="image" style="width:11px;height:11px"></i> Foto ' + (i + 1) + '</a>';
+                  }).join('') +
+                '</div>'
+              : '<span style="font-size:12px;color:var(--text-muted)">-</span>') +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    // ── Tabel 2: Tindak Lanjut Temuan (hanya untuk APPROVAL_IMPL) ──
+    var tindakLanjutHtml = !isTPP
+      ? '<div class="card mb-16" style="overflow:hidden">' +
+          '<div style="background:var(--primary,#1F3864);padding:10px 16px">' +
+            '<span style="color:#fff;font-size:13px;font-weight:700">Tindak Lanjut Temuan</span>' +
+          '</div>' +
+
+          // Correction section
+          '<div style="border-bottom:1px solid var(--border)">' +
+            '<div style="padding:10px 16px;background:rgba(59,130,246,.04);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">' +
+              '<span class="badge badge-correction">CORRECTION</span>' +
+              '<span style="font-size:11px;color:var(--text-muted)">Due: <strong>' + formatDate(res.due_date_correction || '') + '</strong></span>' +
+            '</div>' +
+            '<div style="padding:10px 16px;border-bottom:1px solid var(--border)">' +
+              '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em;margin-bottom:4px">CORRECTION</div>' +
+              '<div style="font-size:13px">' + escHtml(res.correction || '-') + '</div>' +
+            '</div>' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--border)">' +
+              '<div style="padding:10px 16px;border-right:1px solid var(--border)">' +
+                '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em;margin-bottom:6px">BUKTI IMPLEMENTASI</div>' +
+                '<div style="display:flex;flex-wrap:wrap;gap:5px">' +
+                  (res.impl_correction_foto_urls
+                    ? res.impl_correction_foto_urls.split(',').filter(Boolean).map(function(entry, i) {
+                        var url = _fotoUrl(entry); var label = _fotoLabel(entry, i);
+                        return '<a href="' + escHtml(url) + '" target="_blank" class="btn btn-outline btn-sm" style="font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escHtml(label) + '">' +
+                          '<i data-lucide="file" style="width:11px;height:11px;flex-shrink:0"></i> ' + escHtml(label) + '</a>';
+                      }).join('')
+                    : '<span style="font-size:12px;color:var(--text-muted)">Belum ada bukti.</span>') +
+                '</div>' +
+              '</div>' +
+              '<div style="padding:10px 16px">' +
+                '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em;margin-bottom:4px">KETERANGAN BUKTI</div>' +
+                '<div style="font-size:12px;line-height:1.6;white-space:pre-wrap">' + escHtml(res.impl_correction_keterangan || '-') + '</div>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+
+          // Corrective Action section
+          '<div>' +
+            '<div style="padding:10px 16px;background:rgba(139,92,246,.04);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">' +
+              '<span class="badge badge-corrective-action">CORRECTIVE ACTION</span>' +
+              '<span style="font-size:11px;color:var(--text-muted)">Due: <strong>' + formatDate(res.due_date_corrective_action || '') + '</strong></span>' +
+            '</div>' +
+            '<div style="padding:10px 16px;border-bottom:1px solid var(--border)">' +
+              '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em;margin-bottom:4px">CORRECTIVE ACTION</div>' +
+              '<div style="font-size:13px">' + escHtml(res.corrective_action || '-') + '</div>' +
+            '</div>' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr">' +
+              '<div style="padding:10px 16px;border-right:1px solid var(--border)">' +
+                '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em;margin-bottom:6px">BUKTI IMPLEMENTASI</div>' +
+                '<div style="display:flex;flex-wrap:wrap;gap:5px">' +
+                  (res.impl_corrective_action_foto_urls
+                    ? res.impl_corrective_action_foto_urls.split(',').filter(Boolean).map(function(entry, i) {
+                        var url = _fotoUrl(entry); var label = _fotoLabel(entry, i);
+                        return '<a href="' + escHtml(url) + '" target="_blank" class="btn btn-outline btn-sm" style="font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escHtml(label) + '">' +
+                          '<i data-lucide="file" style="width:11px;height:11px;flex-shrink:0"></i> ' + escHtml(label) + '</a>';
+                      }).join('')
+                    : '<span style="font-size:12px;color:var(--text-muted)">Belum ada bukti.</span>') +
+                '</div>' +
+              '</div>' +
+              '<div style="padding:10px 16px">' +
+                '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em;margin-bottom:4px">KETERANGAN BUKTI</div>' +
+                '<div style="font-size:12px;line-height:1.6;white-space:pre-wrap">' + escHtml(res.impl_corrective_action_keterangan || '-') + '</div>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+
+        '</div>'
+      : contentHtml; // APPROVAL_TPP tetap pakai contentHtml lama
+
     container.innerHTML =
       _subPageHeader(
         (isTPP ? 'Approval TPP' : 'Approval Tindak Lanjut Temuan') +
@@ -2393,15 +2504,10 @@ async function _renderApprovalPage(container, task, period) {
         ' · ' + escHtml(f ? f.deskripsi_temuan : '')
       ) +
 
-      // Info temuan
-      '<div class="card mb-16"><div class="card-body" style="padding:12px 16px">' +
-        statusBadge(f ? f.status : '') + ' ' +
-        '<span style="font-size:13px;font-weight:600">' + escHtml(f ? f.deskripsi_temuan : '') + '</span>' +
-      '</div></div>' +
+      detailTemuan +
+      tindakLanjutHtml +
 
-      contentHtml +
-
-      // Komentar + tombol approve/reject — di atas history
+      // Komentar + tombol
       '<div class="card mb-16"><div class="card-body">' +
         '<div class="form-group">' +
           '<label class="form-label">Komentar <span style="font-size:11px;color:var(--text-muted)">(wajib jika menolak)</span></label>' +
