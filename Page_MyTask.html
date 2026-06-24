@@ -2063,8 +2063,6 @@ async function _renderUploadImplPage(container, task, period) {
         '<div style="border-bottom:0.5px solid var(--border)">' +
           '<div style="display:flex;align-items:center;gap:8px;padding:10px 16px;background:var(--surface-2,#f8f9fa);border-left:3px solid var(--blue,#3b82f6)">' +
             '<span class="badge badge-correction">CORRECTION</span>' +
-            '<span style="font-size:12px;color:var(--text-muted)">Due: <strong style="color:var(--text)">' + formatDate(res.due_date_correction || '') + '</strong></span>' +
-            (hasCorrSubmitted ? '<span style="font-size:11px;color:var(--text-muted)">✓ Disubmit ' + formatDate(res.impl_correction_submitted_at) + '</span>' : '') +
             '<span style="flex:1"></span>' +
             (!isLocked
               ? '<button class="btn btn-ghost btn-sm" id="impl-corr-edit-btn" onclick="_toggleCorrEditMode()" ' +
@@ -2081,8 +2079,6 @@ async function _renderUploadImplPage(container, task, period) {
         '<div>' +
           '<div style="display:flex;align-items:center;gap:8px;padding:10px 16px;background:var(--surface-2,#f8f9fa);border-left:3px solid var(--purple,#8b5cf6)">' +
             '<span class="badge badge-corrective-action">CORRECTIVE ACTION</span>' +
-            '<span style="font-size:12px;color:var(--text-muted)">Due: <strong style="color:var(--text)">' + formatDate(res.due_date_corrective_action || '') + '</strong></span>' +
-            (hasCASubmitted ? '<span style="font-size:11px;color:var(--text-muted)">✓ Disubmit ' + formatDate(res.impl_submitted_at) + '</span>' : '') +
             '<span style="flex:1"></span>' +
             (!isLocked
               ? '<button class="btn btn-ghost btn-sm" id="impl-ca-edit-btn" onclick="_toggleCAEditMode()" ' +
@@ -2228,7 +2224,7 @@ async function _submitCorrectionImpl(resultId, agendaId, periodId) {
   var files = zone && zone._getFiles ? zone._getFiles() : [];
 
   var savedContainer = document.getElementById('impl-correction-saved-files');
-  var existingDomCount = savedContainer ? savedContainer.querySelectorAll('a').length : 0;
+  var existingDomCount = savedContainer ? savedContainer.querySelectorAll('button').length : 0;
   if (!files.length && existingDomCount === 0) {
     return toast('Upload minimal 1 bukti correction.', 'error');
   }
@@ -2289,7 +2285,7 @@ async function _submitCorrectiveActionImpl(resultId, agendaId, periodId) {
   var files = zone && zone._getFiles ? zone._getFiles() : [];
 
   var savedContainer = document.getElementById('impl-ca-saved-files');
-  var existingCount = savedContainer ? savedContainer.querySelectorAll('a').length : 0;
+  var existingCount = savedContainer ? savedContainer.querySelectorAll('button').length : 0;
   if (!files.length && existingCount === 0) {
     return toast('Upload minimal 1 foto bukti corrective action.', 'error');
   }
@@ -2330,7 +2326,7 @@ async function _submitCorrectiveActionImpl(resultId, agendaId, periodId) {
       var corrZone = document.getElementById('impl-correction-zone');
       var corrFiles = corrZone && corrZone._getFiles ? corrZone._getFiles() : [];
       var corrSavedContainer = document.getElementById('impl-correction-saved-files');
-      var corrExistingCount = corrSavedContainer ? corrSavedContainer.querySelectorAll('a').length : 0;
+      var corrExistingCount = corrSavedContainer ? corrSavedContainer.querySelectorAll('button').length : 0;
       var corrKetEl = document.getElementById('impl-correction-ket');
       var corrKeterangan = (corrKetEl || {}).value?.trim() || '';
 
