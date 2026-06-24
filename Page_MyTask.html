@@ -409,18 +409,7 @@ function _renderMyTask(container, tasks, period) {
       '</div>';
     }
 
-    var hasOverdueImpl_ui = uploadImplTasks.some(function(t) {
-      var fi = t.finding || {};
-      var today_ui = new Date(); today_ui.setHours(0,0,0,0);
-      var corrDue_ui = fi.due_date_correction ? new Date(fi.due_date_correction) : null;
-      var caDue_ui   = fi.due_date_corrective_action ? new Date(fi.due_date_corrective_action) : null;
-      var corrLate = corrDue_ui && !fi.impl_correction_submitted_at &&
-        today_ui > new Date(corrDue_ui.getFullYear(), corrDue_ui.getMonth(), corrDue_ui.getDate());
-      var caLate = caDue_ui && !fi.impl_submitted_at &&
-        today_ui > new Date(caDue_ui.getFullYear(), caDue_ui.getMonth(), caDue_ui.getDate());
-      return corrLate || caLate;
-    });
-    var overdueImplNote_ui = '';
+    // (overdueImplNote_ui dihapus — status overdue sudah ditampilkan per kolom di tabel)
 
     listHtml =
       _taskSection('Verifikasi Temuan', '', 'var(--amber,#f59e0b)', verifikasiTasks) +
@@ -1868,30 +1857,6 @@ async function _renderUploadImplPage(container, task, period) {
  
     var historyHtml = _renderApprovalHistory(log);
  
-    // ── 1. Identity + TPP Plan ────────────────────────────────
-    // ── Helper render bukti read-only ─────────────────────────
-    var _implBuktiReadHtml = function(fotoUrls, keterangan) {
-      var entries = (fotoUrls || '').split(',').filter(Boolean);
-      var buktiHtml = entries.length
-        ? entries.map(function(entry, i) {
-            var url = _fotoUrl(entry); var label = _fotoLabel(entry, i);
-            return '<button onclick="event.stopPropagation();_openFotoLightbox(\'' + escAttr(url) + '\',\'' + escAttr(label) + '\')" ' +
-              'class="btn btn-outline btn-sm" style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escHtml(label) + '">' +
-              '<i data-lucide="file" style="width:11px;height:11px;flex-shrink:0"></i> ' + escHtml(label) + '</button>';
-          }).join('')
-        : '<span style="font-size:12px;color:var(--text-muted)">Belum ada bukti.</span>';
-      return '<div style="padding:10px 0;border-top:0.5px solid var(--border)">' +
-        '<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:8px">' +
-          '<span style="font-size:12px;color:var(--text-muted);width:130px;flex-shrink:0">Bukti Implementasi</span>' +
-          '<div style="display:flex;flex-wrap:wrap;gap:5px">' + buktiHtml + '</div>' +
-        '</div>' +
-        '<div style="display:flex;align-items:baseline;gap:10px">' +
-          '<span style="font-size:12px;color:var(--text-muted);width:130px;flex-shrink:0">Keterangan</span>' +
-          '<div style="font-size:13px;color:var(--text);line-height:1.6;white-space:pre-wrap">' + escHtml(keterangan || '-') + '</div>' +
-        '</div>' +
-      '</div>';
-    };
-
     // ── 1. Detail Temuan card (sama persis dengan approval page) ──
     var _implAprRow = function(label, value, first) {
       return '<div style="display:flex;align-items:baseline;gap:12px;padding:8px 0;' + (first ? '' : 'border-top:0.5px solid var(--border)') + '">' +
@@ -2401,109 +2366,28 @@ async function _renderApprovalPage(container, task, period) {
         '</div>'
       : '';
 
-    // ── Content berdasarkan stage ────────────────────────────
-    var contentHtml = isTPP
-      // APPROVAL TPP — tampilkan rencana correction + corrective action
-      ? '<div class="card mb-16"><div class="card-body">' +
-          '<div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:12px">RENCANA TPP</div>' +
+    // ── Content TPP (hanya untuk APPROVAL_TPP) ───────────────
+    var contentHtml = '<div class="card mb-16"><div class="card-body">' +
+      '<div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:12px">RENCANA TPP</div>' +
 
-          // Correction
-          '<div style="padding:12px;border:1px solid var(--border);border-radius:6px;margin-bottom:10px">' +
-            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
-              '<span class="badge badge-blue" style="font-size:10px">Correction</span>' +
-              '<span style="font-size:11px;color:var(--text-muted)">' +
-                'Due: <strong>' + formatDate(res.due_date_correction || '') + '</strong>' +
-              '</span>' +
-            '</div>' +
-            '<div style="font-size:13px">' + escHtml(res.correction || '-') + '</div>' +
-          '</div>' +
-
-          // Corrective Action
-          '<div style="padding:12px;border:1px solid var(--border);border-radius:6px;margin-bottom:10px">' +
-            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
-              '<span class="badge badge-purple" style="font-size:10px">Corrective Action</span>' +
-              '<span style="font-size:11px;color:var(--text-muted)">' +
-                'Due: <strong>' + formatDate(res.due_date_corrective_action || '') + '</strong>' +
-              '</span>' +
-            '</div>' +
-            '<div style="font-size:13px">' + escHtml(res.corrective_action || '-') + '</div>' +
-          '</div>' +
-
-          fotoTemuan +
-        '</div></div>'
-
-      // APPROVAL IMPL — read-only version Upload Implementasi
-      : // Card Rencana TPP
-        '<div class="card mb-16" style="overflow:hidden">' +
-          '<div style="background:var(--primary,#1F3864);padding:10px 16px">' +
-            '<span style="color:#fff;font-size:13px;font-weight:700">Rencana Tindakan Perbaikan dan Pencegahan</span>' +
-          '</div>' +
-          '<div class="card-body" style="padding:16px">' +
-            fotoTemuan +
-            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
-              '<div>' +
-                '<div style="font-size:10px;font-weight:700;color:var(--blue,#3b82f6);letter-spacing:.05em;margin-bottom:4px">CORRECTION</div>' +
-                '<div style="font-size:12px;color:var(--text-muted);margin-bottom:2px">Due: <strong>' + formatDate(res.due_date_correction || '') + '</strong></div>' +
-                '<div style="font-size:13px">' + escHtml(res.correction || '-') + '</div>' +
-              '</div>' +
-              '<div>' +
-                '<div style="font-size:10px;font-weight:700;color:var(--purple,#8b5cf6);letter-spacing:.05em;margin-bottom:4px">CORRECTIVE ACTION</div>' +
-                '<div style="font-size:12px;color:var(--text-muted);margin-bottom:2px">Due: <strong>' + formatDate(res.due_date_corrective_action || '') + '</strong></div>' +
-                '<div style="font-size:13px">' + escHtml(res.corrective_action || '-') + '</div>' +
-              '</div>' +
-            '</div>' +
-          '</div>' +
+      '<div style="padding:12px;border:1px solid var(--border);border-radius:6px;margin-bottom:10px">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
+          '<span class="badge badge-blue" style="font-size:10px">Correction</span>' +
+          '<span style="font-size:11px;color:var(--text-muted)">Due: <strong>' + formatDate(res.due_date_correction || '') + '</strong></span>' +
         '</div>' +
+        '<div style="font-size:13px">' + escHtml(res.correction || '-') + '</div>' +
+      '</div>' +
 
-        // Card Bukti Correction
-        '<div class="card mb-16" style="overflow:hidden">' +
-          '<div style="background:var(--primary,#1F3864);padding:10px 16px;display:flex;align-items:center;gap:10px">' +
-            '<span class="badge badge-correction">CORRECTION</span>' +
-            '<span style="color:#fff;font-size:13px;font-weight:700">Bukti Implementasi</span>' +
-            (res.impl_correction_submitted_at
-              ? '<span style="color:rgba(255,255,255,.7);font-size:11px">✓ Disubmit ' + formatDate(res.impl_correction_submitted_at) + '</span>'
-              : '<span style="color:rgba(255,255,255,.5);font-size:11px">Belum disubmit</span>') +
-          '</div>' +
-          '<div class="card-body" style="padding:16px">' +
-            '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em;margin-bottom:6px">BUKTI IMPLEMENTASI</div>' +
-            '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">' +
-              (res.impl_correction_foto_urls
-                ? res.impl_correction_foto_urls.split(',').filter(Boolean).map(function(entry, i) {
-                    var url = _fotoUrl(entry); var label = _fotoLabel(entry, i);
-                    return '<a href="' + escHtml(url) + '" target="_blank" class="btn btn-outline btn-sm" style="font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escHtml(label) + '">' +
-                      '<i data-lucide="file" style="width:11px;height:11px;flex-shrink:0"></i> ' + escHtml(label) + '</a>';
-                  }).join('')
-                : '<div style="font-size:12px;color:var(--text-muted)">Belum ada bukti diupload.</div>') +
-            '</div>' +
-            '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em;margin-bottom:4px">KETERANGAN</div>' +
-            '<div style="font-size:13px">' + escHtml(res.impl_correction_keterangan || '-') + '</div>' +
-          '</div>' +
+      '<div style="padding:12px;border:1px solid var(--border);border-radius:6px;margin-bottom:10px">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
+          '<span class="badge badge-purple" style="font-size:10px">Corrective Action</span>' +
+          '<span style="font-size:11px;color:var(--text-muted)">Due: <strong>' + formatDate(res.due_date_corrective_action || '') + '</strong></span>' +
         '</div>' +
+        '<div style="font-size:13px">' + escHtml(res.corrective_action || '-') + '</div>' +
+      '</div>' +
 
-        // Card Bukti Corrective Action
-        '<div class="card mb-16" style="overflow:hidden">' +
-          '<div style="background:var(--primary,#1F3864);padding:10px 16px;display:flex;align-items:center;gap:10px">' +
-            '<span class="badge badge-corrective-action">CORRECTIVE ACTION</span>' +
-            '<span style="color:#fff;font-size:13px;font-weight:700">Bukti Implementasi</span>' +
-            (res.impl_submitted_at
-              ? '<span style="color:rgba(255,255,255,.7);font-size:11px">✓ Disubmit ' + formatDate(res.impl_submitted_at) + '</span>'
-              : '<span style="color:rgba(255,255,255,.5);font-size:11px">Belum disubmit</span>') +
-          '</div>' +
-          '<div class="card-body" style="padding:16px">' +
-            '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em;margin-bottom:6px">BUKTI IMPLEMENTASI</div>' +
-            '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">' +
-              (res.impl_corrective_action_foto_urls
-                ? res.impl_corrective_action_foto_urls.split(',').filter(Boolean).map(function(entry, i) {
-                    var url = _fotoUrl(entry); var label = _fotoLabel(entry, i);
-                    return '<a href="' + escHtml(url) + '" target="_blank" class="btn btn-outline btn-sm" style="font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escHtml(label) + '">' +
-                      '<i data-lucide="file" style="width:11px;height:11px;flex-shrink:0"></i> ' + escHtml(label) + '</a>';
-                  }).join('')
-                : '<div style="font-size:12px;color:var(--text-muted)">Belum ada bukti diupload.</div>') +
-            '</div>' +
-            '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em;margin-bottom:4px">KETERANGAN</div>' +
-            '<div style="font-size:13px">' + escHtml(res.impl_corrective_action_keterangan || '-') + '</div>' +
-          '</div>' +
-        '</div>';
+      fotoTemuan +
+    '</div></div>';
 
     // ── Tabel 1: Detail Temuan ────────────────────────────────
     var _aprRow = function(label, value, first) {
@@ -2725,12 +2609,12 @@ function _renderApprovalHistory(log, stage) {
     }
     if (l.action === 'CLOSED')    return 'Temuan Ditutup';
     if (l.action === 'SUBMITTED') {
-      if (l.stage === 'CORRECTION') return 'Bukti Correction Disubmit';
-      if (l.stage === 'IMPL')       return 'Bukti Corrective Action Disubmit';
-      if (l.stage === 'TPP')        return 'Rencana TPP Disubmit';
+      if (l.stage === 'IMPL_CORRECTION') return 'Bukti Correction Disubmit';
+      if (l.stage === 'IMPL_CA')         return 'Bukti Corrective Action Disubmit';
+      if (l.stage === 'TPP')             return 'Rencana TPP Disubmit';
       return 'Disubmit';
     }
-    if (l.action === 'ROUTING') return 'Diteruskan ke Approval';
+    if (l.action === 'ROUTING') return 'Tindak Lanjut Diteruskan ke Approval';
     return l.action;
   };
 
@@ -2741,6 +2625,10 @@ function _renderApprovalHistory(log, stage) {
       return { icon: 'x', color: 'var(--rose,#f43f5e)' };
     if (l.action === 'SUBMITTED')
       return { icon: 'upload', color: 'var(--blue,#3b82f6)' };
+    if (l.action === 'ROUTING')
+      return { icon: 'arrow-right-circle', color: 'var(--purple,#8b5cf6)' };
+    if (l.action === 'CLOSED')
+      return { icon: 'check-circle', color: 'var(--emerald,#10b981)' };
     return { icon: 'clock', color: 'var(--text-muted)' };
   };
 
@@ -2769,17 +2657,19 @@ function _renderApprovalHistory(log, stage) {
               '<span style="font-size:12px;font-weight:600">' + _actionLabel(l) + '</span>' +
               (function() {
                 var stageClassMap = {
-                  'CORRECTION':   'badge-correction',
-                  'IMPL':         'badge-corrective-action',
-                  'TPP':          'badge-slate',
-                  'VERIFICATION': 'badge-amber',
+                  'IMPL_CORRECTION': 'badge-correction',
+                  'IMPL_CA':         'badge-corrective-action',
+                  'IMPL':            'badge-teal',
+                  'TPP':             'badge-slate',
+                  'VERIFICATION':    'badge-amber',
                 };
                 var cls = stageClassMap[l.stage] || 'badge-slate';
                 var stageLabel = {
-                  'CORRECTION':   'Correction',
-                  'IMPL':         'Corrective Action',
-                  'TPP':          'TPP',
-                  'VERIFICATION': 'Verifikasi',
+                  'IMPL_CORRECTION': 'Correction',
+                  'IMPL_CA':         'Corrective Action',
+                  'IMPL':            'Implementasi',
+                  'TPP':             'Rencana TPP',
+                  'VERIFICATION':    'Verifikasi',
                 }[l.stage] || escHtml(l.stage || '');
                 return '<span class="badge ' + cls + '" style="font-size:10px">' + stageLabel + '</span>';
               })() +
