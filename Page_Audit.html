@@ -2264,7 +2264,7 @@ async function _submitAgreementAndFinish(agendaId, periodId) {
     var fileUp = b64[0];
     await api('FINISH_AUDIT',     { agenda_id: agendaId, period_id: periodId });
     await api('SUBMIT_AGREEMENT', { period_id: periodId, agenda_id: agendaId, file_base64: fileUp.base64, file_name: fileUp.name, mime_type: fileUp.mime_type, ofi: ofi, auditee_hadir_names: auditeeNames });
-    clearCache('GET_FINDINGS_BY_AGENDA'); clearCache('GET_ALL_FINDINGS_BY_PERIOD'); clearCache('GET_AGENDAS_BY_PERIOD'); clearCache('GET_DASHBOARD');
+    clearCache('GET_FINDINGS_BY_AGENDA'); clearCache('GET_ALL_FINDINGS_BY_PERIOD'); clearCache('GET_AGENDAS_BY_PERIOD'); clearCache('GET_DASHBOARD'); clearCache('GET_HASIL_AUDIT');
     _stopLockPolling();
     _detachAuditUnloadGuard();
 
