@@ -2386,8 +2386,8 @@ async function _renderApprovalPage(container, task, period) {
         '</div>';
 
     // ── Tabel 1: Detail Temuan ────────────────────────────────
-    var _aprRow = function(label, value) {
-      return '<div style="display:flex;align-items:baseline;gap:12px;padding:8px 0;border-top:0.5px solid var(--border)">' +
+    var _aprRow = function(label, value, first) {
+      return '<div style="display:flex;align-items:baseline;gap:12px;padding:8px 0;' + (first ? '' : 'border-top:0.5px solid var(--border)') + '">' +
         '<span style="font-size:12px;color:var(--text-muted);width:110px;flex-shrink:0">' + label + '</span>' +
         '<span style="font-size:13px;color:var(--text);line-height:1.6">' + value + '</span>' +
       '</div>';
@@ -2410,21 +2410,15 @@ async function _renderApprovalPage(container, task, period) {
 
           // Kolom kiri — fixed 280px
           '<div style="width:280px;flex-shrink:0;padding:10px 16px;border-right:0.5px solid var(--border)">' +
-            '<div style="padding:8px 0">' +
-              '<span style="font-size:12px;color:var(--text-muted);width:110px;display:inline-block">Result ID</span>' +
-              '<span style="font-size:13px;font-family:monospace;color:var(--text)">' + escHtml(f ? f.result_id : '-') + '</span>' +
-            '</div>' +
+            _aprRow('Result ID',     '<span style="font-family:monospace;font-size:12px">' + escHtml(f ? f.result_id : '-') + '</span>', true) +
             _aprRow('Periode Audit', escHtml(period.nama_periode || '-')) +
             _aprRow('Dept / Area',   escHtml(task.agenda ? task.agenda.dept : '-')) +
           '</div>' +
 
           // Kolom kanan — flex:1
           '<div style="flex:1;min-width:0;padding:10px 16px">' +
-            '<div style="padding:8px 0">' +
-              '<span style="font-size:12px;color:var(--text-muted);width:110px;display:inline-block;vertical-align:top">Deskripsi</span>' +
-              '<span style="font-size:13px;color:var(--text);line-height:1.6;display:inline;max-width:calc(100% - 122px)">' + escHtml(f ? f.deskripsi_temuan : '-') + '</span>' +
-            '</div>' +
-            _aprRow('Lokasi', escHtml(f ? f.lokasi_temuan || '-' : '-')) +
+            _aprRow('Deskripsi',  escHtml(f ? f.deskripsi_temuan : '-'), true) +
+            _aprRow('Lokasi',     escHtml(f ? f.lokasi_temuan || '-' : '-')) +
             '<div style="display:flex;align-items:flex-start;gap:12px;padding:8px 0;border-top:0.5px solid var(--border)">' +
               '<span style="font-size:12px;color:var(--text-muted);width:110px;flex-shrink:0;padding-top:2px">Bukti foto</span>' +
               '<div style="display:flex;flex-wrap:wrap;gap:5px">' + fotoButtons + '</div>' +
