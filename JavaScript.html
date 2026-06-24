@@ -368,6 +368,116 @@ function filesToBase64(files) {
   }));
 }
 
+// ── Foto / Dokumen Lightbox ───────────────────────────────────
+function _openFotoLightbox(url, filename) {
+  var existing = document.getElementById('foto-lightbox');
+  if (existing) existing.remove();
+
+  var lb = document.createElement('div');
+  lb.id = 'foto-lightbox';
+  lb.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.88);' +
+    'display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px';
+  lb.onclick = function(e) { if (e.target === lb) lb.remove(); };
+
+  var header =
+    '<div style="width:100%;max-width:90vw;display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">' +
+      '<span style="color:rgba(255,255,255,.7);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80%">' +
+        escHtml(filename || '') +
+      '</span>' +
+      '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0">' +
+        '<a href="' + escHtml(url) + '" target="_blank" onclick="event.stopPropagation()" ' +
+          'style="background:rgba(255,255,255,.15);border:none;color:#fff;padding:4px 10px;border-radius:6px;' +
+          'cursor:pointer;font-size:11px;text-decoration:none;display:flex;align-items:center;gap:4px">' +
+          '↗ Buka tab baru' +
+        '</a>' +
+        '<button onclick="document.getElementById(\'foto-lightbox\').remove()" ' +
+          'style="background:rgba(255,255,255,.15);border:none;color:#fff;width:30px;height:30px;border-radius:50%;' +
+          'cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;line-height:1">✕</button>' +
+      '</div>' +
+    '</div>';
+
+  var name    = filename || url || '';
+  var ext     = name.split('.').pop().toLowerCase().split('?')[0];
+  var isImage = ['jpg','jpeg','png','gif','webp','bmp','svg'].indexOf(ext) !== -1 ||
+    (url && (url.indexOf('uc?export=view') !== -1 || url.indexOf('blob:') === 0));
+  var isPdf   = ext === 'pdf';
+
+  // Blob URL dari pending file (gambar)
+  if (url && url.indexOf('blob:') === 0) {
+    lb.innerHTML = header +
+      '<div style="max-width:90vw;max-height:85vh;display:flex;align-items:center;justify-content:center">' +
+        '<img src="' + escHtml(url) + '" style="max-width:90vw;max-height:85vh;object-fit:contain;border-radius:8px">' +
+      '</div>';
+    document.body.appendChild(lb);
+    return;
+  }
+
+  // PDF
+  if (isPdf) {
+    lb.innerHTML = header +
+      '<div style="width:90vw;height:85vh;background:#fff;border-radius:8px;overflow:hidden">' +
+        '<iframe src="' + escHtml(url) + '" style="width:100%;height:100%;border:none"></iframe>' +
+      '</div>';
+    document.body.appendChild(lb);
+    return;
+  }
+
+  // Dokumen lain — tidak bisa di-preview inline
+  if (!isImage) {
+    lb.innerHTML = header +
+      '<div style="background:#fff;border-radius:12px;padding:32px 40px;text-align:center;max-width:360px">' +
+        '<div style="font-size:40px;margin-bottom:12px">📄</div>' +
+        '<div style="font-size:13px;font-weight:600;margin-bottom:6px">' + escHtml(filename || 'Dokumen') + '</div>' +
+        '<div style="font-size:12px;color:#666;margin-bottom:16px">File ini tidak bisa ditampilkan secara langsung.</div>' +
+        '<a href="' + escHtml(url) + '" target="_blank" ' +
+          'style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;' +
+          'background:#1F3864;color:#fff;border-radius:6px;font-size:13px;text-decoration:none">' +
+          'Buka di Tab Baru' +
+        '</a>' +
+      '</div>';
+    document.body.appendChild(lb);
+    return;
+  }
+
+  // Gambar dari Drive
+  var cachedSrc = (_driveImgCache && _driveImgCache[url]) || '';
+  lb.innerHTML = header +
+    '<div style="max-width:90vw;max-height:85vh;display:flex;align-items:center;justify-content:center">' +
+      '<div id="lb-spinner" style="color:#fff;font-size:13px;padding:32px;' + (cachedSrc ? 'display:none;' : '') + '">' +
+        'Memuat gambar...' +
+      '</div>' +
+      '<img id="lb-img" src="' + escHtml(cachedSrc) + '" ' +
+        'style="max-width:90vw;max-height:85vh;object-fit:contain;border-radius:8px;' + (cachedSrc ? '' : 'display:none;') + '" ' +
+        'onerror="this.style.display=\'none\';var e=document.getElementById(\'lb-err\');if(e)e.style.display=\'block\'">' +
+      '<div id="lb-err" style="display:none;color:#fff;text-align:center;padding:32px">' +
+        'Tidak bisa memuat gambar.<br>' +
+        '<a href="' + escHtml(url) + '" target="_blank" style="color:#60a5fa">Buka di tab baru</a>' +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(lb);
+
+  if (!cachedSrc) {
+    var imgEl  = lb.querySelector('#lb-img');
+    var spinner = lb.querySelector('#lb-spinner');
+    api('GET_DRIVE_IMAGE_BASE64', { url: url }).then(function(dataUri) {
+      if (!dataUri) {
+        if (spinner) spinner.style.display = 'none';
+        var errEl = lb.querySelector('#lb-err');
+        if (errEl) errEl.style.display = 'block';
+        return;
+      }
+      if (_driveImgCache) _driveImgCache[url] = dataUri;
+      if (imgEl)   { imgEl.src = dataUri; imgEl.style.display = ''; }
+      if (spinner) spinner.style.display = 'none';
+    }).catch(function() {
+      if (spinner) spinner.style.display = 'none';
+      var errEl = lb.querySelector('#lb-err');
+      if (errEl) errEl.style.display = 'block';
+    });
+  }
+}
+
 // ── Status Badge ──────────────────────────────────────────────
 function statusBadge(status) {
   var map = {
