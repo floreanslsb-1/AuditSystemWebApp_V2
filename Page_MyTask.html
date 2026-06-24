@@ -342,13 +342,13 @@ function _renderMyTask(container, tasks, period) {
                 var today_ui = new Date(); today_ui.setHours(0,0,0,0);
 
                 // Helper: hitung status per jenis (correction / CA)
-                var _implStatus = function(dueStr, submittedAt) {
+                var _implStatus = function(dueStr, submittedAt, isRejected) {
                   var due = dueStr ? new Date(dueStr) : null;
                   var dueDay = due ? new Date(due.getFullYear(), due.getMonth(), due.getDate()) : null;
                   var isOverdue = dueDay && today_ui > dueDay;
 
-                  if (submittedAt) {
-                    // Sudah submit — cek apakah overdue saat submit
+                  // Sudah submit DAN tidak sedang dalam status reject (finding masih locked di approval)
+                  if (submittedAt && !isRejected) {
                     var submitDate = new Date(submittedAt);
                     submitDate.setHours(0,0,0,0);
                     var submitOverdue = dueDay && submitDate > dueDay;
@@ -366,8 +366,13 @@ function _renderMyTask(container, tasks, period) {
                   return { text: 'Due in ' + diffDays + ' hari', color: 'var(--text)' };
                 };
 
-                var corrStatus = _implStatus(fi.due_date_correction,          fi.impl_correction_submitted_at);
-                var caStatus   = _implStatus(fi.due_date_corrective_action,    fi.impl_submitted_at);
+                // isRejected: finding sudah pernah masuk approval tapi di-reject → kembali ke OPEN_IMPL
+                // Correction: kalau sudah disubmit dan finding_status masih OPEN_IMPL, berarti
+                //   correction memang belum masuk approval (tidak pernah di-reject), tetap "Submitted"
+                // CA: kalau impl_submitted_at ada tapi finding_status OPEN_IMPL → pernah di-reject
+                var caRejected = !!(fi.impl_submitted_at && fi.finding_status === 'OPEN_IMPL');
+                var corrStatus = _implStatus(fi.due_date_correction,       fi.impl_correction_submitted_at, false);
+                var caStatus   = _implStatus(fi.due_date_corrective_action, fi.impl_submitted_at,           caRejected);
 
                 return '<tr style="cursor:pointer" onclick="_openTaskDetail(' + globalIdx + ')" ' +
                   'onmouseover="this.style.background=\'var(--bg)\'" ' +
