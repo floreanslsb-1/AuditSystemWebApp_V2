@@ -1467,7 +1467,7 @@ function submitCorrectionImpl(spreadsheetId, resultId, agendaId, fotoUrls, keter
   updateResultField(spreadsheetId, resultId, C.IMPL_CORRECTION_SUBMITTED_BY, submittedBy);
   appendApprovalLog(spreadsheetId, {
     result_id: resultId, agenda_id: agendaId,
-    stage: 'CORRECTION', level: 'AUDITEE', action: 'SUBMITTED',
+    stage: 'IMPL_CORRECTION', level: 'AUDITEE', action: 'SUBMITTED',
     by_email: submittedBy, skipped: false, skip_reason: '',
   });
   try {
@@ -1492,7 +1492,12 @@ function submitCorrectiveActionImpl(spreadsheetId, resultId, agendaId, fotoUrls,
   updateResultField(spreadsheetId, resultId, C.FINDING_STATUS,                   CONFIG.FINDING_STATUS.APP_DEPT_HEAD);
   appendApprovalLog(spreadsheetId, {
     result_id: resultId, agenda_id: agendaId,
-    stage: 'IMPL', level: 'AUDITEE', action: 'SUBMITTED',
+    stage: 'IMPL_CA', level: 'AUDITEE', action: 'SUBMITTED',
+    by_email: submittedBy, skipped: false, skip_reason: '',
+  });
+  appendApprovalLog(spreadsheetId, {
+    result_id: resultId, agenda_id: agendaId,
+    stage: 'IMPL', level: 'SYSTEM', action: 'ROUTING',
     by_email: submittedBy, skipped: false, skip_reason: '',
   });
   try {
@@ -1528,12 +1533,17 @@ function submitCorrectionAndCorrectiveActionImpl(
 
   appendApprovalLog(spreadsheetId, {
     result_id: resultId, agenda_id: agendaId,
-    stage: 'CORRECTION', level: 'AUDITEE', action: 'SUBMITTED',
+    stage: 'IMPL_CORRECTION', level: 'AUDITEE', action: 'SUBMITTED',
     by_email: submittedBy, skipped: false, skip_reason: '',
   });
   appendApprovalLog(spreadsheetId, {
     result_id: resultId, agenda_id: agendaId,
-    stage: 'IMPL', level: 'AUDITEE', action: 'SUBMITTED',
+    stage: 'IMPL_CA', level: 'AUDITEE', action: 'SUBMITTED',
+    by_email: submittedBy, skipped: false, skip_reason: '',
+  });
+  appendApprovalLog(spreadsheetId, {
+    result_id: resultId, agenda_id: agendaId,
+    stage: 'IMPL', level: 'SYSTEM', action: 'ROUTING',
     by_email: submittedBy, skipped: false, skip_reason: '',
   });
 
