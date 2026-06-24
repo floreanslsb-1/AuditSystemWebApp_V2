@@ -20,22 +20,30 @@ Pages['dashboard'] = async function(container) {
     '<div class="page-loader"><div class="spinner dark"></div><span>Memuat dashboard...</span></div>';
   try {
     // Load daftar periode untuk selector (COMPLETED + ACTIVE)
-    var allPeriods = await cachedApi('GET_PERIODS', {}, 60);
-    var viewable   = (allPeriods || []).filter(function(p) {
+    // Tentukan period kandidat dari state yang sudah ada (tanpa tunggu GET_PERIODS)
+    var earlyId = App.dashboardSelectedPeriodId
+      || (App.activePeriod ? App.activePeriod.period_id : null);
+
+    // GET_PERIODS dan GET_DASHBOARD jalan paralel
+    var parallelRes = await Promise.all([
+      cachedApi('GET_PERIODS', {}, 60),
+      earlyId ? cachedApi('GET_DASHBOARD', { period_id: earlyId }, 60) : Promise.resolve(null),
+    ]);
+    var allPeriods = parallelRes[0];
+    var earlyData  = parallelRes[1];
+
+    var viewable = (allPeriods || []).filter(function(p) {
       return p.status === 'ACTIVE' || p.status === 'COMPLETED';
     }).sort(function(a, b) {
-      // ACTIVE di atas, COMPLETED urut terbaru dulu
       if (a.status === 'ACTIVE') return -1;
       if (b.status === 'ACTIVE') return 1;
       return (b.completed_at || b.tanggal_selesai || '') > (a.completed_at || a.tanggal_selesai || '') ? 1 : -1;
     });
 
-    // Default: periode aktif, atau periode pertama kalau tidak ada yang aktif
+    // Recalculate selectedId setelah periods tersedia
     var defaultId = App.activePeriod
       ? App.activePeriod.period_id
       : (viewable[0] ? viewable[0].period_id : null);
-
-    // Gunakan period yang tersimpan di state kalau ada (supaya tidak reset saat re-render)
     var selectedId = (App.dashboardSelectedPeriodId && viewable.find(function(p) {
       return p.period_id === App.dashboardSelectedPeriodId;
     })) ? App.dashboardSelectedPeriodId : defaultId;
@@ -43,7 +51,10 @@ Pages['dashboard'] = async function(container) {
     App.dashboardSelectedPeriodId = selectedId;
     App._dashboardPeriods = viewable;
 
-    var raw  = await cachedApi('GET_DASHBOARD', { period_id: selectedId }, 20);
+    // Pakai hasil parallel kalau period-nya sama, kalau beda load ulang
+    var raw = (earlyData && earlyId === selectedId)
+      ? earlyData
+      : await cachedApi('GET_DASHBOARD', { period_id: selectedId }, 60);
     var data = typeof raw === 'string' ? JSON.parse(raw) : raw;
     App.dashboardData = data;
     _renderDashboard(container, data, viewable, selectedId);
