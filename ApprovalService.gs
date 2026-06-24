@@ -94,6 +94,16 @@ function _handleApprove({ spreadsheetId, result, agenda, flow, byEmail, komentar
     // APP_KOORDINATOR approve → CLOSED
     updateResultField(spreadsheetId, result.result_id, C.FINDING_STATUS, FS.CLOSED);
     updateResultField(spreadsheetId, result.result_id, C.CLOSED_AT, now());
+    appendApprovalLog(spreadsheetId, {
+      result_id:   result.result_id,
+      agenda_id:   agenda.agenda_id,
+      stage:       'IMPL',
+      level:       'SYSTEM',
+      action:      'CLOSED',
+      by_email:    byEmail,
+      skipped:     false,
+      skip_reason: '',
+    });
     try { notifyFindingClosed(agenda, result); } catch(e) {}
     _checkAgendaAllClosed(spreadsheetId, agenda.agenda_id);
 
