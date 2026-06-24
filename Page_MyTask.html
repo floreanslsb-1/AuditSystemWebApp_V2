@@ -449,6 +449,9 @@ function _renderMyTask(container, tasks, period) {
   window._myTaskList = tasks;
   window._myTaskPeriod = period;
 
+  // Prefetch detail task di background — agar klik langsung render tanpa loading
+  setTimeout(function() { _prefetchTaskDetails(tasks, period); }, 400);
+
   lucide.createIcons();
 }
 
@@ -473,6 +476,35 @@ function _openTaskDetail(idx) {
 
 function _backToMyTask() {
   navigateTo('mytask');
+}
+
+// Prefetch GET_TPP_ITEMS + GET_APPROVAL_LOG untuk semua task yang butuh detail.
+// Dibatasi max 6 task pertama agar tidak membanjiri koneksi GAS.
+// Hasilnya masuk App.cache sehingga saat klik, cachedApi langsung return tanpa network.
+function _prefetchTaskDetails(tasks, period) {
+  var prefetchable = tasks.filter(function(t) {
+    return t.result_id && (
+      t.type === 'ISI_TPP' ||
+      t.type === 'UPLOAD_IMPL' ||
+      t.type === 'APPROVAL_IMPL' ||
+      t.type === 'APPROVAL_TPP'
+    );
+  }).slice(0, 6); // batasi 6 teratas
+
+  prefetchable.forEach(function(t, i) {
+    // Beri jeda antar task agar tidak semua hit server sekaligus
+    setTimeout(function() {
+      cachedApi('GET_TPP_ITEMS', {
+        period_id: period.period_id,
+        result_id: t.result_id,
+        agenda_id: t.agenda_id,
+      }, 30).catch(function() {});
+      cachedApi('GET_APPROVAL_LOG', {
+        period_id: period.period_id,
+        result_id: t.result_id,
+      }, 30).catch(function() {});
+    }, i * 500); // 500ms antar task — 6 task selesai dalam ~3 detik
+  });
 }
 
 function _subPageHeader(title, subtitle) {
@@ -1292,15 +1324,20 @@ async function _renderIsiTppPage(container, task, period) {
     '<div class="page-loader"><div class="spinner dark"></div><span>Memuat...</span></div>';
 
   try {
-    var tppData = await api('GET_TPP_ITEMS', {
+    var tppData = await cachedApi('GET_TPP_ITEMS', {
       period_id: period.period_id,
       result_id: task.result_id,
       agenda_id: task.agenda_id,
-    });
-    var log = await api('GET_APPROVAL_LOG', {
+    }, 30);var _taskData = await Promise.all([
+      cachedApi('GET_TPP_ITEMS',    { period_id: period.period_id, result_id: task.result_id, agenda_id: task.agenda_id }, 30),
+      cachedApi('GET_APPROVAL_LOG', { period_id: period.period_id, result_id: task.result_id }, 30),
+    ]);
+    var tppData = _taskData[0];
+    var log     = _taskData[1];
+    var log = await cachedApi('GET_APPROVAL_LOG', {
       period_id: period.period_id,
       result_id: task.result_id,
-    });
+    }, 30);
 
     var f        = task.finding;
     var existing = (tppData && tppData[0]) ? tppData[0] : null;
@@ -1841,15 +1878,25 @@ async function _renderUploadImplPage(container, task, period) {
     '<div class="page-loader"><div class="spinner dark"></div><span>Memuat...</span></div>';
  
   try {
-    var tppData = await api('GET_TPP_ITEMS', {
+    var tppData = await cachedApi('GET_TPP_ITEMS', {
       period_id: period.period_id,
       result_id: task.result_id,
       agenda_id: task.agenda_id,
-    });
-    var log = await api('GET_APPROVAL_LOG', {
+    }, 30);var _taskData = await Promise.all([
+      cachedApi('GET_TPP_ITEMS',    { period_id: period.period_id, result_id: task.result_id, agenda_id: task.agenda_id }, 30),
+      cachedApi('GEvar _taskData = await Promise.all([
+      cachedApi('GET_TPP_ITEMS',    { period_id: period.period_id, result_id: task.result_id, agenda_id: task.agenda_id }, 30),
+      cachedApi('GET_APPROVAL_LOG', { period_id: period.period_id, result_id: task.result_id }, 30),
+    ]);
+    var tppData = _taskData[0];
+    var log     = _taskData[1];T_APPROVAL_LOG', { period_id: period.period_id, result_id: task.result_id }, 30),
+    ]);
+    var tppData = _taskData[0];
+    var log     = _taskData[1];
+    var log = await cachedApi('GET_APPROVAL_LOG', {
       period_id: period.period_id,
       result_id: task.result_id,
-    });
+    }, 30);
     var f   = task.finding;
     // Read-only saat sedang dalam approval chain atau sudah CLOSED
     var isLocked = ['APP_DEPT_HEAD','APP_AUDITOR','APP_KOORDINATOR','CLOSED','OVERDUE']
@@ -2358,15 +2405,12 @@ async function _renderApprovalPage(container, task, period) {
     '<div class="page-loader"><div class="spinner dark"></div><span>Memuat...</span></div>';
 
   try {
-    var tppData = await api('GET_TPP_ITEMS', {
-      period_id: period.period_id,
-      result_id: task.result_id,
-      agenda_id: task.agenda_id,
-    });
-    var log = await api('GET_APPROVAL_LOG', {
-      period_id: period.period_id,
-      result_id: task.result_id,
-    });
+    var _taskData = await Promise.all([
+      cachedApi('GET_TPP_ITEMS',    { period_id: period.period_id, result_id: task.result_id, agenda_id: task.agenda_id }, 30),
+      cachedApi('GET_APPROVAL_LOG', { period_id: period.period_id, result_id: task.result_id }, 30),
+    ]);
+    var tppData = _taskData[0];
+    var log     = _taskData[1];
     var f     = task.finding;
     var res   = (tppData && tppData[0]) ? tppData[0] : {};
     var stage = task.type === 'APPROVAL_TPP' ? 'TPP' : 'IMPL';
