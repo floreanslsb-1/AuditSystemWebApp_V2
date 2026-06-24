@@ -2602,14 +2602,12 @@ async function _renderApprovalPage(container, task, period) {
           '<div style="background:var(--primary,#1F3864);padding:10px 16px">' +
             '<span style="color:#fff;font-size:13px;font-weight:700">Tindak Lanjut Temuan</span>' +
           '</div>' +
-          // Correction section
           '<div style="border-bottom:0.5px solid var(--border)">' +
             '<div style="display:flex;align-items:center;gap:8px;padding:10px 16px;background:var(--surface-2,#f8f9fa);border-left:3px solid var(--blue,#3b82f6)">' +
               '<span class="badge badge-correction">CORRECTION</span>' +
             '</div>' +
             _sectionReadHtml('apr-corr', res.correction, res.impl_correction_foto_urls, res.impl_correction_keterangan, res.impl_correction_submitted_at, res.due_date_correction) +
           '</div>' +
-          // Corrective Action section
           '<div>' +
             '<div style="display:flex;align-items:center;gap:8px;padding:10px 16px;background:var(--surface-2,#f8f9fa);border-left:3px solid var(--purple,#8b5cf6)">' +
               '<span class="badge badge-corrective-action">CORRECTIVE ACTION</span>' +
