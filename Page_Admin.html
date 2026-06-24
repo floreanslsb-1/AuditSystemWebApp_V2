@@ -1168,6 +1168,7 @@ async function setPeriodStatus(periodId, status, btn) {
         clearCache('GET_PERIODS');
         clearCache('GET_ALL_FINDINGS_BY_PERIOD');
         clearCache('GET_DASHBOARD');
+        clearCache('GET_HASIL_AUDIT');
         toast('Periode ditutup. ' + check.openCount + ' temuan ditandai Overdue.', 'success');
       } else {
         clearCache('GET_PERIODS');
@@ -2552,6 +2553,7 @@ async function _saveEditAgenda(btn) {
     clearCache('GET_AGENDAS_BY_PERIOD');
     clearCache('GET_ALL_FINDINGS_BY_PERIOD');
     clearCache('GET_DASHBOARD');
+    clearCache('GET_HASIL_AUDIT');
     toast('Audit plan berhasil diperbarui.', 'success');
     closeModal('edit-agenda-modal');
     _togglePeriodExpand(s.ag.period_id, '');
@@ -2580,6 +2582,7 @@ async function _deleteAgendaConfirm(btn) {
     clearCache('GET_AGENDAS_BY_PERIOD');
     clearCache('GET_ALL_FINDINGS_BY_PERIOD');
     clearCache('GET_DASHBOARD');
+    clearCache('GET_HASIL_AUDIT');
     toast('Audit plan berhasil dihapus.', 'success');
     closeModal('edit-agenda-modal');
     _togglePeriodExpand(s.ag.period_id, '');
