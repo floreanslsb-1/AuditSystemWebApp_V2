@@ -1265,6 +1265,8 @@ async function _verifConfirmSubmit() {
     });
 
     clearCache('GET_ALL_FINDINGS_BY_PERIOD');
+    clearCache('GET_DASHBOARD');
+    clearCache('GET_HASIL_AUDIT');
     clearCache('GET_FINDINGS_BY_AGENDA');
     closeModal('verif-preview-modal');
     toast('Verifikasi berhasil. Temuan bisa ditindaklanjuti auditee.', 'success');
@@ -1513,7 +1515,11 @@ async function _submitTpp(resultId, agendaId, periodId) {
       due_date_corrective_action: dueDateCA,
     });
     clearCache('GET_ALL_FINDINGS_BY_PERIOD');
+    clearCache('GET_DASHBOARD');
+    clearCache('GET_HASIL_AUDIT');
     clearCache('GET_APPROVAL_LOG');
+    clearCache('GET_MY_OPEN_TPP_COUNT');
+    _preloadOpenTppFlag(App.activePeriod);
     toast('TPP berhasil disubmit. Silakan upload bukti implementasi.', 'success');
     navigateTo('mytask');
   } catch(err) {
@@ -1646,6 +1652,8 @@ async function _saveImplTppEdit(periodEndDate, resultId, agendaId, periodId) {
       due_date_corrective_action: dueDateCA,
     });
     clearCache('GET_ALL_FINDINGS_BY_PERIOD');
+    clearCache('GET_DASHBOARD');
+    clearCache('GET_HASIL_AUDIT');
     clearCache('GET_TPP_ITEMS');
     toast('Rencana TPP berhasil diperbarui.', 'success');
     // Re-render halaman
@@ -2111,6 +2119,8 @@ async function _deleteImplFoto(url, jenis, resultId, agendaId, periodId, btnEl) 
   }
 
   clearCache('GET_ALL_FINDINGS_BY_PERIOD');
+  clearCache('GET_DASHBOARD');
+  clearCache('GET_HASIL_AUDIT');
   toast('Foto berhasil dihapus.', 'success');
   var task = window._myTaskList && window._myTaskList[window._myTaskReturnIdx];
   if (task) _renderUploadImplPage(document.getElementById('page-content'), task, window._myTaskPeriod);
@@ -2215,6 +2225,8 @@ async function _submitCorrectionImpl(resultId, agendaId, periodId) {
 
     _implPendingDeletes.correction = [];
     clearCache('GET_ALL_FINDINGS_BY_PERIOD');
+    clearCache('GET_DASHBOARD');
+    clearCache('GET_HASIL_AUDIT');
     toast('Bukti correction berhasil dikirim.', 'success');
     var task = window._myTaskList && window._myTaskList[window._myTaskReturnIdx];
     if (task) _renderUploadImplPage(document.getElementById('page-content'), task, window._myTaskPeriod);
@@ -2300,6 +2312,8 @@ async function _submitCorrectiveActionImpl(resultId, agendaId, periodId) {
         ca_keterangan:          keteranganCa,
       });
       clearCache('GET_ALL_FINDINGS_BY_PERIOD');
+      clearCache('GET_DASHBOARD');
+      clearCache('GET_HASIL_AUDIT');
       toast('Correction dan Corrective Action berhasil dikirim. Menunggu approval Dept Head.', 'success');
       navigateTo('mytask');
       return;
@@ -2325,6 +2339,8 @@ async function _submitCorrectiveActionImpl(resultId, agendaId, periodId) {
       existing_foto_urls: existingUrls,
     });
     clearCache('GET_ALL_FINDINGS_BY_PERIOD');
+    clearCache('GET_DASHBOARD');
+    clearCache('GET_HASIL_AUDIT');
     toast('Bukti corrective action berhasil dikirim. Menunggu approval Dept Head.', 'success');
     navigateTo('mytask');
   } catch(err) {
@@ -2547,6 +2563,8 @@ async function _processApproval(resultId, agendaId, periodId, stage, level, acti
       komentar:  komentar,
     });
     clearCache('GET_ALL_FINDINGS_BY_PERIOD');
+    clearCache('GET_DASHBOARD');
+    clearCache('GET_HASIL_AUDIT');
     clearCache('GET_FINDINGS_BY_AGENDA');
     clearCache('GET_TPP_ITEMS');
     clearCache('GET_APPROVAL_LOG');
@@ -2585,6 +2603,8 @@ async function _massApproveAll(stage) {
       // stage & level dihapus — derive dari finding_status di server
     });
     clearCache('GET_ALL_FINDINGS_BY_PERIOD');
+    clearCache('GET_DASHBOARD');
+    clearCache('GET_HASIL_AUDIT');
     toast(tasks.length + ' finding berhasil di-approve.', 'success');
     navigateTo('mytask');
   } catch(err) { toast(err.message, 'error'); }
