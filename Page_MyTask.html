@@ -1839,9 +1839,13 @@ async function _renderUploadImplPage(container, task, period) {
               '<i data-lucide="file" style="width:11px;height:11px;flex-shrink:0"></i> ' + escHtml(label) + '</button>';
           }).join('')
         : '<span style="font-size:12px;color:var(--text-muted)">Belum ada bukti.</span>';
-      return '<div style="display:flex;gap:0;padding:10px 0;border-top:0.5px solid var(--border)">' +
-        '<div style="flex:1;min-width:0;padding-right:16px;display:flex;flex-wrap:wrap;gap:5px">' + buktiHtml + '</div>' +
-        '<div style="flex:1;min-width:0;border-left:0.5px solid var(--border);padding-left:16px">' +
+      return '<div style="padding:10px 0;border-top:0.5px solid var(--border)">' +
+        '<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:8px">' +
+          '<span style="font-size:12px;color:var(--text-muted);width:130px;flex-shrink:0">Bukti Implementasi</span>' +
+          '<div style="display:flex;flex-wrap:wrap;gap:5px">' + buktiHtml + '</div>' +
+        '</div>' +
+        '<div style="display:flex;align-items:baseline;gap:10px">' +
+          '<span style="font-size:12px;color:var(--text-muted);width:130px;flex-shrink:0">Keterangan</span>' +
           '<div style="font-size:13px;color:var(--text);line-height:1.6;white-space:pre-wrap">' + escHtml(keterangan || '-') + '</div>' +
         '</div>' +
       '</div>';
@@ -1915,24 +1919,44 @@ async function _renderUploadImplPage(container, task, period) {
     // Edit mode: form upload menggantikan read view
     var corrEditHtml =
       '<div id="impl-corr-edit" style="display:none;padding:12px 16px">' +
+        // Edit rencana correction inline
+        '<div style="margin-bottom:12px;padding-bottom:12px;border-bottom:0.5px solid var(--border)">' +
+          '<div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start">' +
+            '<div>' +
+              '<div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Correction</div>' +
+              '<textarea class="form-control" id="impl-edit-correction" rows="2" style="resize:vertical;font-size:12px">' + escHtml(res.correction || '') + '</textarea>' +
+            '</div>' +
+            '<div style="flex-shrink:0">' +
+              '<div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Due Date' + (maxDateCorr ? ' <span style="font-size:10px">(maks. ' + formatDate(maxDateCorr) + ')</span>' : '') + '</div>' +
+              '<input class="form-control" type="date" id="impl-edit-due-corr" style="width:130px;font-size:12px;padding:5px 8px" ' + (maxDateCorr ? 'max="' + maxDateCorr + '" ' : '') + 'value="' + toDateInputValue(res.due_date_correction) + '">' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
         _buildImplUploadForm('correction', task.result_id, task.agenda_id, period.period_id, corrFotoUrls, corrKet, hasCorrSubmitted) +
       '</div>';
 
     var caEditHtml =
       '<div id="impl-ca-edit" style="display:none;padding:12px 16px">' +
+        // Edit rencana CA inline
+        '<div style="margin-bottom:12px;padding-bottom:12px;border-bottom:0.5px solid var(--border)">' +
+          '<div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start">' +
+            '<div>' +
+              '<div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Corrective Action</div>' +
+              '<textarea class="form-control" id="impl-edit-ca" rows="2" style="resize:vertical;font-size:12px">' + escHtml(res.corrective_action || '') + '</textarea>' +
+            '</div>' +
+            '<div style="flex-shrink:0">' +
+              '<div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Due Date' + (maxDateCA ? ' <span style="font-size:10px">(maks. ' + formatDate(maxDateCA) + ')</span>' : '') + '</div>' +
+              '<input class="form-control" type="date" id="impl-edit-due-ca" style="width:130px;font-size:12px;padding:5px 8px" ' + (maxDateCA ? 'max="' + maxDateCA + '" ' : '') + 'value="' + toDateInputValue(res.due_date_corrective_action) + '">' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
         _buildImplUploadForm('ca', task.result_id, task.agenda_id, period.period_id, caFotoUrls, caKet, hasCASubmitted) +
       '</div>';
 
     var tindakLanjutCard =
       '<div class="card mb-16" style="overflow:hidden">' +
-        '<div style="background:var(--primary,#1F3864);padding:10px 16px;display:flex;align-items:center;justify-content:space-between">' +
+        '<div style="background:var(--primary,#1F3864);padding:10px 16px">' +
           '<span style="color:#fff;font-size:13px;font-weight:700">Tindak Lanjut Temuan</span>' +
-          (!isLocked
-            ? '<button class="btn btn-ghost btn-sm" id="impl-edit-all-btn" onclick="_toggleAllImplEditMode()" ' +
-                'style="font-size:11px;gap:4px;color:rgba(255,255,255,.8);border-color:rgba(255,255,255,.3)">' +
-                '<i data-lucide="pencil" style="width:11px;height:11px"></i> Edit' +
-              '</button>'
-            : '') +
         '</div>' +
 
         // Correction section
@@ -1940,7 +1964,14 @@ async function _renderUploadImplPage(container, task, period) {
           '<div style="display:flex;align-items:center;gap:8px;padding:10px 16px;background:var(--surface-2,#f8f9fa);border-left:3px solid var(--blue,#3b82f6)">' +
             '<span class="badge badge-correction">CORRECTION</span>' +
             '<span style="font-size:12px;color:var(--text-muted)">Due: <strong style="color:var(--text)">' + formatDate(res.due_date_correction || '') + '</strong></span>' +
-            (hasCorrSubmitted ? '<span style="font-size:11px;color:var(--text-muted);margin-left:auto">✓ Disubmit ' + formatDate(res.impl_correction_submitted_at) + '</span>' : '') +
+            (hasCorrSubmitted ? '<span style="font-size:11px;color:var(--text-muted)">✓ Disubmit ' + formatDate(res.impl_correction_submitted_at) + '</span>' : '') +
+            '<span style="flex:1"></span>' +
+            (!isLocked
+              ? '<button class="btn btn-ghost btn-sm" id="impl-corr-edit-btn" onclick="_toggleCorrEditMode()" ' +
+                  'style="font-size:11px;gap:4px;color:var(--text-muted)">' +
+                  '<i data-lucide="pencil" style="width:11px;height:11px"></i> Edit' +
+                '</button>'
+              : '') +
           '</div>' +
           corrReadHtml +
           corrEditHtml +
@@ -1951,58 +1982,20 @@ async function _renderUploadImplPage(container, task, period) {
           '<div style="display:flex;align-items:center;gap:8px;padding:10px 16px;background:var(--surface-2,#f8f9fa);border-left:3px solid var(--purple,#8b5cf6)">' +
             '<span class="badge badge-corrective-action">CORRECTIVE ACTION</span>' +
             '<span style="font-size:12px;color:var(--text-muted)">Due: <strong style="color:var(--text)">' + formatDate(res.due_date_corrective_action || '') + '</strong></span>' +
-            (hasCASubmitted ? '<span style="font-size:11px;color:var(--text-muted);margin-left:auto">✓ Disubmit ' + formatDate(res.impl_submitted_at) + '</span>' : '') +
+            (hasCASubmitted ? '<span style="font-size:11px;color:var(--text-muted)">✓ Disubmit ' + formatDate(res.impl_submitted_at) + '</span>' : '') +
+            '<span style="flex:1"></span>' +
+            (!isLocked
+              ? '<button class="btn btn-ghost btn-sm" id="impl-ca-edit-btn" onclick="_toggleCAEditMode()" ' +
+                  'style="font-size:11px;gap:4px;color:var(--text-muted)">' +
+                  '<i data-lucide="pencil" style="width:11px;height:11px"></i> Edit' +
+                '</button>'
+              : '') +
           '</div>' +
           caReadHtml +
           caEditHtml +
         '</div>' +
 
-        // Rencana TPP di bawah (collapsed, bisa di-edit)
-        '<div style="border-top:0.5px solid var(--border);background:var(--surface-2,#f8f9fa)">' +
-          '<div id="impl-tpp-read" style="display:flex;padding:0">' +
-            '<div style="flex:1;padding:10px 16px;border-right:0.5px solid var(--border)">' +
-              '<div style="font-size:10px;font-weight:700;color:var(--blue,#3b82f6);letter-spacing:.05em;margin-bottom:3px">CORRECTION</div>' +
-              '<div style="font-size:13px;margin-bottom:3px">' + escHtml(res.correction || '-') + '</div>' +
-              '<div style="font-size:11px;color:var(--text-muted)">Due: <strong>' + formatDate(res.due_date_correction || '') + '</strong></div>' +
-            '</div>' +
-            '<div style="flex:1;padding:10px 16px">' +
-              '<div style="font-size:10px;font-weight:700;color:var(--purple,#8b5cf6);letter-spacing:.05em;margin-bottom:3px">CORRECTIVE ACTION</div>' +
-              '<div style="font-size:13px;margin-bottom:3px">' + escHtml(res.corrective_action || '-') + '</div>' +
-              '<div style="font-size:11px;color:var(--text-muted)">Due: <strong>' + formatDate(res.due_date_corrective_action || '') + '</strong></div>' +
-            '</div>' +
-          '</div>' +
-          '<div id="impl-tpp-edit" style="display:none;padding:12px 14px;border-top:0.5px solid var(--border)">' +
-            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">' +
-              '<div>' +
-                '<div style="font-size:10px;font-weight:700;color:var(--blue,#3b82f6);letter-spacing:.05em;margin-bottom:6px">CORRECTION</div>' +
-                '<div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start">' +
-                  '<textarea class="form-control" id="impl-edit-correction" rows="2" style="resize:vertical;min-height:56px;font-size:12px">' + escHtml(res.correction || '') + '</textarea>' +
-                  '<div>' +
-                    '<div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;white-space:nowrap">Due Date' + (maxDateCorr ? '<br><span>maks. ' + formatDate(maxDateCorr) + '</span>' : '') + '</div>' +
-                    '<input class="form-control" type="date" id="impl-edit-due-corr" style="width:120px;font-size:11px;padding:4px 6px" ' + (maxDateCorr ? 'max="' + maxDateCorr + '" ' : '') + 'value="' + toDateInputValue(res.due_date_correction) + '">' +
-                  '</div>' +
-                '</div>' +
-              '</div>' +
-              '<div>' +
-                '<div style="font-size:10px;font-weight:700;color:var(--purple,#8b5cf6);letter-spacing:.05em;margin-bottom:6px">CORRECTIVE ACTION</div>' +
-                '<div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start">' +
-                  '<textarea class="form-control" id="impl-edit-ca" rows="2" style="resize:vertical;min-height:56px;font-size:12px">' + escHtml(res.corrective_action || '') + '</textarea>' +
-                  '<div>' +
-                    '<div style="font-size:10px;color:var(--text-muted);margin-bottom:3px;white-space:nowrap">Due Date' + (maxDateCA ? '<br><span>maks. ' + formatDate(maxDateCA) + '</span>' : '') + '</div>' +
-                    '<input class="form-control" type="date" id="impl-edit-due-ca" style="width:120px;font-size:11px;padding:4px 6px" ' + (maxDateCA ? 'max="' + maxDateCA + '" ' : '') + 'value="' + toDateInputValue(res.due_date_corrective_action) + '">' +
-                  '</div>' +
-                '</div>' +
-              '</div>' +
-            '</div>' +
-            '<div style="display:flex;justify-content:flex-end;gap:8px">' +
-              '<button class="btn btn-outline btn-sm" onclick="_toggleAllImplEditMode()">Batal</button>' +
-              '<button class="btn btn-primary btn-sm" id="impl-tpp-save-btn" ' +
-                  'onclick="singleClick(this,function(){ _saveImplTppEdit(\'' + (period.tanggal_selesai || '') + '\',\'' + task.result_id + '\',\'' + task.agenda_id + '\',\'' + period.period_id + '\') })">' +
-                'Simpan Rencana' +
-              '</button>' +
-            '</div>' +
-          '</div>' +
-        '</div>' +
+        // (dihapus — rencana TPP sudah tampil di sub-header masing-masing section)
 
       '</div>';
 
