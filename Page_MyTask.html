@@ -1324,20 +1324,12 @@ async function _renderIsiTppPage(container, task, period) {
     '<div class="page-loader"><div class="spinner dark"></div><span>Memuat...</span></div>';
 
   try {
-    var tppData = await cachedApi('GET_TPP_ITEMS', {
-      period_id: period.period_id,
-      result_id: task.result_id,
-      agenda_id: task.agenda_id,
-    }, 30);var _taskData = await Promise.all([
+    var _taskData = await Promise.all([
       cachedApi('GET_TPP_ITEMS',    { period_id: period.period_id, result_id: task.result_id, agenda_id: task.agenda_id }, 30),
       cachedApi('GET_APPROVAL_LOG', { period_id: period.period_id, result_id: task.result_id }, 30),
     ]);
     var tppData = _taskData[0];
     var log     = _taskData[1];
-    var log = await cachedApi('GET_APPROVAL_LOG', {
-      period_id: period.period_id,
-      result_id: task.result_id,
-    }, 30);
 
     var f        = task.finding;
     var existing = (tppData && tppData[0]) ? tppData[0] : null;
@@ -1878,25 +1870,12 @@ async function _renderUploadImplPage(container, task, period) {
     '<div class="page-loader"><div class="spinner dark"></div><span>Memuat...</span></div>';
  
   try {
-    var tppData = await cachedApi('GET_TPP_ITEMS', {
-      period_id: period.period_id,
-      result_id: task.result_id,
-      agenda_id: task.agenda_id,
-    }, 30);var _taskData = await Promise.all([
-      cachedApi('GET_TPP_ITEMS',    { period_id: period.period_id, result_id: task.result_id, agenda_id: task.agenda_id }, 30),
-      cachedApi('GEvar _taskData = await Promise.all([
+    var _taskData = await Promise.all([
       cachedApi('GET_TPP_ITEMS',    { period_id: period.period_id, result_id: task.result_id, agenda_id: task.agenda_id }, 30),
       cachedApi('GET_APPROVAL_LOG', { period_id: period.period_id, result_id: task.result_id }, 30),
     ]);
     var tppData = _taskData[0];
-    var log     = _taskData[1];T_APPROVAL_LOG', { period_id: period.period_id, result_id: task.result_id }, 30),
-    ]);
-    var tppData = _taskData[0];
     var log     = _taskData[1];
-    var log = await cachedApi('GET_APPROVAL_LOG', {
-      period_id: period.period_id,
-      result_id: task.result_id,
-    }, 30);
     var f   = task.finding;
     // Read-only saat sedang dalam approval chain atau sudah CLOSED
     var isLocked = ['APP_DEPT_HEAD','APP_AUDITOR','APP_KOORDINATOR','CLOSED','OVERDUE']
