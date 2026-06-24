@@ -2665,12 +2665,12 @@ function _renderApprovalHistory(log, stage) {
                 };
                 var cls = stageClassMap[l.stage] || 'badge-slate';
                 var stageLabel = {
-                  'IMPL_CORRECTION': 'Correction',
-                  'IMPL_CA':         'Corrective Action',
-                  'IMPL':            'Implementasi',
-                  'TPP':             'Rencana TPP',
-                  'VERIFICATION':    'Verifikasi',
-                }[l.stage] || escHtml(l.stage || '');
+                  'IMPL_CORRECTION': 'CORRECTION',
+                  'IMPL_CA':         'CORRECTIVE ACTION',
+                  'IMPL':            'IMPLEMENTASI',
+                  'TPP':             'RENCANA TPP',
+                  'VERIFICATION':    'VERIFIKASI',
+                }[l.stage] || escHtml((l.stage || '').toUpperCase());
                 return '<span class="badge ' + cls + '" style="font-size:10px">' + stageLabel + '</span>';
               })() +
               (isSkipped ? '<span class="badge badge-amber" style="font-size:10px">Skip</span>' : '') +
