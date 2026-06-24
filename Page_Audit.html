@@ -266,6 +266,12 @@ async function _refreshLocks(agendaId, periodId) {
     }
 
     _patchLockBadgesInDOM();
+
+    // Update "Dimulai X menit lalu" tanpa re-render seluruh card
+    var _agoEl = document.getElementById('audit-started-ago');
+    if (_agoEl && _agoEl.dataset.startedAt) {
+      _agoEl.textContent = timeAgo(_agoEl.dataset.startedAt);
+    }
   } catch(e) { /* silent — gagal poll tidak critical */ }
 }
 
@@ -679,7 +685,7 @@ async function renderAuditChecklist(panel, agenda, areaId, periodId) {
     '<div class="card mb-16"><div class="card-body" style="padding:12px 16px">' +
       '<div class="flex items-center justify-between" style="flex-wrap:wrap;gap:8px">' +
         '<div><div class="fw-700">' + escHtml(agenda.dept) + '</div>' +
-          '<div class="text-sm text-muted">Dimulai ' + timeAgo(agenda.started_at) + ' · ' + escHtml(agenda.started_by ? agenda.started_by.split('@')[0] : '') + '</div></div>' +
+          '<div class="text-sm text-muted">Dimulai <span id="audit-started-ago" data-started-at="' + escAttr(agenda.started_at) + '">' + timeAgo(agenda.started_at) + '</span> · ' + escHtml(agenda.started_by ? agenda.started_by.split('@')[0] : '') + '</div></div>' +
         '<div class="flex gap-8 items-center">' + statusBadge(agenda.status) + '</div>' +
       '</div>' +
       '<div style="margin-top:12px">' +
@@ -1058,64 +1064,7 @@ function _buildFotoGrid(prefix, fotoUrlsStr, gKey, resultId, agendaId, periodId)
     '</div></div>';
 }
 
-// Lightbox sederhana
-function _openFotoLightbox(url) {
-  var existing = document.getElementById('foto-lightbox');
-  if (existing) existing.remove();
-  var lb = document.createElement('div');
-  lb.id = 'foto-lightbox';
-  lb.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.85);' +
-    'display:flex;align-items:center;justify-content:center;cursor:zoom-out;padding:16px';
-  lb.onclick = function() { lb.remove(); };
-
-  // blob: URL dari pending file — tampilkan langsung tanpa server
-  if (url && url.indexOf('blob:') === 0) {
-    lb.innerHTML =
-      '<div style="position:relative;max-width:90vw;max-height:90vh">' +
-        '<img src="' + escHtml(url) + '" ' +
-          'style="max-width:90vw;max-height:85vh;object-fit:contain;border-radius:8px">' +
-      '</div>';
-    document.body.appendChild(lb);
-    return;
-  }
-
-  // Pakai base64 dari cache kalau ada, atau load via server
-  var cachedSrc = _driveImgCache[url] || '';
-  lb.innerHTML =
-    '<div style="position:relative;max-width:90vw;max-height:90vh;display:flex;align-items:center;justify-content:center">' +
-      '<div id="lb-spinner" style="' + (cachedSrc ? 'display:none' : '') + 'color:#fff;font-size:13px;padding:32px">Memuat gambar...</div>' +
-      '<img id="lb-img" src="' + escHtml(cachedSrc) + '" ' +
-        'style="max-width:90vw;max-height:85vh;object-fit:contain;border-radius:8px;display:' + (cachedSrc ? 'block' : 'none') + '" ' +
-        'onerror="this.style.display=\'none\';document.getElementById(\'lb-err\').style.display=\'block\'">' +
-      '<div id="lb-err" style="display:none;color:#fff;text-align:center;padding:32px">' +
-        'Tidak bisa memuat gambar.<br>' +
-        '<a href="' + escHtml(url) + '" target="_blank" style="color:#60a5fa">Buka di tab baru</a>' +
-      '</div>' +
-      '<a href="' + escHtml(url) + '" target="_blank" onclick="event.stopPropagation()" ' +
-        'style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,.6);border-radius:6px;' +
-          'padding:6px 10px;color:#fff;text-decoration:none;font-size:12px;display:flex;align-items:center;gap:4px">' +
-        '<i data-lucide="external-link" style="width:13px;height:13px"></i>Buka tab baru' +
-      '</a>' +
-    '</div>';
-  document.body.appendChild(lb);
-  lucide.createIcons(lb);
-
-  // Kalau belum di-cache, load via server sekarang
-  if (!cachedSrc) {
-    var imgEl = lb.querySelector('#lb-img');
-    var spinner = lb.querySelector('#lb-spinner');
-    api('GET_DRIVE_IMAGE_BASE64', { url: url }).then(function(dataUri) {
-      if (!dataUri) { if (spinner) spinner.style.display = 'none'; document.getElementById('lb-err') && (document.getElementById('lb-err').style.display = 'block'); return; }
-      _driveImgCache[url] = dataUri;
-      if (imgEl) { imgEl.src = dataUri; imgEl.style.display = 'block'; }
-      if (spinner) spinner.style.display = 'none';
-    }).catch(function() {
-      if (spinner) spinner.style.display = 'none';
-      var errEl = lb.querySelector('#lb-err');
-      if (errEl) errEl.style.display = 'block';
-    });
-  }
-}
+// _openFotoLightbox dipindah ke JavaScript.html
 
 // ============================================================
 //  SURGICAL REPAINT
