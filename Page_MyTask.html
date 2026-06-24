@@ -2386,43 +2386,51 @@ async function _renderApprovalPage(container, task, period) {
         '</div>';
 
     // ── Tabel 1: Detail Temuan ────────────────────────────────
+    var _aprRow = function(label, value) {
+      return '<div style="display:flex;align-items:baseline;gap:12px;padding:8px 0;border-top:0.5px solid var(--border)">' +
+        '<span style="font-size:12px;color:var(--text-muted);width:110px;flex-shrink:0">' + label + '</span>' +
+        '<span style="font-size:13px;color:var(--text);line-height:1.6">' + value + '</span>' +
+      '</div>';
+    };
+
+    var fotoButtons = f && f.foto_urls
+      ? f.foto_urls.split(',').filter(Boolean).map(function(url, i) {
+          return '<button onclick="_openFotoLightbox(\'' + escAttr(url) + '\',\'Foto ' + (i+1) + '\')" ' +
+            'class="btn btn-outline btn-sm" style="font-size:11px">' +
+            '<i data-lucide="image" style="width:11px;height:11px"></i> Foto ' + (i+1) + '</button>';
+        }).join(' ')
+      : '<span style="font-size:12px;color:var(--text-muted)">-</span>';
+
     var detailTemuan =
       '<div class="card mb-16" style="overflow:hidden">' +
         '<div style="background:var(--primary,#1F3864);padding:10px 16px">' +
           '<span style="color:#fff;font-size:13px;font-weight:700">Detail Temuan</span>' +
         '</div>' +
-        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:var(--surface-2,#f8f9fa);border-bottom:1px solid var(--border)">' +
-          '<div style="padding:8px 14px;border-right:1px solid var(--border)">' +
-            '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em">RESULT ID</div>' +
-            '<div style="font-size:12px;font-weight:600;font-family:monospace">' + escHtml(f ? f.result_id : '-') + '</div>' +
+        '<div style="display:flex">' +
+
+          // Kolom kiri — fixed 280px
+          '<div style="width:280px;flex-shrink:0;padding:10px 16px;border-right:0.5px solid var(--border)">' +
+            '<div style="padding:8px 0">' +
+              '<span style="font-size:12px;color:var(--text-muted);width:110px;display:inline-block">Result ID</span>' +
+              '<span style="font-size:13px;font-family:monospace;color:var(--text)">' + escHtml(f ? f.result_id : '-') + '</span>' +
+            '</div>' +
+            _aprRow('Periode Audit', escHtml(period.nama_periode || '-')) +
+            _aprRow('Dept / Area',   escHtml(task.agenda ? task.agenda.dept : '-')) +
           '</div>' +
-          '<div style="padding:8px 14px;border-right:1px solid var(--border)">' +
-            '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em">PERIODE AUDIT</div>' +
-            '<div style="font-size:12px;font-weight:600">' + escHtml(period.nama_periode || '-') + '</div>' +
+
+          // Kolom kanan — flex:1
+          '<div style="flex:1;min-width:0;padding:10px 16px">' +
+            '<div style="padding:8px 0">' +
+              '<span style="font-size:12px;color:var(--text-muted);width:110px;display:inline-block;vertical-align:top">Deskripsi</span>' +
+              '<span style="font-size:13px;color:var(--text);line-height:1.6;display:inline;max-width:calc(100% - 122px)">' + escHtml(f ? f.deskripsi_temuan : '-') + '</span>' +
+            '</div>' +
+            _aprRow('Lokasi', escHtml(f ? f.lokasi_temuan || '-' : '-')) +
+            '<div style="display:flex;align-items:flex-start;gap:12px;padding:8px 0;border-top:0.5px solid var(--border)">' +
+              '<span style="font-size:12px;color:var(--text-muted);width:110px;flex-shrink:0;padding-top:2px">Bukti foto</span>' +
+              '<div style="display:flex;flex-wrap:wrap;gap:5px">' + fotoButtons + '</div>' +
+            '</div>' +
           '</div>' +
-          '<div style="padding:8px 14px">' +
-            '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em">DEPT / AREA</div>' +
-            '<div style="font-size:12px;font-weight:600">' + escHtml(task.agenda ? task.agenda.dept : '-') + '</div>' +
-          '</div>' +
-        '</div>' +
-        '<div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--border)">' +
-          '<div style="padding:10px 14px;border-right:1px solid var(--border)">' +
-            '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em;margin-bottom:4px">DESKRIPSI KETIDAKSESUAIAN</div>' +
-            '<div style="font-size:13px">' + escHtml(f ? f.deskripsi_temuan : '-') + '</div>' +
-          '</div>' +
-          '<div style="padding:10px 14px">' +
-            '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em;margin-bottom:4px">LOKASI</div>' +
-            '<div style="font-size:13px;margin-bottom:10px">' + escHtml(f ? f.lokasi_temuan || '-' : '-') + '</div>' +
-            '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em;margin-bottom:4px">BUKTI FOTO</div>' +
-            (f && f.foto_urls
-              ? '<div style="display:flex;flex-wrap:wrap;gap:5px">' +
-                  f.foto_urls.split(',').filter(Boolean).map(function(url, i) {
-                    return '<a href="' + escHtml(url) + '" target="_blank" class="btn btn-outline btn-sm" style="font-size:11px">' +
-                      '<i data-lucide="image" style="width:11px;height:11px"></i> Foto ' + (i + 1) + '</a>';
-                  }).join('') +
-                '</div>'
-              : '<span style="font-size:12px;color:var(--text-muted)">-</span>') +
-          '</div>' +
+
         '</div>' +
       '</div>';
 
@@ -2444,7 +2452,6 @@ async function _renderApprovalPage(container, task, period) {
             '</div>' +
             '<div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--border)">' +
               '<div style="padding:10px 16px;border-right:1px solid var(--border)">' +
-                '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em;margin-bottom:6px">BUKTI IMPLEMENTASI</div>' +
                 '<div style="display:flex;flex-wrap:wrap;gap:5px">' +
                   (res.impl_correction_foto_urls
                     ? res.impl_correction_foto_urls.split(',').filter(Boolean).map(function(entry, i) {
@@ -2474,7 +2481,6 @@ async function _renderApprovalPage(container, task, period) {
             '</div>' +
             '<div style="display:grid;grid-template-columns:1fr 1fr">' +
               '<div style="padding:10px 16px;border-right:1px solid var(--border)">' +
-                '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em;margin-bottom:6px">BUKTI IMPLEMENTASI</div>' +
                 '<div style="display:flex;flex-wrap:wrap;gap:5px">' +
                   (res.impl_corrective_action_foto_urls
                     ? res.impl_corrective_action_foto_urls.split(',').filter(Boolean).map(function(entry, i) {
