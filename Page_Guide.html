@@ -1,0 +1,501 @@
+<script>
+// ============================================================
+//  Page_Guide.html
+//  In-app guided tour + welcome modal per role
+//  - Welcome modal otomatis pertama kali (per perangkat, via localStorage)
+//  - Tour per halaman: Dashboard, My Task, Hasil Audit
+//  - Tombol "?" di sidebar untuk panggil ulang kapan saja
+// ============================================================
+
+// ── State ────────────────────────────────────────────────────
+var _guideOverlay    = null;
+var _guideTourActive = false;
+var _guideTourSteps  = [];
+var _guideTourIndex  = 0;
+var _guideScrollEl   = null;
+
+var GUIDE_LS_KEY = 'guide_welcomed_v1';
+
+// ── Init — dipanggil dari renderSidebar setelah App.profile siap ─
+function guideInit() {
+  _guideInjectBtn();
+  var seen = false;
+  try { seen = !!localStorage.getItem(GUIDE_LS_KEY); } catch(e) {}
+  if (!seen) {
+    setTimeout(function() { guideShowWelcome(); }, 600);
+  }
+}
+
+// ── Tombol "?" di sidebar ─────────────────────────────────────
+function _guideInjectBtn() {
+  if (document.getElementById('guide-help-btn')) return;
+  var sidebar = document.getElementById('sidebar-nav');
+  if (!sidebar) return;
+
+  var btn = document.createElement('div');
+  btn.id        = 'guide-help-btn';
+  btn.title     = 'Panduan Penggunaan';
+  btn.className = 'nav-item';
+  btn.style.cssText = 'margin-top:auto;border-top:1px solid rgba(255,255,255,.08);padding-top:10px;margin-top:8px';
+  btn.innerHTML =
+    '<i data-lucide="help-circle" style="width:16px;height:16px;flex-shrink:0"></i>' +
+    '<span class="nav-label">Panduan</span>';
+  btn.onclick = function() { guideShowWelcome(true); };
+  sidebar.appendChild(btn);
+  if (window.lucide) lucide.createIcons(btn);
+}
+
+// ════════════════════════════════════════════════════════════
+//  WELCOME MODAL
+// ════════════════════════════════════════════════════════════
+
+function guideShowWelcome(forceShow) {
+  var p = App.profile || {};
+
+  // Tentukan role utama (prioritas: Koordinator > Auditor > DeptHead > Auditee > Viewer)
+  var role = 'viewer';
+  if (p.isKoordinator) role = 'koordinator';
+  else if (p.isAuditor && !p.isDeptHead && !p.isAuditee) role = 'auditor';
+  else if (p.isDeptHead && !p.isAuditee) role = 'depthead';
+  else if (p.isAuditee) role = 'auditee';
+
+  var roleContent = {
+    koordinator: {
+      color:    '#2563eb',
+      icon:     'shield-check',
+      badge:    'Koordinator',
+      tagline:  'Kamu mengelola seluruh proses audit dan verifikasi temuan.',
+      steps: [
+        { icon: 'check-circle',  text: 'Verifikasi temuan dari auditor di halaman <strong>My Task</strong> — pastikan deskripsi dan lokasi temuan sudah benar sebelum diverifikasi.' },
+        { icon: 'bar-chart-2',   text: '<strong>Dashboard</strong> menampilkan progress TPP dan implementasi per area secara real-time.' },
+        { icon: 'table-2',       text: '<strong>Hasil Audit</strong> adalah tabel lengkap semua temuan Non Comply beserta status correction dan corrective action.' },
+        { icon: 'bell',          text: 'Kamu akan menerima <strong>notifikasi email</strong> saat ada submission implementasi yang perlu di-approve.' },
+      ],
+      tourPage: null,
+      tourLabel: 'Lihat Tour Dashboard',
+      tourTarget: 'dashboard',
+    },
+    auditor: {
+      color:    '#7c3aed',
+      icon:     'clipboard-list',
+      badge:    'Auditor',
+      tagline:  'Kamu bertanggung jawab me-review implementasi tindak lanjut temuan.',
+      steps: [
+        { icon: 'upload-cloud',  text: 'Di <strong>My Task</strong>, kamu akan mendapat tugas <em>Review Implementasi</em> saat auditee sudah upload bukti.' },
+        { icon: 'check-circle',  text: 'Buka detail temuan, periksa foto bukti dan keterangan, lalu <strong>Approve</strong> atau <strong>Reject</strong> dengan komentar.' },
+        { icon: 'table-2',       text: '<strong>Hasil Audit</strong> memperlihatkan status semua temuan di area yang kamu audit.' },
+        { icon: 'bell',          text: 'Notifikasi email dikirim saat ada submission implementasi yang menunggu review kamu.' },
+      ],
+      tourPage: null,
+      tourLabel: 'Lihat Tour My Task',
+      tourTarget: 'mytask',
+    },
+    depthead: {
+      color:    '#0d9488',
+      icon:     'user-check',
+      badge:    'Dept Head',
+      tagline:  'Kamu menjadi approver pertama untuk implementasi tindak lanjut temuan di departemenmu.',
+      steps: [
+        { icon: 'upload-cloud',  text: 'Di <strong>My Task</strong>, kamu akan mendapat tugas <em>Review Implementasi</em> saat auditee sudah upload bukti temuan di area kamu.' },
+        { icon: 'check-circle',  text: 'Buka detail temuan, periksa foto bukti, lalu <strong>Approve</strong> atau <strong>Reject</strong> disertai komentar bila perlu.' },
+        { icon: 'bell',          text: 'Notifikasi email dikirim setiap ada submission implementasi baru yang menunggu approval kamu.' },
+      ],
+      tourPage: null,
+      tourLabel: 'Lihat Tour My Task',
+      tourTarget: 'mytask',
+    },
+    auditee: {
+      color:    '#059669',
+      icon:     'pencil',
+      badge:    'Auditee',
+      tagline:  'Kamu bertugas mengisi rencana tindak lanjut dan mengupload bukti implementasi.',
+      steps: [
+        { icon: 'wrench',        text: 'Setelah temuan diverifikasi koordinator, buka <strong>My Task → Isi TPP</strong> dan isi Correction + Corrective Action beserta due date masing-masing.' },
+        { icon: 'camera',        text: 'Setelah melaksanakan tindakan, buka <strong>My Task → Upload Implementasi</strong> dan upload foto bukti beserta keterangan.' },
+        { icon: 'clock',         text: 'Perhatikan <strong>due date</strong> — temuan yang melewati due date akan ditandai Overdue di dashboard.' },
+        { icon: 'bell',          text: 'Kamu akan menerima email reminder kalau ada temuan yang belum diselesaikan.' },
+      ],
+      tourPage: null,
+      tourLabel: 'Lihat Tour My Task',
+      tourTarget: 'mytask',
+    },
+    viewer: {
+      color:    '#64748b',
+      icon:     'eye',
+      badge:    'Viewer',
+      tagline:  'Kamu dapat memantau progress audit tanpa dapat mengubah data.',
+      steps: [
+        { icon: 'bar-chart-2',   text: '<strong>Dashboard</strong> menampilkan ringkasan progress audit dan status tindak lanjut per area.' },
+        { icon: 'table-2',       text: '<strong>Hasil Audit</strong> memperlihatkan semua temuan Non Comply beserta status correction dan corrective action.' },
+      ],
+      tourPage: null,
+      tourLabel: 'Lihat Tour Dashboard',
+      tourTarget: 'dashboard',
+    },
+  };
+
+  var c = roleContent[role];
+  var nama = (p.nama || 'Halo').split(' ')[0];
+
+  var stepsHtml = c.steps.map(function(s) {
+    return '<div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid #f1f5f9">' +
+      '<div style="width:32px;height:32px;border-radius:8px;background:' + c.color + '18;' +
+        'display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">' +
+        '<i data-lucide="' + s.icon + '" style="width:15px;height:15px;color:' + c.color + '"></i>' +
+      '</div>' +
+      '<div style="font-size:13px;color:#374151;line-height:1.6">' + s.text + '</div>' +
+    '</div>';
+  }).join('');
+
+  var html =
+    '<div id="guide-welcome-overlay" style="position:fixed;inset:0;background:rgba(15,31,61,.55);' +
+      'backdrop-filter:blur(4px);z-index:2000;display:flex;align-items:center;justify-content:center;padding:20px">' +
+      '<div style="background:#fff;border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,.18);' +
+        'width:100%;max-width:480px;max-height:90vh;overflow-y:auto;animation:_guideSlideIn .3s ease">' +
+
+        // Header
+        '<div style="padding:24px 24px 16px;border-bottom:1px solid #f1f5f9">' +
+          '<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">' +
+            '<div style="width:40px;height:40px;border-radius:10px;background:' + c.color + '18;' +
+              'display:flex;align-items:center;justify-content:center;flex-shrink:0">' +
+              '<i data-lucide="' + c.icon + '" style="width:20px;height:20px;color:' + c.color + '"></i>' +
+            '</div>' +
+            '<div>' +
+              '<div style="font-size:11px;font-weight:700;letter-spacing:.06em;color:' + c.color + ';text-transform:uppercase">' + c.badge + '</div>' +
+              '<div style="font-size:18px;font-weight:800;color:#0f172a">Halo, ' + escHtml(nama) + '! 👋</div>' +
+            '</div>' +
+          '</div>' +
+          '<div style="font-size:13px;color:#64748b;line-height:1.6">' + c.tagline + '</div>' +
+        '</div>' +
+
+        // Steps
+        '<div style="padding:8px 24px 16px">' +
+          '<div style="font-size:11px;font-weight:700;letter-spacing:.06em;color:#94a3b8;padding:12px 0 4px">APA YANG PERLU KAMU LAKUKAN</div>' +
+          stepsHtml +
+        '</div>' +
+
+        // Footer
+        '<div style="padding:16px 24px 20px;display:flex;gap:10px;flex-wrap:wrap;border-top:1px solid #f1f5f9">' +
+          '<button onclick="_guideWelcomeTour(\'' + c.tourTarget + '\')" ' +
+            'style="flex:1;padding:10px 16px;border-radius:8px;border:none;' +
+              'background:' + c.color + ';color:#fff;font-size:13px;font-weight:700;cursor:pointer;' +
+              'display:flex;align-items:center;justify-content:center;gap:6px">' +
+            '<i data-lucide="play-circle" style="width:15px;height:15px"></i>' +
+            escHtml(c.tourLabel) +
+          '</button>' +
+          '<button onclick="_guideWelcomeClose()" ' +
+            'style="padding:10px 16px;border-radius:8px;border:1.5px solid #e2e8f0;' +
+              'background:transparent;font-size:13px;font-weight:600;color:#64748b;cursor:pointer">' +
+            'Lewati' +
+          '</button>' +
+        '</div>' +
+
+      '</div>' +
+    '</div>';
+
+  // Inject overlay
+  var existing = document.getElementById('guide-welcome-overlay');
+  if (existing) existing.remove();
+  document.body.insertAdjacentHTML('beforeend', html);
+  if (window.lucide) lucide.createIcons(document.getElementById('guide-welcome-overlay'));
+
+  // Tandai sudah dilihat
+  try { localStorage.setItem(GUIDE_LS_KEY, '1'); } catch(e) {}
+}
+
+function _guideWelcomeClose() {
+  var el = document.getElementById('guide-welcome-overlay');
+  if (el) {
+    el.style.opacity = '0';
+    el.style.transition = 'opacity .2s';
+    setTimeout(function() { if (el.parentNode) el.parentNode.removeChild(el); }, 200);
+  }
+}
+
+function _guideWelcomeTour(page) {
+  _guideWelcomeClose();
+  setTimeout(function() {
+    if (App.currentPage !== page) {
+      navigateTo(page);
+      setTimeout(function() { guideStartTour(page); }, 800);
+    } else {
+      guideStartTour(page);
+    }
+  }, 300);
+}
+
+// ════════════════════════════════════════════════════════════
+//  TOUR ENGINE
+// ════════════════════════════════════════════════════════════
+
+var GUIDE_TOURS = {
+  'dashboard': [
+    {
+      target:  null,
+      title:   'Dashboard',
+      text:    'Halaman ini adalah pusat monitoring audit. Kamu bisa lihat progress keseluruhan dan status tindak lanjut per area di sini.',
+      position:'center',
+    },
+    {
+      target:  '.db-progress-grid',
+      title:   'Progres Audit',
+      text:    'Donut chart menunjukkan berapa area yang sudah selesai, sedang berjalan, dan belum dimulai. Klik "Detail Per Area" untuk lihat breakdown per area.',
+      position:'bottom',
+    },
+    {
+      target:  '#db-approval-body',
+      title:   'Status Tindak Lanjut',
+      text:    'Tabel ini menampilkan jumlah temuan per area berdasarkan statusnya — Open TPP, Open Implementasi, dalam proses Approval, dan Closed.',
+      position:'top',
+    },
+    {
+      target:  '#analytics-section',
+      title:   'Visualisasi Data',
+      text:    'Bagian ini memungkinkan kamu membuat chart interaktif — bar, pie, line — berdasarkan dimensi yang kamu pilih seperti Departemen atau Status Temuan.',
+      position:'top',
+    },
+  ],
+  'mytask': [
+    {
+      target:  null,
+      title:   'My Task',
+      text:    'Halaman ini menampilkan semua tugas aktif yang perlu kamu selesaikan — verifikasi temuan, isi TPP, upload bukti, atau approve implementasi.',
+      position:'center',
+    },
+    {
+      target:  '.task-section',
+      title:   'Daftar Tugas',
+      text:    'Setiap tugas dikelompokkan berdasarkan jenisnya. Klik salah satu kartu tugas untuk membuka detail dan melakukan tindakan.',
+      position:'bottom',
+    },
+    {
+      target:  '#mytask-period-info',
+      title:   'Periode Aktif',
+      text:    'Tugas yang tampil adalah untuk periode audit yang sedang aktif. Semua deadline dan due date mengacu ke periode ini.',
+      position:'bottom',
+    },
+  ],
+  'hasil-audit': [
+    {
+      target:  null,
+      title:   'Hasil Audit',
+      text:    'Tabel ini menampilkan semua temuan Non Comply beserta status correction dan corrective action dari setiap temuan.',
+      position:'center',
+    },
+    {
+      target:  '#ha-search',
+      title:   'Pencarian',
+      text:    'Ketik nama dept, deskripsi temuan, atau result ID untuk menyaring data dengan cepat.',
+      position:'bottom',
+    },
+    {
+      target:  '#ha-thead',
+      title:   'Filter per Kolom',
+      text:    'Klik header kolom manapun untuk memfilter data berdasarkan kolom tersebut. Kolom tanggal punya filter range, kolom status punya filter checkbox.',
+      position:'bottom',
+    },
+    {
+      target:  '#ha-col-btn',
+      title:   'Sembunyikan Kolom',
+      text:    'Klik tombol "Kolom" untuk memilih kolom mana yang ingin ditampilkan. Drag tepi kanan header untuk mengubah lebar kolom.',
+      position:'bottom',
+    },
+    {
+      target:  '#ha-dl-btn',
+      title:   'Download CSV',
+      text:    'Export data ke CSV — bisa semua data atau hanya data yang sedang difilter.',
+      position:'bottom',
+    },
+  ],
+};
+
+function guideStartTour(page) {
+  var steps = GUIDE_TOURS[page];
+  if (!steps || !steps.length) return;
+
+  _guideTourSteps  = steps;
+  _guideTourIndex  = 0;
+  _guideTourActive = true;
+
+  _guideShowStep(0);
+}
+
+function _guideShowStep(index) {
+  // Hapus tooltip lama
+  _guideCleanup(false);
+
+  if (index >= _guideTourSteps.length) {
+    _guideEndTour();
+    return;
+  }
+
+  var step = _guideTourSteps[index];
+  var total = _guideTourSteps.length;
+
+  // Cari elemen target
+  var targetEl = step.target ? document.querySelector(step.target) : null;
+
+  // Buat overlay backdrop
+  var overlay = document.createElement('div');
+  overlay.id = 'guide-tour-overlay';
+  overlay.style.cssText =
+    'position:fixed;inset:0;z-index:1900;pointer-events:none';
+
+  // Backdrop gelap di luar highlight
+  var backdrop = document.createElement('div');
+  backdrop.id = 'guide-tour-backdrop';
+  backdrop.style.cssText =
+    'position:fixed;inset:0;background:rgba(15,31,61,.6);z-index:1900;pointer-events:all';
+  backdrop.onclick = function(e) {
+    if (e.target === backdrop) _guideNextStep();
+  };
+  document.body.appendChild(backdrop);
+
+  var rect = null;
+  if (targetEl) {
+    rect = targetEl.getBoundingClientRect();
+    // Scroll ke element kalau tidak terlihat
+    targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    // Cutout highlight — pakai outline box
+    var highlight = document.createElement('div');
+    highlight.id = 'guide-tour-highlight';
+    highlight.style.cssText =
+      'position:fixed;' +
+      'top:' + (rect.top - 6) + 'px;' +
+      'left:' + (rect.left - 6) + 'px;' +
+      'width:' + (rect.width + 12) + 'px;' +
+      'height:' + (rect.height + 12) + 'px;' +
+      'border-radius:10px;' +
+      'box-shadow:0 0 0 4000px rgba(15,31,61,.6);' +
+      'border:2px solid #06b6d4;' +
+      'z-index:1901;pointer-events:none;' +
+      'animation:_guidePulse 2s ease-in-out infinite';
+    document.body.appendChild(highlight);
+  }
+
+  // Tooltip
+  var tooltip = document.createElement('div');
+  tooltip.id = 'guide-tour-tooltip';
+
+  var progressDots = '';
+  for (var i = 0; i < total; i++) {
+    progressDots +=
+      '<div style="width:' + (i === index ? '18' : '6') + 'px;height:6px;border-radius:3px;' +
+        'background:' + (i === index ? '#06b6d4' : 'rgba(255,255,255,.3)') + ';' +
+        'transition:all .25s"></div>';
+  }
+
+  tooltip.innerHTML =
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+      '<div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#06b6d4;text-transform:uppercase">' +
+        'PANDUAN ' + (index + 1) + ' / ' + total +
+      '</div>' +
+      '<button onclick="_guideEndTour()" ' +
+        'style="width:22px;height:22px;border-radius:50%;border:none;background:rgba(255,255,255,.15);' +
+          'color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;line-height:1">' +
+        '×' +
+      '</button>' +
+    '</div>' +
+    '<div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:6px">' + escHtml(step.title) + '</div>' +
+    '<div style="font-size:13px;color:rgba(255,255,255,.85);line-height:1.6;margin-bottom:14px">' + step.text + '</div>' +
+    '<div style="display:flex;align-items:center;justify-content:space-between">' +
+      '<div style="display:flex;gap:4px;align-items:center">' + progressDots + '</div>' +
+      '<div style="display:flex;gap:8px">' +
+        (index > 0
+          ? '<button onclick="_guidePrevStep()" style="padding:7px 14px;border-radius:7px;border:1.5px solid rgba(255,255,255,.3);' +
+              'background:transparent;color:#fff;font-size:12px;font-weight:600;cursor:pointer">← Kembali</button>'
+          : '') +
+        '<button onclick="_guideNextStep()" ' +
+          'style="padding:7px 18px;border-radius:7px;border:none;' +
+            'background:#06b6d4;color:#fff;font-size:13px;font-weight:700;cursor:pointer">' +
+          (index === total - 1 ? 'Selesai ✓' : 'Lanjut →') +
+        '</button>' +
+      '</div>' +
+    '</div>';
+
+  tooltip.style.cssText =
+    'position:fixed;z-index:1902;' +
+    'background:linear-gradient(135deg,#0f1f3d,#1a3260);' +
+    'border:1px solid rgba(6,182,212,.4);' +
+    'border-radius:12px;padding:16px 18px;' +
+    'width:320px;max-width:calc(100vw - 32px);' +
+    'box-shadow:0 16px 40px rgba(0,0,0,.4);' +
+    'animation:_guideSlideIn .25s ease';
+
+  document.body.appendChild(tooltip);
+  if (window.lucide) lucide.createIcons(tooltip);
+
+  // Posisi tooltip
+  _guidePositionTooltip(tooltip, rect, step.position);
+}
+
+function _guidePositionTooltip(tooltip, rect, position) {
+  var tw = 320;
+  var th = tooltip.offsetHeight || 180;
+  var vw = window.innerWidth;
+  var vh = window.innerHeight;
+  var margin = 16;
+
+  var left, top;
+
+  if (!rect || position === 'center') {
+    // Center di layar
+    left = Math.max(margin, (vw - tw) / 2);
+    top  = Math.max(margin, (vh - th) / 2);
+  } else if (position === 'bottom') {
+    left = Math.max(margin, Math.min(rect.left, vw - tw - margin));
+    top  = rect.bottom + 12;
+    if (top + th > vh - margin) top = rect.top - th - 12;
+  } else if (position === 'top') {
+    left = Math.max(margin, Math.min(rect.left, vw - tw - margin));
+    top  = rect.top - th - 12;
+    if (top < margin) top = rect.bottom + 12;
+  } else {
+    left = Math.max(margin, (vw - tw) / 2);
+    top  = Math.max(margin, (vh - th) / 2);
+  }
+
+  tooltip.style.left = left + 'px';
+  tooltip.style.top  = top  + 'px';
+}
+
+function _guideNextStep() {
+  _guideTourIndex++;
+  _guideShowStep(_guideTourIndex);
+}
+
+function _guidePrevStep() {
+  if (_guideTourIndex > 0) {
+    _guideTourIndex--;
+    _guideShowStep(_guideTourIndex);
+  }
+}
+
+function _guideEndTour() {
+  _guideTourActive = false;
+  _guideCleanup(true);
+  // Toast selamat
+  if (typeof toast === 'function') toast('Tour selesai! Klik tombol Panduan di sidebar untuk melihat lagi.', 'success');
+}
+
+function _guideCleanup(full) {
+  ['guide-tour-overlay','guide-tour-backdrop','guide-tour-highlight','guide-tour-tooltip'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+  });
+}
+
+// ── CSS animasi (inject sekali) ───────────────────────────────
+(function() {
+  if (document.getElementById('guide-styles')) return;
+  var style = document.createElement('style');
+  style.id = 'guide-styles';
+  style.textContent =
+    '@keyframes _guideSlideIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}' +
+    '@keyframes _guidePulse{0%,100%{box-shadow:0 0 0 4000px rgba(15,31,61,.6),0 0 0 3px rgba(6,182,212,.5)}' +
+      '50%{box-shadow:0 0 0 4000px rgba(15,31,61,.6),0 0 0 6px rgba(6,182,212,.2)}}';
+  document.head.appendChild(style);
+})();
+
+</script>
