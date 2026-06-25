@@ -103,7 +103,7 @@ async function _buildTaskList(findings, agendas, period) {
   }
 
   // ── 3. UPLOAD IMPLEMENTASI (Auditee — DeptHead dikecualikan) ─────────────
-  if (p.isAuditee) {
+  if (p.isAuditee && !p.isDeptHead) {
     findings
       .filter(function(f) {
         return f.finding_status === 'OPEN_IMPL' &&
