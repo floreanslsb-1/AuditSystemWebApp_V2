@@ -89,7 +89,7 @@ const CONFIG = {
   },
 
   NOTIFICATIONS_ENABLED: true,   // ← set false untuk disable semua notifikasi
-  TEST_MODE_EMAIL: 'floreansalsabila.irdana@wingscorp.com', // ← kosongkan ('') untuk production
+  TEST_MODE_EMAIL: '', // ← kosong = kirim ke penerima asli
 
   LOCK_TIMEOUT_MINUTES: 60,
   CACHE_TTL_SECONDS:    21600,
