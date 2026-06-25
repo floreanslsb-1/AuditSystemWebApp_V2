@@ -792,13 +792,51 @@ function _routeAction(action, payload, profile) {
       return { success: true };
     }
 
+    case 'GET_MY_OPEN_TPP_COUNT': {
+      // Cek apakah user yang login punya temuan status OPEN (belum isi TPP)
+      // untuk periode tertentu. Dipakai untuk kontrol banner overdue.
+      const period_otc = payload.period_id ? getPeriodById(payload.period_id) : getActivePeriod();
+      if (!period_otc || !period_otc.spreadsheet_id) return { count: 0 };
+      if (!profile.isAuditee) return { count: 0 };
+      const agendas_otc  = getCachedAgendasByPeriod(period_otc.period_id);
+      const findings_otc = getAllFindingsByPeriod(period_otc.spreadsheet_id, period_otc.period_id);
+      // Temukan area milik user ini
+      const myEmail_otc = profile.email;
+      const myAgendaIds_otc = new Set(
+        agendas_otc
+          .filter(function(a) {
+            return a.auditee_emails && a.auditee_emails.toLowerCase().split(',')
+              .map(function(e) { return e.trim(); })
+              .includes(myEmail_otc.toLowerCase());
+          })
+          .map(function(a) { return a.agenda_id; })
+      );
+      const count = findings_otc.filter(function(f) {
+        return f.status === CONFIG.RESULT_STATUS.NON_COMPLY &&
+               f.finding_status === CONFIG.FINDING_STATUS.OPEN &&
+               myAgendaIds_otc.has(f.agenda_id);
+      }).length;
+      return { count: count };
+    }
+
     case 'GET_HASIL_AUDIT': {
       const period_ha = payload.period_id ? getPeriodById(payload.period_id) : getActivePeriod();
       if (!period_ha || !period_ha.spreadsheet_id) return [];
       const findings_ha = getAllFindingsByPeriod(period_ha.spreadsheet_id, period_ha.period_id);
       const agendas_ha  = getCachedAgendasByPeriod(period_ha.period_id);
+      // Hanya tampilkan temuan dari agenda yang sudah DONE (audit selesai)
+      // dan sudah melewati verifikasi (finding_status bukan PENDING_VERIFICATION)
+      const doneAgendaIds_ha = new Set(
+        agendas_ha
+          .filter(function(a) { return a.status === CONFIG.AGENDA_STATUS.DONE; })
+          .map(function(a) { return a.agenda_id; })
+      );
       return findings_ha
-        .filter(function(f) { return f.status === CONFIG.RESULT_STATUS.NON_COMPLY; })
+        .filter(function(f) {
+          return f.status === CONFIG.RESULT_STATUS.NON_COMPLY &&
+                 doneAgendaIds_ha.has(f.agenda_id) &&
+                 f.finding_status !== CONFIG.FINDING_STATUS.PENDING_VERIFICATION;
+        })
         .map(function(f) {
           var ag = agendas_ha.find(function(a) { return a.agenda_id === f.agenda_id; });
           return _sanitizeObj(Object.assign({}, f, {
