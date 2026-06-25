@@ -52,13 +52,18 @@ function _guideInjectBtn() {
 function guideShowWelcome(forceShow) {
   var p = App.profile || {};
 
-  // Kumpulkan semua role yang dimiliki user
+  // Kumpulkan semua role yang dimiliki user (Koordinator tidak perlu tour)
   var availableRoles = [];
-  if (p.isKoordinator)               availableRoles.push('koordinator');
   if (p.isAuditor)                   availableRoles.push('auditor');
   if (p.isDeptHead)                  availableRoles.push('depthead');
   if (p.isAuditee && !p.isDeptHead)  availableRoles.push('auditee');
   if (!availableRoles.length)        availableRoles.push('viewer');
+
+  // Koordinator — langsung tampilkan welcome tanpa selector/tour
+  if (p.isKoordinator && !availableRoles.length) {
+    _guideShowWelcomeForRole('koordinator');
+    return;
+  }
 
   // Kalau multi-role, tampilkan selector dulu
   if (availableRoles.length > 1) {
@@ -100,9 +105,9 @@ function _guideShowWelcomeForRole(role) {
         { icon: 'table-2',       text: '<strong>Hasil Audit</strong> memperlihatkan status semua temuan di area yang kamu audit.' },
         { icon: 'bell',          text: 'Notifikasi email dikirim saat ada submission implementasi yang menunggu review kamu.' },
       ],
-      tourPage: null,
-      tourLabel: 'Lihat Tour My Task',
+      tourLabel:  'Mulai Tour My Task',
       tourTarget: 'mytask',
+      extraTours: ['dashboard', 'hasil-audit'],
     },
     depthead: {
       color:    '#0d9488',
@@ -114,9 +119,9 @@ function _guideShowWelcomeForRole(role) {
         { icon: 'check-circle',  text: 'Buka detail temuan, periksa foto bukti, lalu <strong>Approve</strong> atau <strong>Reject</strong> disertai komentar bila perlu.' },
         { icon: 'bell',          text: 'Notifikasi email dikirim setiap ada submission implementasi baru yang menunggu approval kamu.' },
       ],
-      tourPage: null,
-      tourLabel: 'Lihat Tour My Task',
+      tourLabel:  'Mulai Tour My Task',
       tourTarget: 'mytask',
+      extraTours: ['dashboard', 'hasil-audit'],
     },
     auditee: {
       color:    '#059669',
