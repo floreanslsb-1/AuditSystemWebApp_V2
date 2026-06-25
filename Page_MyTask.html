@@ -1509,17 +1509,15 @@ async function _submitTpp(resultId, agendaId, periodId) {
     return toast('Due date correction harus lebih awal atau sama dengan due date corrective action.', 'error');
 
   // Validasi max date
-  if (period) {
-    var _pd = App.activePeriod || {};
-    var _endDate = _pd.tanggal_selesai ? new Date(_pd.tanggal_selesai) : null;
-    if (_endDate) {
-      var _maxCorr = new Date(_endDate); _maxCorr.setMonth(_maxCorr.getMonth() + 3);
-      var _maxCA   = new Date(_endDate); _maxCA.setFullYear(_maxCA.getFullYear() + 1);
-      if (new Date(dueDateCorr) > _maxCorr)
-        return toast('Due date correction melebihi batas maksimal (' + formatDate(_maxCorr.toISOString().split('T')[0]) + ').', 'error');
-      if (new Date(dueDateCA) > _maxCA)
-        return toast('Due date corrective action melebihi batas maksimal (' + formatDate(_maxCA.toISOString().split('T')[0]) + ').', 'error');
-    }
+  var _pd = App.activePeriod || {};
+  var _endDate = _pd.tanggal_selesai ? new Date(_pd.tanggal_selesai) : null;
+  if (_endDate) {
+    var _maxCorr = new Date(_endDate); _maxCorr.setMonth(_maxCorr.getMonth() + 3);
+    var _maxCA   = new Date(_endDate); _maxCA.setFullYear(_maxCA.getFullYear() + 1);
+    if (new Date(dueDateCorr) > _maxCorr)
+      return toast('Due date correction melebihi batas maksimal (' + formatDate(_maxCorr.toISOString().split('T')[0]) + ').', 'error');
+    if (new Date(dueDateCA) > _maxCA)
+      return toast('Due date corrective action melebihi batas maksimal (' + formatDate(_maxCA.toISOString().split('T')[0]) + ').', 'error');
   }
 
   var btn      = document.getElementById('tpp-submit-btn');
