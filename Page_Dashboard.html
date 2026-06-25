@@ -209,7 +209,9 @@ function _renderDashboardData(container, data, viewablePeriods, selectedPeriodId
   lucide.createIcons();
 
   // Render analytics section setelah DOM siap
-  renderAnalyticsSection(findings, period);
+  if (typeof renderAnalyticsSection === 'function') {
+    renderAnalyticsSection(findings, period, agendas);
+  }
 }
 
 // ════════════════════════════════════════════════════════════
@@ -237,7 +239,8 @@ function _dbStyles() {
     '}' +
     '.db-tbl tr:last-child td{border-bottom:none}' +
     '.db-tbl td:last-child,.db-tbl th:last-child{border-right:none}' +
-    '.db-tbl thead th{position:sticky;top:0;z-index:1}' +
+    '.db-tbl thead tr:first-child th{position:sticky;top:0;z-index:1}' +
+    '.db-tbl thead tr:last-child th{position:sticky;top:37px;z-index:1}' +
     '.db-col-area{position:sticky!important;left:0;z-index:2!important;background:var(--surface2);min-width:160px;text-align:left!important}' +
     'thead .db-col-area{z-index:3!important}' +
     '<th rowspan="2" class="db-col-area" style="vertical-align:middle;text-align:center!important;z-index:2;border-bottom:1px solid var(--border)">Area</th>' +
@@ -269,7 +272,7 @@ function _dbStyles() {
     '.db-tbl tbody tr:hover .db-col-area{background:var(--surface2)}' +
 
     /* Top row layout — Progress + OFI side by side */
-    '.db-top-row{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:start;margin-bottom:24px}' +
+    '.db-top-row{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:stretch;margin-bottom:24px}' +
     '@media(max-width:900px){.db-top-row{grid-template-columns:1fr;}}' +
 
     /* OFI table */
@@ -320,7 +323,7 @@ function _dbProgressSection(agendas, s, donePct, totalAgendas) {
   var hasOverdue   = (s.overdue || 0) > 0;
 
   return '<div class="card" style="max-width:560px">' +
-    '<div class="card-header">' +
+    '<div class="card-header" id="db-progress-card-header">' +
       '<div>' +
         '<div class="card-title">Progres Audit</div>' +
         '<div class="card-subtitle">Status penyelesaian form audit per area</div>' +
@@ -415,7 +418,7 @@ function _dbOfiSection(agendas) {
         'Belum ada OFI yang tercatat.' +
       '</td></tr>';
 
-  return '<div class="card" style="flex:1;min-width:0;display:flex;flex-direction:column">' +
+  return '<div class="card" style="flex:1;min-width:0;display:flex;flex-direction:column;height:100%">' +
     '<div class="card-header" style="flex-wrap:wrap;gap:10px">' +
       '<div>' +
         '<div class="card-title">OFI Summary</div>' +
@@ -793,7 +796,7 @@ function _dbApprovalSection(agendas, findings, s) {
     : '';
 
   return '<div class="card">' +
-    '<div class="card-header" style="cursor:pointer;user-select:none" onclick="_dbToggleApproval()">' +
+    '<div class="card-header" id="db-approval-card-header" style="cursor:pointer;user-select:none" onclick="_dbToggleApproval()">' +
       '<div>' +
         '<div class="card-title">Status Tindak Lanjut Temuan</div>' +
         '<div class="card-subtitle">Progress TPP dan implementasi per area</div>' +
@@ -809,13 +812,11 @@ function _dbApprovalSection(agendas, findings, s) {
       '</button>' +
     '</div>' +
     '<div id="db-approval-body">' +
-      '<div style="overflow-x:auto">' +
-        '<div style="max-height:348px;overflow-y:auto">' +
+      '<div style="overflow-x:auto;overflow-y:auto;max-height:348px">' +
           '<table class="db-tbl">' +
             '<thead>' + gh + ch + '</thead>' +
             '<tbody>' + dataRows + totalRow + '</tbody>' +
           '</table>' +
-        '</div>' +
       '</div>' +
       pendingNote +
       inAuditNote +
