@@ -1,24 +1,114 @@
 <script>
 // ════════════════════════════════════════════════════════════
-//  Page_HasilAudit.html
-//  Tabel semua temuan Non Comply + status correction/corrective action
-//  + overdue flags (computed di frontend, tidak disimpan ke sheet)
+//  Page_HasilAudit.html  — v2
+//  Fitur baru: column resize, hide/show, filter per kolom
 // ════════════════════════════════════════════════════════════
+
+// ── Definisi kolom ────────────────────────────────────────────
+// type: 'text' | 'select' | 'daterange' | 'none'
+// field: key di finding object (untuk filter)
+var HA_COLS = [
+  { id:'result_id',     label:'Result ID',         group:'',    type:'text',      field:'result_id',                        minWidth:120 },
+  { id:'dept',          label:'Dept',              group:'',    type:'select',    field:'dept',                             minWidth:80  },
+  { id:'deskripsi',     label:'Deskripsi Temuan',  group:'',    type:'text',      field:'deskripsi_temuan',                 minWidth:160 },
+  { id:'lokasi',        label:'Lokasi',            group:'',    type:'text',      field:'lokasi_temuan',                    minWidth:120 },
+  { id:'bukti_temuan',  label:'Bukti Temuan',      group:'',    type:'none',      field:null,                               minWidth:90  },
+  { id:'status_temuan', label:'Status Temuan',     group:'',    type:'select',    field:'finding_status',                   minWidth:140, border:'right' },
+  { id:'correction',    label:'Correction',        group:'corr',type:'text',      field:'correction',                       minWidth:160 },
+  { id:'corr_status',   label:'Status',            group:'corr',type:'select',    field:'_corr_status',                     minWidth:110 },
+  { id:'corr_due',      label:'Due Date',          group:'corr',type:'daterange', field:'due_date_correction',              minWidth:100 },
+  { id:'corr_aktual',   label:'Aktual Submit',     group:'corr',type:'daterange', field:'impl_correction_submitted_at',     minWidth:110 },
+  { id:'corr_bukti',    label:'Bukti',             group:'corr',type:'none',      field:null,                               minWidth:80  },
+  { id:'corr_ket',      label:'Keterangan',        group:'corr',type:'text',      field:'impl_correction_keterangan',       minWidth:120, border:'right' },
+  { id:'ca',            label:'Corrective Action', group:'ca',  type:'text',      field:'corrective_action',                minWidth:160 },
+  { id:'ca_status',     label:'Status',            group:'ca',  type:'select',    field:'_ca_status',                       minWidth:110 },
+  { id:'ca_due',        label:'Due Date',          group:'ca',  type:'daterange', field:'due_date_corrective_action',       minWidth:100 },
+  { id:'ca_aktual',     label:'Aktual Submit',     group:'ca',  type:'daterange', field:'impl_submitted_at',                minWidth:110 },
+  { id:'ca_bukti',      label:'Bukti',             group:'ca',  type:'none',      field:null,                               minWidth:80  },
+  { id:'ca_ket',        label:'Keterangan',        group:'ca',  type:'text',      field:'impl_corrective_action_keterangan',minWidth:120 },
+];
+
+var HA_LS_WIDTHS = 'ha_col_widths';
+var HA_LS_HIDDEN = 'ha_col_hidden';
+
+// ── LocalStorage helpers ─────────────────────────────────────
+function _haLoadWidths() {
+  try { return JSON.parse(localStorage.getItem(HA_LS_WIDTHS) || '{}'); } catch(e) { return {}; }
+}
+function _haSaveWidths(w) {
+  try { localStorage.setItem(HA_LS_WIDTHS, JSON.stringify(w)); } catch(e) {}
+}
+function _haLoadHidden() {
+  try { return JSON.parse(localStorage.getItem(HA_LS_HIDDEN) || '[]'); } catch(e) { return []; }
+}
+function _haSaveHidden(arr) {
+  try { localStorage.setItem(HA_LS_HIDDEN, JSON.stringify(arr)); } catch(e) {}
+}
+
+// ── Computed status helpers ───────────────────────────────────
+function _haCorrectiveStatus(f) {
+  // Status label untuk kolom Status Correction & CA — sama dengan _dueDateStatus tapi return string plain
+  function _s(dueStr, submittedAt) {
+    if (!dueStr) return '—';
+    var today = new Date(); today.setHours(0,0,0,0);
+    var due   = new Date(dueStr); due.setHours(0,0,0,0);
+    var diff  = Math.ceil((due - today) / 86400000);
+    if (submittedAt) {
+      var sub = new Date(submittedAt); sub.setHours(0,0,0,0);
+      return sub > due ? 'Terlambat' : 'Tepat Waktu';
+    }
+    if (today > due) return 'Overdue';
+    if (diff === 0)  return 'Due Hari Ini';
+    return 'Due ' + diff + ' Hari';
+  }
+  return {
+    corr: _s(f.due_date_correction,       f.impl_correction_submitted_at),
+    ca:   _s(f.due_date_corrective_action, f.impl_submitted_at),
+  };
+}
+
+// ── Inisialisasi state filter per kolom ──────────────────────
+function _haInitColFilters() {
+  var f = {};
+  HA_COLS.forEach(function(c) { f[c.id] = null; }); // null = tidak ada filter
+  return f;
+}
+
+// ── Ambil nilai unik untuk kolom select ─────────────────────
+function _haUniqueValues(colId, findings, period) {
+  var vals = {};
+  var fsLabel = {
+    'OPEN':'Open TPP','OPEN_IMPL':'Open Implementasi',
+    'APP_DEPT_HEAD':'Review Dept Head','APP_AUDITOR':'Review Auditor',
+    'APP_KOORDINATOR':'Review Koordinator','CLOSED':'Closed','OVERDUE':'Overdue',
+  };
+  findings.forEach(function(f) {
+    var v;
+    if (colId === 'dept')          v = f.dept || '';
+    else if (colId === 'status_temuan') v = fsLabel[f.finding_status] || f.finding_status || '';
+    else if (colId === 'corr_status')   v = _haCorrectiveStatus(f).corr;
+    else if (colId === 'ca_status')     v = _haCorrectiveStatus(f).ca;
+    if (v) vals[v] = true;
+  });
+  return Object.keys(vals).sort();
+}
+
+// ─────────────────────────────────────────────────────────────
+//  MAIN PAGE ENTRY
+// ─────────────────────────────────────────────────────────────
 
 Pages['hasil-audit'] = async function(container) {
   container.innerHTML =
     '<div class="page-loader"><div class="spinner dark"></div><span>Memuat data temuan...</span></div>';
   try {
-    // Tentukan period kandidat dari state yang sudah ada (tanpa tunggu GET_PERIODS)
     var earlyId = App.hasilAuditSelectedPeriodId
       || (App.activePeriod ? App.activePeriod.period_id : null);
 
-    // GET_PERIODS dan GET_HASIL_AUDIT jalan paralel
     var parallelRes = await Promise.all([
       cachedApi('GET_PERIODS', {}, 60),
       earlyId ? cachedApi('GET_HASIL_AUDIT', { period_id: earlyId }, 60) : Promise.resolve(null),
     ]);
-    var allPeriods   = parallelRes[0];
+    var allPeriods    = parallelRes[0];
     var earlyFindings = parallelRes[1];
 
     var viewable = (allPeriods || []).filter(function(p) {
@@ -40,11 +130,10 @@ Pages['hasil-audit'] = async function(container) {
     App._hasilAuditPeriods         = viewable;
 
     var selectedPeriod = viewable.find(function(p) { return p.period_id === selectedId; });
-
-    // Pakai hasil parallel kalau period-nya sama, kalau beda load ulang
     var findings = (earlyFindings && earlyId === selectedId)
       ? earlyFindings
       : await cachedApi('GET_HASIL_AUDIT', { period_id: selectedId }, 60);
+
     _renderHasilAudit(container, findings, viewable, selectedId, selectedPeriod);
   } catch(err) {
     container.innerHTML =
@@ -57,9 +146,9 @@ Pages['hasil-audit'] = async function(container) {
   }
 };
 
+// ── Switch periode ────────────────────────────────────────────
 async function _hasilAuditSwitchPeriod(periodId) {
   App.hasilAuditSelectedPeriodId = periodId;
-  var container = document.getElementById('page-content');
   var dataSection = document.getElementById('hasil-audit-data');
   if (dataSection) {
     dataSection.innerHTML =
@@ -78,84 +167,19 @@ async function _hasilAuditSwitchPeriod(periodId) {
   }
 }
 
-// ── Hitung overdue flags dari data yang ada (computed, tidak simpan ke sheet) ──
-function _computeOverdue(result, period) {
-  var today = new Date(); today.setHours(0, 0, 0, 0);
-  var flags = { tpp_plan: false, correction: false, corrective_action: false };
-
-  // Rencana TPP overdue — bandingkan tpp_submitted_at vs tpp_plan_due_date periode
-  if (period && period.tpp_plan_due_date) {
-    var planDue = new Date(period.tpp_plan_due_date); planDue.setHours(0,0,0,0);
-    if (!result.tpp_submitted_at) {
-      if (today > planDue) flags.tpp_plan = true;
-    } else {
-      var submitted = new Date(result.tpp_submitted_at); submitted.setHours(0,0,0,0);
-      if (submitted > planDue) flags.tpp_plan = true;
-    }
-  }
-
-  // Correction overdue
-  if (result.due_date_correction) {
-    var corrDue = new Date(result.due_date_correction); corrDue.setHours(0,0,0,0);
-    if (!result.impl_correction_submitted_at) {
-      if (today > corrDue) flags.correction = true;
-    } else {
-      var corrSubmitted = new Date(result.impl_correction_submitted_at); corrSubmitted.setHours(0,0,0,0);
-      if (corrSubmitted > corrDue) flags.correction = true;
-    }
-  }
-
-  // Corrective Action overdue
-  if (result.due_date_corrective_action) {
-    var caDue = new Date(result.due_date_corrective_action); caDue.setHours(0,0,0,0);
-    if (!result.impl_submitted_at) {
-      if (today > caDue) flags.corrective_action = true;
-    } else {
-      var caSubmitted = new Date(result.impl_submitted_at); caSubmitted.setHours(0,0,0,0);
-      if (caSubmitted > caDue) flags.corrective_action = true;
-    }
-  }
-
-  return flags;
-}
-
-// ── Hitung label status due date ──────────────────────────────
-function _dueDateStatus(dueDateStr, submittedAtStr) {
-  if (!dueDateStr) return '';
-  var today     = new Date(); today.setHours(0,0,0,0);
-  var due       = new Date(dueDateStr); due.setHours(0,0,0,0);
-  var diffDays  = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
-
-  if (submittedAtStr) {
-    var sub = new Date(submittedAtStr); sub.setHours(0,0,0,0);
-    if (sub > due) {
-      var lateDays = Math.ceil((sub - due) / (1000 * 60 * 60 * 24));
-      return '<span style="color:var(--rose,#f43f5e);font-size:11px;font-weight:600">Terlambat ' + lateDays + ' hari</span>';
-    }
-    return '<span style="color:var(--emerald,#10b981);font-size:11px;font-weight:600">Tepat waktu</span>';
-  }
-
-  if (diffDays < 0)
-    return '<span style="color:var(--rose,#f43f5e);font-size:11px;font-weight:700">Overdue ' + Math.abs(diffDays) + ' hari</span>';
-  if (diffDays === 0)
-    return '<span style="color:var(--rose,#f43f5e);font-size:11px;font-weight:600">Jatuh tempo hari ini</span>';
-  if (diffDays <= 7)
-    return '<span style="color:var(--amber,#f59e0b);font-size:11px;font-weight:600">Due in ' + diffDays + ' hari</span>';
-  return '<span style="color:var(--text-muted);font-size:11px">Due in ' + diffDays + ' hari</span>';
-}
-
+// ── Top-level render (periode selector + data) ────────────────
 function _renderHasilAudit(container, findings, viewable, selectedId, selectedPeriod) {
   var selectorHtml = '';
-  if (viewable.length >= 1) {
+  if (viewable.length > 1) {
     selectorHtml =
-      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px">' +
-        '<span style="font-size:12px;font-weight:600;color:var(--text-muted);flex-shrink:0">Lihat periode:</span>' +
+      '<div style="margin-bottom:16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+        '<span style="font-size:12px;color:var(--text-muted);font-weight:600">Lihat periode:</span>' +
         '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
           viewable.map(function(p) {
             var isSelected = p.period_id === selectedId;
             var isActive   = p.status === 'ACTIVE';
-            return '<button onclick="singleClick(this,function(){ _hasilAuditSwitchPeriod(\'' + escAttr(p.period_id) + '\') })" ' +
-              'style="padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;' +
+            return '<button onclick="_hasilAuditSwitchPeriod(\'' + escAttr(p.period_id) + '\')" ' +
+              'style="padding:4px 12px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;' +
                 'border:1.5px solid ' + (isSelected ? 'var(--blue,#3b82f6)' : 'var(--border)') + ';' +
                 'background:' + (isSelected ? 'rgba(59,130,246,.1)' : 'transparent') + ';' +
                 'color:' + (isSelected ? 'var(--blue,#3b82f6)' : 'var(--text-muted)') + ';' +
@@ -168,10 +192,13 @@ function _renderHasilAudit(container, findings, viewable, selectedId, selectedPe
       '</div>';
   }
   container.innerHTML = selectorHtml + '<div id="hasil-audit-data"></div>';
-  var dataSection = document.getElementById('hasil-audit-data');
-  _renderHasilAuditData(dataSection, findings, selectedId, selectedPeriod);
+  _renderHasilAuditData(document.getElementById('hasil-audit-data'), findings, selectedId, selectedPeriod);
   lucide.createIcons();
 }
+
+// ─────────────────────────────────────────────────────────────
+//  RENDER DATA SECTION
+// ─────────────────────────────────────────────────────────────
 
 function _renderHasilAuditData(container, findings, selectedId, period) {
   if (!findings || !findings.length) {
@@ -186,226 +213,914 @@ function _renderHasilAuditData(container, findings, selectedId, period) {
     return;
   }
 
-  // ── Helper shared untuk render satu baris temuan ──────────
-  function _buildFindingRow(f, period) {
-    var overdue = _computeOverdue(f, period);
+  // Init state
+  window._hasilAuditFindings    = findings;
+  window._hasilAuditPeriod      = period;
+  window._haColFilters          = _haInitColFilters();
+  window._haActiveFilterCol     = null;
 
-    // Kondisi merah: OPEN TPP + tpp_plan overdue (TPP belum disubmit)
-    var isRedRow = f.finding_status === 'OPEN' && overdue.tpp_plan && !f.tpp_submitted_at;
+  var widths = _haLoadWidths();
+  var hidden = _haLoadHidden();
 
-    // Status label (tanpa warna-warni — warna diatur di level row/td)
-    var fsLabel = {
-      'OPEN':            'Open TPP',
-      'OPEN_IMPL':       'Open Implementasi',
-      'APP_DEPT_HEAD':   'Review Dept Head',
-      'APP_AUDITOR':     'Review Auditor',
-      'APP_KOORDINATOR': 'Review Koordinator',
-      'CLOSED':          'Closed',
-      'OVERDUE':         'Overdue',
-    };
-    var fsLbl = fsLabel[f.finding_status] || f.finding_status || '-';
+  // Terapkan width tersimpan ke definisi kolom
+  HA_COLS.forEach(function(c) {
+    if (widths[c.id]) c.minWidth = widths[c.id];
+  });
 
-    // Badge status — hitam semua, kecuali row merah pakai merah
-    var badgeColor = isRedRow ? 'var(--rose,#f43f5e)' : '#374151';
-    var fsBadge = '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;' +
-      'border-radius:4px;font-size:11px;font-weight:600;' +
-      'background:' + (isRedRow ? 'rgba(244,63,94,.08)' : 'rgba(55,65,81,.07)') + ';' +
-      'color:' + badgeColor + ';border:1px solid ' + (isRedRow ? 'rgba(244,63,94,.25)' : 'rgba(55,65,81,.2)') + '">' +
-      fsLbl +
-      (isRedRow ? ' <span style="font-weight:700">(Overdue)</span>' : '') +
-    '</span>';
-
-    // Warna font baris — merah jika isRedRow, hitam normal lainnya
-    var textColor = isRedRow ? 'color:#dc2626' : 'color:#111827';
-
-    function _fotoLinks(urls) {
-      if (!urls) return '<span style="font-size:12px;color:#6b7280">-</span>';
-      return urls.split(',').filter(Boolean).map(function(urlpart, i) {
-        var url = urlpart.split('::')[0];
-        return '<a href="' + escHtml(url) + '" target="_blank" ' +
-          'class="btn btn-outline btn-sm" style="font-size:11px;padding:2px 8px">' +
-          '<i data-lucide="image" style="width:11px;height:11px"></i> ' + (i + 1) + '</a>';
-      }).join(' ');
-    }
-
-    // Sel standar — font seragam 12px, warna sesuai textColor
-    var td = 'font-size:12px;padding:10px 12px;vertical-align:top;' + textColor;
-    var tdNw = td + ';white-space:nowrap';
-    var tdMono = 'font-family:monospace;font-size:11px;white-space:nowrap;padding:10px 12px;vertical-align:top;' + textColor;
-
-    return '<tr style="' + (isRedRow ? 'background:rgba(254,242,242,.5)' : '') + '">' +
-      // Result ID
-      '<td style="' + tdMono + '">' + escHtml(f.result_id || '') + '</td>' +
-      // Dept
-      '<td style="' + tdNw + ';font-weight:600">' + escHtml(f.dept || '') + '</td>' +
-      // Deskripsi temuan
-      '<td style="' + td + ';min-width:160px">' + escHtml(f.deskripsi_temuan || '-') + '</td>' +
-      // Lokasi
-      '<td style="' + tdNw + '">' + escHtml(f.lokasi_temuan || '-') + '</td>' +
-      // Bukti temuan
-      '<td style="' + tdNw + '">' + _fotoLinks(f.foto_urls) + '</td>' +
-      // Status temuan
-      '<td style="' + tdNw + ';border-right:2px solid var(--border)">' + fsBadge + '</td>' +
-      // Correction
-      '<td style="' + td + ';min-width:140px">' + escHtml(f.correction || '-') + '</td>' +
-      // Status correction (label teks saja)
-      '<td style="' + tdNw + '">' + _dueDateStatus(f.due_date_correction, f.impl_correction_submitted_at) + '</td>' +
-      // Due date correction
-      '<td style="' + tdNw + '">' + (f.due_date_correction ? formatDate(f.due_date_correction) : '-') + '</td>' +
-      // Aktual correction submitted
-      '<td style="' + tdNw + '">' + (f.impl_correction_submitted_at ? formatDate(f.impl_correction_submitted_at) : '-') + '</td>' +
-      // Bukti correction
-      '<td style="' + tdNw + '">' + _fotoLinks(f.impl_correction_foto_urls) + '</td>' +
-      // Keterangan correction
-      '<td style="' + td + ';min-width:120px;border-right:2px solid var(--border)">' + escHtml(f.impl_correction_keterangan || '-') + '</td>' +
-      // Corrective Action
-      '<td style="' + td + ';min-width:140px">' + escHtml(f.corrective_action || '-') + '</td>' +
-      // Status corrective action (label teks saja)
-      '<td style="' + tdNw + '">' + _dueDateStatus(f.due_date_corrective_action, f.impl_submitted_at) + '</td>' +
-      // Due date corrective action
-      '<td style="' + tdNw + '">' + (f.due_date_corrective_action ? formatDate(f.due_date_corrective_action) : '-') + '</td>' +
-      // Aktual corrective action submitted
-      '<td style="' + tdNw + '">' + (f.impl_submitted_at ? formatDate(f.impl_submitted_at) : '-') + '</td>' +
-      // Bukti corrective action
-      '<td style="' + tdNw + '">' + _fotoLinks(f.impl_corrective_action_foto_urls) + '</td>' +
-      // Keterangan corrective action
-      '<td style="' + td + ';min-width:120px">' + escHtml(f.impl_corrective_action_keterangan || '-') + '</td>' +
-    '</tr>';
-  }
-
-  // ── Render tabel ──────────────────────────────────────────
-  var rows = findings.map(function(f) { return _buildFindingRow(f, period); }).join('');
+  var visibleCols = HA_COLS.filter(function(c) { return hidden.indexOf(c.id) === -1; });
 
   container.innerHTML =
-    // Header
+    // ── Header halaman ────────────────────────────────────────
     '<div class="page-hero mb-16">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">' +
         '<div>' +
           '<h1 style="margin:0 0 4px">Hasil Audit</h1>' +
-          '<div style="font-size:13px;color:var(--text-muted)">' +
-            (period ? escHtml(period.nama_periode) : '') + ' · ' + findings.length + ' temuan Non Comply' +
+          '<div style="font-size:13px;color:rgba(255,255,255,.6)">' +
+            (period ? escHtml(period.nama_periode) + ' · ' : '') + findings.length + ' temuan Non Comply' +
           '</div>' +
         '</div>' +
       '</div>' +
     '</div>' +
 
-    // TPP Plan Due Date Banner
     _renderTppPlanDueDateBanner(period) +
 
-    // Search + filter bar
-    '<div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap">' +
+    // ── Toolbar ───────────────────────────────────────────────
+    '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">' +
+      // Search
       '<div style="position:relative;flex:1;min-width:200px">' +
         '<i data-lucide="search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);' +
           'width:14px;height:14px;color:var(--text-muted);pointer-events:none"></i>' +
         '<input type="text" id="ha-search" class="form-control" ' +
           'style="padding-left:34px;font-size:13px" ' +
           'placeholder="Cari dept, deskripsi, result ID..." ' +
-          'oninput="_hasilAuditFilter()">' +
+          'oninput="_haApplyFilters()">' +
       '</div>' +
-      '<select id="ha-filter-status" class="form-control" style="font-size:13px;width:auto;min-width:160px" ' +
-        'onchange="_hasilAuditFilter()">' +
-        '<option value="">Semua Status</option>' +
-        '<option value="OPEN">Open TPP</option>' +
-        '<option value="OPEN_IMPL">Open Implementasi</option>' +
-        '<option value="APP_DEPT_HEAD">Review Dept Head</option>' +
-        '<option value="APP_AUDITOR">Review Auditor</option>' +
-        '<option value="APP_KOORDINATOR">Review Koordinator</option>' +
-        '<option value="CLOSED">Closed</option>' +
-        '<option value="OVERDUE">Overdue</option>' +
-      '</select>' +
-      '<select id="ha-filter-overdue" class="form-control" style="font-size:13px;width:auto;min-width:160px" ' +
-        'onchange="_hasilAuditFilter()">' +
-        '<option value="">Semua</option>' +
-        '<option value="tpp_plan">Rencana TPP Overdue</option>' +
-        '<option value="correction">Correction Overdue</option>' +
-        '<option value="corrective_action">Corrective Action Overdue</option>' +
-      '</select>' +
+      // Tombol kolom
+      '<div style="position:relative">' +
+        '<button id="ha-col-btn" onclick="_haToggleColPanel()" ' +
+          'style="display:inline-flex;align-items:center;gap:5px;padding:7px 12px;border-radius:var(--radius-sm);' +
+            'border:1.5px solid var(--border);background:var(--surface);font-size:12px;font-weight:600;' +
+            'color:var(--text-muted);cursor:pointer">' +
+          '<i data-lucide="columns" style="width:13px;height:13px"></i> Kolom' +
+          '<span id="ha-hidden-count" style="display:none;background:var(--blue);color:#fff;border-radius:10px;' +
+            'padding:0 5px;font-size:10px;font-weight:700;margin-left:2px"></span>' +
+        '</button>' +
+        '<div id="ha-col-panel" style="display:none;position:absolute;top:calc(100%+6px);right:0;z-index:100;' +
+          'background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);' +
+          'box-shadow:0 8px 24px rgba(0,0,0,.12);padding:8px;min-width:200px;max-height:380px;overflow-y:auto">' +
+          '<div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--text-muted);' +
+            'padding:4px 6px 8px">TAMPILKAN KOLOM</div>' +
+          HA_COLS.map(function(c) {
+            var isHidden = hidden.indexOf(c.id) !== -1;
+            var groupLabel = c.group === 'corr' ? ' · Correction' : c.group === 'ca' ? ' · CA' : '';
+            return '<label style="display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:4px;' +
+              'cursor:pointer;font-size:12px;color:var(--text)" ' +
+              'onmouseover="this.style.background=\'var(--surface2)\'" ' +
+              'onmouseout="this.style.background=\'\'">' +
+              '<input type="checkbox" ' + (!isHidden ? 'checked' : '') + ' ' +
+                'onchange="_haToggleCol(\'' + c.id + '\',this.checked)" ' +
+                'style="width:13px;height:13px;accent-color:var(--blue)">' +
+              escHtml(c.label) + '<span style="color:var(--text-muted);font-size:10px">' + groupLabel + '</span>' +
+            '</label>';
+          }).join('') +
+          '<div style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px;display:flex;gap:6px">' +
+            '<button onclick="_haShowAllCols()" style="flex:1;padding:5px;border-radius:4px;border:1px solid var(--border);' +
+              'background:transparent;font-size:11px;cursor:pointer;color:var(--text-muted)">Tampilkan Semua</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      // Reset filter
+      '<button id="ha-reset-btn" onclick="_haResetAllFilters()" ' +
+        'style="display:none;align-items:center;gap:5px;padding:7px 12px;border-radius:var(--radius-sm);' +
+        'border:1.5px solid var(--rose,#f43f5e);background:rgba(244,63,94,.06);font-size:12px;font-weight:600;' +
+        'color:var(--rose,#f43f5e);cursor:pointer">' +
+        '<i data-lucide="x" style="width:12px;height:12px"></i> Reset Filter' +
+      '</button>' +
+
+      // Download
+      '<div style="position:relative">' +
+        '<button id="ha-dl-btn" onclick="_haToggleDownloadMenu()" ' +
+          'style="display:inline-flex;align-items:center;gap:5px;padding:7px 12px;border-radius:var(--radius-sm);' +
+            'border:1.5px solid var(--border);background:var(--surface);font-size:12px;font-weight:600;' +
+            'color:var(--text-muted);cursor:pointer">' +
+          '<i data-lucide="download" style="width:13px;height:13px"></i> Download' +
+          '<i data-lucide="chevron-down" style="width:11px;height:11px;margin-left:1px"></i>' +
+        '</button>' +
+        '<div id="ha-dl-menu" style="display:none;position:absolute;top:calc(100% + 4px);right:0;z-index:100;' +
+          'background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);' +
+          'box-shadow:0 8px 24px rgba(0,0,0,.12);min-width:200px;overflow:hidden">' +
+          '<button onclick="_haDownloadCsv(false)" ' +
+            'style="width:100%;text-align:left;padding:10px 14px;border:none;background:transparent;' +
+              'font-size:12px;cursor:pointer;display:flex;align-items:center;gap:8px;color:var(--text)" ' +
+            'onmouseover="this.style.background=\'var(--surface2)\'" onmouseout="this.style.background=\'\'">' +
+            '<i data-lucide="table" style="width:13px;height:13px;color:var(--emerald,#10b981)"></i>' +
+            'Download Semua Data' +
+          '</button>' +
+          '<button onclick="_haDownloadCsv(true)" ' +
+            'style="width:100%;text-align:left;padding:10px 14px;border:none;background:transparent;' +
+              'font-size:12px;cursor:pointer;display:flex;align-items:center;gap:8px;color:var(--text)" ' +
+            'onmouseover="this.style.background=\'var(--surface2)\'" onmouseout="this.style.background=\'\'">' +
+            '<i data-lucide="filter" style="width:13px;height:13px;color:var(--blue,#3b82f6)"></i>' +
+            'Download Data Terfilter' +
+          '</button>' +
+        '</div>' +
+      '</div>' +
     '</div>' +
 
-    // Tabel
+    // ── Hint filter ───────────────────────────────────────────
+    '<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;' +
+      'display:flex;align-items:center;gap:5px">' +
+      '<i data-lucide="info" style="width:11px;height:11px;flex-shrink:0"></i>' +
+      'Klik header kolom untuk filter. Drag tepi kanan header untuk mengubah lebar kolom.' +
+    '</div>' +
+
+    // ── Tabel ─────────────────────────────────────────────────
     '<div style="overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border)">' +
-      '<table id="ha-table" style="width:100%;border-collapse:collapse;min-width:1400px;font-size:12px">' +
-        '<thead>' +
-          '<tr style="background:var(--surface2)">' +
-            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
-              'color:var(--text-muted);border-bottom:1px solid var(--border);white-space:nowrap">Result ID</th>' +
-            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
-              'color:var(--text-muted);border-bottom:1px solid var(--border);white-space:nowrap">Dept</th>' +
-            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
-              'color:var(--text-muted);border-bottom:1px solid var(--border)">Deskripsi Temuan</th>' +
-            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
-              'color:var(--text-muted);border-bottom:1px solid var(--border)">Lokasi</th>' +
-            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
-              'color:var(--text-muted);border-bottom:1px solid var(--border)">Bukti Temuan</th>' +
-            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;' +
-              'color:var(--text-muted);border-bottom:1px solid var(--border);white-space:nowrap;' +
-              'border-right:2px solid var(--border)">Status Temuan</th>' +
-            // Correction group
-            '<th class="th-correction" style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;border-bottom:1px solid var(--border)">Correction</th>' +
-            '<th class="th-correction" style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;border-bottom:1px solid var(--border);white-space:nowrap">Status</th>' +
-            '<th class="th-correction" style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;border-bottom:1px solid var(--border);white-space:nowrap">Due Date</th>' +
-            '<th class="th-correction" style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;border-bottom:1px solid var(--border);white-space:nowrap">Aktual Submit</th>' +
-            '<th class="th-correction" style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;border-bottom:1px solid var(--border)">Bukti</th>' +
-            '<th class="th-correction" style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;border-bottom:1px solid var(--border);border-right:2px solid var(--border)">Keterangan</th>' +
-            // Corrective Action group
-            '<th class="th-corrective-action" style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;border-bottom:1px solid var(--border)">Corrective Action</th>' +
-            '<th class="th-corrective-action" style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;border-bottom:1px solid var(--border);white-space:nowrap">Status</th>' +
-            '<th class="th-corrective-action" style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;border-bottom:1px solid var(--border);white-space:nowrap">Due Date</th>' +
-            '<th class="th-corrective-action" style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;border-bottom:1px solid var(--border);white-space:nowrap">Aktual Submit</th>' +
-            '<th class="th-corrective-action" style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;border-bottom:1px solid var(--border)">Bukti</th>' +
-            '<th class="th-corrective-action" style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.06em;border-bottom:1px solid var(--border)">Keterangan</th>' +
-          '</tr>' +
-        '</thead>' +
-        '<tbody id="ha-tbody">' + rows + '</tbody>' +
+      '<table id="ha-table" style="width:100%;border-collapse:collapse;font-size:12px">' +
+        '<thead id="ha-thead"></thead>' +
+        '<tbody id="ha-tbody"></tbody>' +
       '</table>' +
     '</div>' +
-
     '<div id="ha-empty" style="display:none;text-align:center;padding:48px;font-size:13px;color:var(--text-muted)">' +
       'Tidak ada temuan yang sesuai dengan filter.' +
+    '</div>' +
+
+    // ── Filter popover (shared, dipindah via JS) ───────────────
+    '<div id="ha-filter-pop" style="display:none;position:fixed;z-index:200;' +
+      'background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);' +
+      'box-shadow:0 8px 24px rgba(0,0,0,.15);padding:10px;min-width:220px;max-width:280px">' +
     '</div>';
 
-  // Simpan data findings untuk filter
-  window._hasilAuditFindings = findings;
-  window._hasilAuditPeriod   = period;
+  _haRebuildTable(hidden, widths);
+  _haSetupColResizer();
+  _haUpdateResetBtn();
+
+  // Tutup popover & panel klik di luar
+  document.addEventListener('click', _haOutsideClick, true);
 
   lucide.createIcons();
 }
 
-// ── Filter / Search ───────────────────────────────────────────
-function _hasilAuditFilter() {
-  var query    = (document.getElementById('ha-search')         || {}).value?.toLowerCase()?.trim() || '';
-  var status   = (document.getElementById('ha-filter-status')  || {}).value || '';
-  var overdue  = (document.getElementById('ha-filter-overdue') || {}).value || '';
+// ─────────────────────────────────────────────────────────────
+//  BUILD TABLE HEADER + BODY
+// ─────────────────────────────────────────────────────────────
+
+function _haRebuildTable(hidden, widths) {
+  hidden  = hidden  || _haLoadHidden();
+  widths  = widths  || _haLoadWidths();
+  HA_COLS.forEach(function(c) { if (widths[c.id]) c.minWidth = widths[c.id]; });
+
+  var visibleCols = HA_COLS.filter(function(c) { return hidden.indexOf(c.id) === -1; });
+  var filters     = window._haColFilters || _haInitColFilters();
+
+  // Grup header row
+  var grpHtml = '<tr style="background:var(--surface2)">';
+  var prev    = null;
+  var span    = 0;
+  var groups  = []; // [{group, count, border}]
+  visibleCols.forEach(function(c, i) {
+    if (c.group !== prev) {
+      if (prev !== null) groups.push({ group: prev, count: span });
+      prev = c.group; span = 1;
+    } else { span++; }
+  });
+  if (prev !== null) groups.push({ group: prev, count: span });
+
+  var groupMeta = {
+    '':     { label: '', color: '' },
+    'corr': { label: 'CORRECTION',       color: 'var(--blue,#3b82f6)' },
+    'ca':   { label: 'CORRECTIVE ACTION', color: 'var(--purple,#8b5cf6)' },
+  };
+
+  groups.forEach(function(g) {
+    var m = groupMeta[g.group] || { label: g.group.toUpperCase(), color: 'var(--text-muted)' };
+    grpHtml += '<th colspan="' + g.count + '" style="padding:5px 10px;text-align:center;font-size:10px;' +
+      'font-weight:700;letter-spacing:.06em;border-bottom:' + (m.label ? '2px solid ' + m.color : '1px solid var(--border)') + ';' +
+      'color:' + (m.color || 'transparent') + ';background:var(--surface2);white-space:nowrap">' +
+      m.label + '</th>';
+  });
+  grpHtml += '</tr>';
+
+  // Kolom header row
+  var colHtml = '<tr style="background:var(--surface2)">';
+  visibleCols.forEach(function(c) {
+    var hasFilter  = filters[c.id] !== null && filters[c.id] !== undefined && (
+      (typeof filters[c.id] === 'string' && filters[c.id] !== '') ||
+      (Array.isArray(filters[c.id]) && filters[c.id].length > 0) ||
+      (filters[c.id] && (filters[c.id].from || filters[c.id].to))
+    );
+    var borderRight = c.border === 'right' ? ';border-right:2px solid var(--border)' : '';
+    var groupColor  = c.group === 'corr' ? 'rgba(59,130,246,.04)' : c.group === 'ca' ? 'rgba(139,92,246,.04)' : 'var(--surface2)';
+
+    colHtml += '<th data-col-id="' + c.id + '" ' +
+      'style="position:relative;padding:10px 28px 10px 12px;text-align:left;font-size:10px;font-weight:700;' +
+        'letter-spacing:.06em;border-bottom:1px solid var(--border);white-space:nowrap;' +
+        'min-width:' + c.minWidth + 'px;' +
+        'background:' + groupColor + borderRight + ';cursor:pointer;user-select:none;' +
+        'color:' + (hasFilter ? 'var(--blue,#3b82f6)' : 'var(--text-muted)') + '" ' +
+      (c.type !== 'none' ? 'onclick="event.stopPropagation();_haOpenFilterPop(\'' + c.id + '\',this)"' : '') + '>' +
+      escHtml(c.label) +
+      (hasFilter ? ' <i data-lucide="filter" style="width:9px;height:9px;display:inline;vertical-align:middle"></i>' : '') +
+      
+      // Resize handle
+      '<div class="ha-resize-handle" data-col="' + c.id + '" ' +
+        'style="position:absolute;right:0;top:0;bottom:0;width:10px;cursor:col-resize;z-index:2;' +
+          'background:transparent;display:flex;align-items:center;justify-content:center" ' +
+        'onmousedown="event.stopPropagation();_haResizeStart(event,\'' + c.id + '\')" ' +
+        'onmouseover="this.querySelector(\'div\').style.background=\'var(--blue,#3b82f6)\'" ' +
+        'onmouseout="this.querySelector(\'div\').style.background=\'var(--border)\'">' +
+        '<div style="width:2px;height:16px;background:var(--border);border-radius:1px;' +
+          'transition:background .15s"></div>' +
+      '</div>' +
+    '</th>';
+  });
+  colHtml += '</tr>';
+
+  document.getElementById('ha-thead').innerHTML = grpHtml + colHtml;
+
+  // Render body
+  _haRenderBody(visibleCols);
+  lucide.createIcons(document.getElementById('ha-thead'));
+}
+
+// ─────────────────────────────────────────────────────────────
+//  RENDER TBODY
+// ─────────────────────────────────────────────────────────────
+
+function _haRenderBody(visibleCols) {
   var findings = window._hasilAuditFindings || [];
   var period   = window._hasilAuditPeriod   || null;
-  var tbody    = document.getElementById('ha-tbody');
-  var empty    = document.getElementById('ha-empty');
-  var table    = document.getElementById('ha-table');
-  if (!tbody) return;
+  var filters  = window._haColFilters       || {};
+  var search   = (document.getElementById('ha-search') || {}).value || '';
 
+  // ── Apply filters ──────────────────────────────────────────
   var filtered = findings.filter(function(f) {
-    // Query search
-    if (query) {
-      var haystack = [f.result_id, f.dept, f.deskripsi_temuan, f.lokasi_temuan,
-                      f.correction, f.corrective_action].join(' ').toLowerCase();
-      if (!haystack.includes(query)) return false;
+    // Global search
+    if (search.trim()) {
+      var hay = [f.result_id, f.dept, f.deskripsi_temuan, f.lokasi_temuan,
+                 f.correction, f.corrective_action].join(' ').toLowerCase();
+      if (!hay.includes(search.toLowerCase().trim())) return false;
     }
-    // Status filter
-    if (status && f.finding_status !== status) return false;
-    // Overdue filter
-    if (overdue) {
-      var flags = _computeOverdue(f, period);
-      if (!flags[overdue]) return false;
+
+    var cs = _haCorrectiveStatus(f);
+    var fsLabel = {
+      'OPEN':'Open TPP','OPEN_IMPL':'Open Implementasi',
+      'APP_DEPT_HEAD':'Review Dept Head','APP_AUDITOR':'Review Auditor',
+      'APP_KOORDINATOR':'Review Koordinator','CLOSED':'Closed','OVERDUE':'Overdue',
+    };
+
+    // Per-kolom filter
+    for (var colId in filters) {
+      var fv = filters[colId];
+      if (!fv) continue;
+
+      var col = HA_COLS.find(function(c) { return c.id === colId; });
+      if (!col) continue;
+
+      if (col.type === 'text' && typeof fv === 'string' && fv.trim()) {
+        var val = '';
+        if (col.field && col.field.indexOf('_') !== 0) val = String(f[col.field] || '');
+        if (!val.toLowerCase().includes(fv.toLowerCase())) return false;
+      }
+
+      if (col.type === 'select' && Array.isArray(fv) && fv.length > 0) {
+        var sv = '';
+        if (colId === 'dept')          sv = f.dept || '';
+        else if (colId === 'status_temuan') sv = fsLabel[f.finding_status] || f.finding_status || '';
+        else if (colId === 'corr_status')   sv = cs.corr;
+        else if (colId === 'ca_status')     sv = cs.ca;
+        if (fv.indexOf(sv) === -1) return false;
+      }
+
+      if (col.type === 'daterange' && fv && (fv.from || fv.to)) {
+        var dateVal = f[col.field] ? new Date(f[col.field]) : null;
+        if (!dateVal) { if (fv.from || fv.to) return false; }
+        else {
+          if (fv.from && dateVal < new Date(fv.from)) return false;
+          if (fv.to   && dateVal > new Date(fv.to + 'T23:59:59')) return false;
+        }
+      }
     }
+
     return true;
   });
 
-  // Re-render tbody — pakai helper bersama _buildFindingRow
-  tbody.innerHTML = filtered.map(function(f) { return _buildFindingRow(f, period); }).join('');
+  var tbody = document.getElementById('ha-tbody');
+  var empty = document.getElementById('ha-empty');
+  var table = document.getElementById('ha-table');
 
-  var visible = filtered.length > 0;
-  if (table)  table.style.display = visible ? '' : 'none';
-  if (empty)  empty.style.display = visible ? 'none' : '';
-  lucide.createIcons();
+  if (!filtered.length) {
+    tbody.innerHTML = '';
+    if (table) table.style.display = 'none';
+    if (empty) empty.style.display = '';
+    return;
+  }
+  if (table) table.style.display = '';
+  if (empty) empty.style.display = 'none';
+
+  tbody.innerHTML = filtered.map(function(f) {
+    return _haBuildRow(f, period, visibleCols);
+  }).join('');
+
+  lucide.createIcons(tbody);
 }
+
+// ── Bangun satu baris ─────────────────────────────────────────
+function _haBuildRow(f, period, visibleCols) {
+  var overdue = _computeOverdue(f, period);
+  var isRed   = f.finding_status === 'OPEN' && overdue.tpp_plan && !f.tpp_submitted_at;
+  var textCol = isRed ? 'color:#dc2626' : 'color:#111827';
+
+  var td      = 'font-size:12px;padding:10px 12px;vertical-align:top;' + textCol;
+  var tdNw    = td + ';white-space:nowrap';
+  var tdMono  = 'font-family:monospace;font-size:11px;white-space:nowrap;padding:10px 12px;vertical-align:top;' + textCol;
+
+  function _cell(text) { return escHtml(String(text || '')); }
+
+  var fsLabel = {
+    'OPEN':'Open TPP','OPEN_IMPL':'Open Implementasi',
+    'APP_DEPT_HEAD':'Review Dept Head','APP_AUDITOR':'Review Auditor',
+    'APP_KOORDINATOR':'Review Koordinator','CLOSED':'Closed','OVERDUE':'Overdue',
+  };
+  var fsLbl = isRed
+    ? fsLabel[f.finding_status] + ' <span style="font-weight:700">(Overdue)</span>'
+    : (fsLabel[f.finding_status] || f.finding_status || '—');
+  var badgeColor  = isRed ? 'rgba(244,63,94,.08)' : 'rgba(55,65,81,.07)';
+  var badgeBorder = isRed ? 'rgba(244,63,94,.25)' : 'rgba(55,65,81,.2)';
+  var badgeTxt    = isRed ? '#dc2626' : '#374151';
+  var fsBadge = '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;' +
+    'border-radius:4px;font-size:11px;font-weight:600;' +
+    'background:' + badgeColor + ';color:' + badgeTxt + ';border:1px solid ' + badgeBorder + '">' + fsLbl + '</span>';
+
+  function _fotoLinks(urls) {
+    if (!urls) return '<span style="font-size:11px;color:#9ca3af">—</span>';
+    return urls.split(',').filter(Boolean).map(function(urlpart, i) {
+      var url = urlpart.split('::')[0];
+      return '<a href="' + escHtml(url) + '" target="_blank" ' +
+        'class="btn btn-outline btn-sm" style="font-size:10px;padding:2px 6px">' +
+        '<i data-lucide="image" style="width:10px;height:10px"></i> ' + (i+1) + '</a>';
+    }).join(' ');
+  }
+
+  var cs = _haCorrectiveStatus(f);
+  var statusColor = function(s) {
+    if (s === 'Overdue' || s === 'Terlambat') return '#dc2626';
+    if (s === 'Due Hari Ini') return '#f59e0b';
+    if (s === 'Tepat Waktu') return '#10b981';
+    return '#111827';
+  };
+
+  // Map kolom → HTML cell content
+  var cellMap = {
+    'result_id':     '<td style="' + tdMono + '">'                                                        + _cell(f.result_id) + '</td>',
+    'dept':          '<td style="' + tdNw + ';font-weight:600">'                                          + _cell(f.dept) + '</td>',
+    'deskripsi':     '<td style="' + td + '">'                                                            + _cell(f.deskripsi_temuan || '—') + '</td>',
+    'lokasi':        '<td style="' + tdNw + '">'                                                          + _cell(f.lokasi_temuan || '—') + '</td>',
+    'bukti_temuan':  '<td style="' + tdNw + '">'                                                          + _fotoLinks(f.foto_urls) + '</td>',
+    'status_temuan': '<td style="' + tdNw + ';border-right:2px solid var(--border)">'                    + fsBadge + '</td>',
+    'correction':    '<td style="' + td + ';min-width:140px">'                                            + _cell(f.correction || '—') + '</td>',
+    'corr_status':   '<td style="' + tdNw + ';color:' + statusColor(cs.corr) + ';font-weight:600">'      + _cell(cs.corr) + '</td>',
+    'corr_due':      '<td style="' + tdNw + '">'                                                          + _cell(f.due_date_correction ? formatDate(f.due_date_correction) : '—') + '</td>',
+    'corr_aktual':   '<td style="' + tdNw + '">'                                                          + _cell(f.impl_correction_submitted_at ? formatDate(f.impl_correction_submitted_at) : '—') + '</td>',
+    'corr_bukti':    '<td style="' + tdNw + '">'                                                          + _fotoLinks(f.impl_correction_foto_urls) + '</td>',
+    'corr_ket':      '<td style="' + td + ';min-width:120px;border-right:2px solid var(--border)">'      + _cell(f.impl_correction_keterangan || '—') + '</td>',
+    'ca':            '<td style="' + td + ';min-width:140px">'                                            + _cell(f.corrective_action || '—') + '</td>',
+    'ca_status':     '<td style="' + tdNw + ';color:' + statusColor(cs.ca) + ';font-weight:600">'        + _cell(cs.ca) + '</td>',
+    'ca_due':        '<td style="' + tdNw + '">'                                                          + _cell(f.due_date_corrective_action ? formatDate(f.due_date_corrective_action) : '—') + '</td>',
+    'ca_aktual':     '<td style="' + tdNw + '">'                                                          + _cell(f.impl_submitted_at ? formatDate(f.impl_submitted_at) : '—') + '</td>',
+    'ca_bukti':      '<td style="' + tdNw + '">'                                                          + _fotoLinks(f.impl_corrective_action_foto_urls) + '</td>',
+    'ca_ket':        '<td style="' + td + ';min-width:120px">'                                            + _cell(f.impl_corrective_action_keterangan || '—') + '</td>',
+  };
+
+  var rowStyle = isRed ? ' style="background:rgba(254,242,242,.5)"' : '';
+  return '<tr' + rowStyle + '>' +
+    visibleCols.map(function(c) { return cellMap[c.id] || '<td></td>'; }).join('') +
+  '</tr>';
+}
+
+// ─────────────────────────────────────────────────────────────
+//  FILTER POPOVER
+// ─────────────────────────────────────────────────────────────
+
+function _haOpenFilterPop(colId, thEl) {
+  var pop = document.getElementById('ha-filter-pop');
+  if (!pop) return;
+
+  // Toggle — tutup kalau klik kolom yang sama
+  if (window._haActiveFilterCol === colId && pop.style.display !== 'none') {
+    pop.style.display = 'none';
+    window._haActiveFilterCol = null;
+    return;
+  }
+  window._haActiveFilterCol = colId;
+
+  var col      = HA_COLS.find(function(c) { return c.id === colId; });
+  if (!col || col.type === 'none') return;
+  var filters  = window._haColFilters || {};
+  var curVal   = filters[colId];
+  var findings = window._hasilAuditFindings || [];
+  var period   = window._hasilAuditPeriod;
+
+  var inner = '';
+
+  if (col.type === 'text') {
+    inner =
+      '<div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--text-muted);margin-bottom:6px">' +
+        'FILTER: ' + escHtml(col.label.toUpperCase()) +
+      '</div>' +
+      '<input type="text" id="ha-pop-text" class="form-control" style="font-size:12px;padding:6px 10px" ' +
+        'placeholder="Cari..." value="' + escHtml(curVal || '') + '" ' +
+        'oninput="_haSetTextFilter(\'' + colId + '\',this.value)">' +
+      '<button onclick="_haClearColFilter(\'' + colId + '\')" ' +
+        'style="margin-top:6px;width:100%;padding:5px;border-radius:4px;border:1px solid var(--border);' +
+          'background:transparent;font-size:11px;cursor:pointer;color:var(--text-muted)">Hapus Filter</button>';
+  }
+
+  if (col.type === 'select') {
+    var opts = _haUniqueValues(colId, findings, period);
+    var selected = Array.isArray(curVal) ? curVal : [];
+    inner =
+      '<div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--text-muted);margin-bottom:6px">' +
+        'FILTER: ' + escHtml(col.label.toUpperCase()) +
+      '</div>' +
+      '<div style="max-height:200px;overflow-y:auto">' +
+        opts.map(function(v) {
+          var chk = selected.indexOf(v) !== -1 ? 'checked' : '';
+          return '<label style="display:flex;align-items:center;gap:7px;padding:4px 2px;cursor:pointer;font-size:12px">' +
+            '<input type="checkbox" ' + chk + ' value="' + escHtml(v) + '" ' +
+              'onchange="_haSetSelectFilter(\'' + colId + '\',this)" ' +
+              'style="width:13px;height:13px;accent-color:var(--blue)">' +
+            escHtml(v) +
+          '</label>';
+        }).join('') +
+      '</div>' +
+      '<button onclick="_haClearColFilter(\'' + colId + '\')" ' +
+        'style="margin-top:6px;width:100%;padding:5px;border-radius:4px;border:1px solid var(--border);' +
+          'background:transparent;font-size:11px;cursor:pointer;color:var(--text-muted)">Hapus Filter</button>';
+  }
+
+  if (col.type === 'daterange') {
+    var dr   = (curVal && typeof curVal === 'object') ? curVal : { from: '', to: '' };
+    inner =
+      '<div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--text-muted);margin-bottom:8px">' +
+        'FILTER: ' + escHtml(col.label.toUpperCase()) +
+      '</div>' +
+      '<div style="display:grid;gap:6px">' +
+        '<label style="font-size:11px;color:var(--text-muted);font-weight:600">Dari</label>' +
+        '<input type="date" id="ha-pop-from" class="form-control" style="font-size:12px;padding:5px 8px" ' +
+          'value="' + escHtml(dr.from || '') + '" ' +
+          'onchange="_haSetDateFilter(\'' + colId + '\',\'from\',this.value)">' +
+        '<label style="font-size:11px;color:var(--text-muted);font-weight:600">Sampai</label>' +
+        '<input type="date" id="ha-pop-to" class="form-control" style="font-size:12px;padding:5px 8px" ' +
+          'value="' + escHtml(dr.to || '') + '" ' +
+          'onchange="_haSetDateFilter(\'' + colId + '\',\'to\',this.value)">' +
+      '</div>' +
+      '<button onclick="_haClearColFilter(\'' + colId + '\')" ' +
+        'style="margin-top:8px;width:100%;padding:5px;border-radius:4px;border:1px solid var(--border);' +
+          'background:transparent;font-size:11px;cursor:pointer;color:var(--text-muted)">Hapus Filter</button>';
+  }
+
+  pop.innerHTML = inner;
+
+  // Posisikan di bawah th
+  var rect = thEl.getBoundingClientRect();
+  pop.style.display = 'block';
+  pop.style.top     = (rect.bottom + window.scrollY + 2) + 'px';
+  // Cek overflow kanan
+  var popW = 240;
+  var left = rect.left + window.scrollX;
+  if (left + popW > window.innerWidth - 8) left = window.innerWidth - popW - 8;
+  pop.style.left = left + 'px';
+
+  // Fokus input kalau text
+  if (col.type === 'text') {
+    setTimeout(function() {
+      var inp = document.getElementById('ha-pop-text');
+      if (inp) inp.focus();
+    }, 50);
+  }
+}
+
+function _haOutsideClick(e) {
+  var pop     = document.getElementById('ha-filter-pop');
+  var colBtn  = document.getElementById('ha-col-btn');
+  var colPanel= document.getElementById('ha-col-panel');
+
+  // Tutup filter pop
+  if (pop && pop.style.display !== 'none') {
+    if (!pop.contains(e.target) && !e.target.closest('th[data-col-id]')) {
+      pop.style.display = 'none';
+      window._haActiveFilterCol = null;
+    }
+  }
+  // Tutup col panel
+  if (colPanel && colPanel.style.display !== 'none') {
+    if (colBtn && !colBtn.contains(e.target) && !colPanel.contains(e.target)) {
+      colPanel.style.display = 'none';
+    }
+  }
+  // Tutup download menu
+  var dlMenu = document.getElementById('ha-dl-menu');
+  var dlBtn  = document.getElementById('ha-dl-btn');
+  if (dlMenu && dlMenu.style.display !== 'none') {
+    if (dlBtn && !dlBtn.contains(e.target) && !dlMenu.contains(e.target)) {
+      dlMenu.style.display = 'none';
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  FILTER SETTERS
+// ─────────────────────────────────────────────────────────────
+
+function _haSetTextFilter(colId, val) {
+  if (!window._haColFilters) window._haColFilters = _haInitColFilters();
+  window._haColFilters[colId] = val || null;
+  _haApplyFilters();
+  _haUpdateResetBtn();
+  _haRefreshHeaderIndicators();
+}
+
+function _haSetSelectFilter(colId, checkbox) {
+  if (!window._haColFilters) window._haColFilters = _haInitColFilters();
+  var cur = Array.isArray(window._haColFilters[colId]) ? window._haColFilters[colId].slice() : [];
+  if (checkbox.checked) { if (cur.indexOf(checkbox.value) === -1) cur.push(checkbox.value); }
+  else { cur = cur.filter(function(v) { return v !== checkbox.value; }); }
+  window._haColFilters[colId] = cur.length ? cur : null;
+  _haApplyFilters();
+  _haUpdateResetBtn();
+  // Update header indicator
+  _haRefreshHeaderIndicators();
+}
+
+function _haSetDateFilter(colId, key, val) {
+  if (!window._haColFilters) window._haColFilters = _haInitColFilters();
+  var cur = (window._haColFilters[colId] && typeof window._haColFilters[colId] === 'object')
+    ? Object.assign({}, window._haColFilters[colId]) : { from: '', to: '' };
+  cur[key] = val || '';
+  window._haColFilters[colId] = (cur.from || cur.to) ? cur : null;
+  _haApplyFilters();
+  _haUpdateResetBtn();
+  _haRefreshHeaderIndicators();
+}
+
+function _haClearColFilter(colId) {
+  if (!window._haColFilters) return;
+  window._haColFilters[colId] = null;
+  _haApplyFilters();
+  _haUpdateResetBtn();
+  _haRefreshHeaderIndicators();
+  // Tutup popover
+  var pop = document.getElementById('ha-filter-pop');
+  if (pop) pop.style.display = 'none';
+  window._haActiveFilterCol = null;
+}
+
+function _haResetAllFilters() {
+  window._haColFilters = _haInitColFilters();
+  var searchEl = document.getElementById('ha-search');
+  if (searchEl) searchEl.value = '';
+  _haApplyFilters();
+  _haUpdateResetBtn();
+  _haRefreshHeaderIndicators();
+}
+
+function _haApplyFilters() {
+  _haRebuildTable(null, null);
+}
+
+function _haRefreshHeaderIndicators() {
+  var filters = window._haColFilters || {};
+  document.querySelectorAll('#ha-thead th[data-col-id]').forEach(function(th) {
+    var colId = th.getAttribute('data-col-id');
+    var fv    = filters[colId];
+    var hasFilter = fv !== null && fv !== undefined && (
+      (typeof fv === 'string' && fv.trim()) ||
+      (Array.isArray(fv) && fv.length > 0) ||
+      (fv && (fv.from || fv.to))
+    );
+    th.style.color = hasFilter ? 'var(--blue,#3b82f6)' : 'var(--text-muted)';
+  });
+}
+
+function _haUpdateResetBtn() {
+  var filters   = window._haColFilters || {};
+  var searchEl  = document.getElementById('ha-search');
+  var searchVal = searchEl ? searchEl.value.trim() : '';
+  var hasAny    = !!searchVal;
+  if (!hasAny) {
+    hasAny = Object.keys(filters).some(function(k) {
+      var v = filters[k];
+      return v !== null && v !== undefined && (
+        (typeof v === 'string' && v.trim()) ||
+        (Array.isArray(v) && v.length > 0) ||
+        (v && (v.from || v.to))
+      );
+    });
+  }
+  var btn = document.getElementById('ha-reset-btn');
+  if (btn) btn.style.display = hasAny ? 'flex' : 'none';
+}
+
+// ─────────────────────────────────────────────────────────────
+//  DOWNLOAD CSV
+// ─────────────────────────────────────────────────────────────
+
+function _haToggleDownloadMenu() {
+  var menu = document.getElementById('ha-dl-menu');
+  if (menu) menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+}
+
+function _haDownloadCsv(filteredOnly) {
+  // Tutup menu
+  var menu = document.getElementById('ha-dl-menu');
+  if (menu) menu.style.display = 'none';
+
+  var allFindings = window._hasilAuditFindings || [];
+  var period      = window._hasilAuditPeriod   || null;
+  var findings;
+
+  if (filteredOnly) {
+    // Ambil data yang saat ini tampil di tbody
+    var filters = window._haColFilters || {};
+    var search  = (document.getElementById('ha-search') || {}).value || '';
+    var fsLabel = {
+      'OPEN':'Open TPP','OPEN_IMPL':'Open Implementasi',
+      'APP_DEPT_HEAD':'Review Dept Head','APP_AUDITOR':'Review Auditor',
+      'APP_KOORDINATOR':'Review Koordinator','CLOSED':'Closed','OVERDUE':'Overdue',
+    };
+    findings = allFindings.filter(function(f) {
+      if (search.trim()) {
+        var hay = [f.result_id, f.dept, f.deskripsi_temuan, f.lokasi_temuan,
+                   f.correction, f.corrective_action].join(' ').toLowerCase();
+        if (!hay.includes(search.toLowerCase().trim())) return false;
+      }
+      var cs = _haCorrectiveStatus(f);
+      for (var colId in filters) {
+        var fv = filters[colId];
+        if (!fv) continue;
+        var col = HA_COLS.find(function(c) { return c.id === colId; });
+        if (!col) continue;
+        if (col.type === 'text' && typeof fv === 'string' && fv.trim()) {
+          var val = col.field && col.field.indexOf('_') !== 0 ? String(f[col.field] || '') : '';
+          if (!val.toLowerCase().includes(fv.toLowerCase())) return false;
+        }
+        if (col.type === 'select' && Array.isArray(fv) && fv.length > 0) {
+          var sv = colId === 'dept' ? (f.dept || '')
+                 : colId === 'status_temuan' ? (fsLabel[f.finding_status] || f.finding_status || '')
+                 : colId === 'corr_status' ? cs.corr
+                 : colId === 'ca_status'   ? cs.ca : '';
+          if (fv.indexOf(sv) === -1) return false;
+        }
+        if (col.type === 'daterange' && fv && (fv.from || fv.to)) {
+          var dateVal = f[col.field] ? new Date(f[col.field]) : null;
+          if (!dateVal) { if (fv.from || fv.to) return false; }
+          else {
+            if (fv.from && dateVal < new Date(fv.from)) return false;
+            if (fv.to   && dateVal > new Date(fv.to + 'T23:59:59')) return false;
+          }
+        }
+      }
+      return true;
+    });
+  } else {
+    findings = allFindings;
+  }
+
+  if (!findings.length) {
+    toast('Tidak ada data untuk didownload.', 'error');
+    return;
+  }
+
+  // ── Build CSV ────────────────────────────────────────────
+  var hidden  = _haLoadHidden();
+  var visibleCols = HA_COLS.filter(function(c) { return hidden.indexOf(c.id) === -1; });
+
+  // Header baris 1: grup
+  var grpRow = visibleCols.map(function(c) {
+    return c.group === 'corr' ? 'CORRECTION' : c.group === 'ca' ? 'CORRECTIVE ACTION' : '';
+  });
+
+  // Header baris 2: label kolom
+  var colRow = visibleCols.map(function(c) { return c.label; });
+
+  var fsLabel = {
+    'OPEN':'Open TPP','OPEN_IMPL':'Open Implementasi',
+    'APP_DEPT_HEAD':'Review Dept Head','APP_AUDITOR':'Review Auditor',
+    'APP_KOORDINATOR':'Review Koordinator','CLOSED':'Closed','OVERDUE':'Overdue',
+  };
+
+  var dataRows = findings.map(function(f) {
+    var cs = _haCorrectiveStatus(f);
+    var overdue = _computeOverdue(f, period);
+    var isRed   = f.finding_status === 'OPEN' && overdue.tpp_plan && !f.tpp_submitted_at;
+
+    var cellVal = {
+      'result_id':    f.result_id || '',
+      'dept':         f.dept || '',
+      'deskripsi':    f.deskripsi_temuan || '',
+      'lokasi':       f.lokasi_temuan || '',
+      'bukti_temuan': (f.foto_urls || '').split(',').filter(Boolean).length + ' foto',
+      'status_temuan': (fsLabel[f.finding_status] || f.finding_status || '') + (isRed ? ' (Overdue)' : ''),
+      'correction':   f.correction || '',
+      'corr_status':  cs.corr,
+      'corr_due':     f.due_date_correction ? formatDate(f.due_date_correction) : '',
+      'corr_aktual':  f.impl_correction_submitted_at ? formatDate(f.impl_correction_submitted_at) : '',
+      'corr_bukti':   (f.impl_correction_foto_urls || '').split(',').filter(Boolean).length + ' foto',
+      'corr_ket':     f.impl_correction_keterangan || '',
+      'ca':           f.corrective_action || '',
+      'ca_status':    cs.ca,
+      'ca_due':       f.due_date_corrective_action ? formatDate(f.due_date_corrective_action) : '',
+      'ca_aktual':    f.impl_submitted_at ? formatDate(f.impl_submitted_at) : '',
+      'ca_bukti':     (f.impl_corrective_action_foto_urls || '').split(',').filter(Boolean).length + ' foto',
+      'ca_ket':       f.impl_corrective_action_keterangan || '',
+    };
+
+    return visibleCols.map(function(c) { return cellVal[c.id] || ''; });
+  });
+
+  // ── Serialize ke CSV ─────────────────────────────────────
+  function _csvCell(v) {
+    var s = String(v || '');
+    // Escape: kalau ada koma, newline, atau kutip → wrap dengan double-quote
+    if (s.indexOf(',') !== -1 || s.indexOf('\n') !== -1 || s.indexOf('"') !== -1) {
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  }
+
+  var rows = [grpRow, colRow].concat(dataRows);
+  var csv  = rows.map(function(row) {
+    return row.map(_csvCell).join(',');
+  }).join('\r\n');
+
+  // ── Trigger download ─────────────────────────────────────
+  // BOM UTF-8 supaya Excel bisa baca karakter Indonesia dengan benar
+  var bom      = '\uFEFF';
+  var blob     = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
+  var url      = URL.createObjectURL(blob);
+  var a        = document.createElement('a');
+  var periodeLabel = period ? period.nama_periode.replace(/[^a-zA-Z0-9_-]/g, '_') : 'export';
+  var suffix   = filteredOnly ? '_filtered' : '_all';
+  var dateStr  = new Date().toISOString().slice(0, 10);
+  a.href       = url;
+  a.download   = 'Hasil_Audit_' + periodeLabel + suffix + '_' + dateStr + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  toast('Download berhasil — ' + findings.length + ' temuan.', 'success');
+}
+
+// ─────────────────────────────────────────────────────────────
+//  COLUMN HIDE / SHOW
+// ─────────────────────────────────────────────────────────────
+
+function _haToggleColPanel() {
+  var panel = document.getElementById('ha-col-panel');
+  if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+function _haToggleCol(colId, visible) {
+  var hidden = _haLoadHidden();
+  if (visible) {
+    hidden = hidden.filter(function(id) { return id !== colId; });
+  } else {
+    if (hidden.indexOf(colId) === -1) hidden.push(colId);
+  }
+  _haSaveHidden(hidden);
+  _haUpdateHiddenCount(hidden);
+  _haRebuildTable(hidden, null);
+}
+
+function _haShowAllCols() {
+  _haSaveHidden([]);
+  _haUpdateHiddenCount([]);
+  // Update semua checkbox di panel
+  document.querySelectorAll('#ha-col-panel input[type=checkbox]').forEach(function(cb) {
+    cb.checked = true;
+  });
+  _haRebuildTable([], null);
+}
+
+function _haUpdateHiddenCount(hidden) {
+  var badge = document.getElementById('ha-hidden-count');
+  if (!badge) return;
+  var n = (hidden || []).length;
+  badge.style.display = n > 0 ? 'inline' : 'none';
+  badge.textContent   = n;
+}
+
+// ─────────────────────────────────────────────────────────────
+//  COLUMN RESIZE
+// ─────────────────────────────────────────────────────────────
+
+var _haResizeState = null;
+
+function _haSetupColResizer() {
+  // Cleanup handler lama
+  document.removeEventListener('mousemove', _haResizeMove);
+  document.removeEventListener('mouseup',   _haResizeEnd);
+  document.addEventListener('mousemove', _haResizeMove);
+  document.addEventListener('mouseup',   _haResizeEnd);
+}
+
+function _haResizeStart(e, colId) {
+  e.preventDefault();
+  var th = e.target.closest('th') || e.target.parentElement;
+  _haResizeState = {
+    colId:   colId,
+    startX:  e.clientX,
+    startW:  th ? th.offsetWidth : 100,
+    th:      th,
+  };
+  document.body.style.cursor = 'col-resize';
+  document.body.style.userSelect = 'none';
+}
+
+function _haResizeMove(e) {
+  if (!_haResizeState) return;
+  var dx   = e.clientX - _haResizeState.startX;
+  var newW = Math.max(60, _haResizeState.startW + dx);
+
+  // Hanya update minWidth di th — table tetap auto-layout
+  var colId = _haResizeState.colId;
+  document.querySelectorAll('#ha-thead th[data-col-id="' + colId + '"]').forEach(function(th) {
+    th.style.minWidth = newW + 'px';
+  });
+  _haResizeState.currentW = newW;
+}
+
+function _haResizeEnd() {
+  if (!_haResizeState) return;
+  var colId = _haResizeState.colId;
+  var newW  = _haResizeState.currentW || _haResizeState.startW;
+
+  // Simpan ke localStorage dan update definisi kolom
+  var widths  = _haLoadWidths();
+  widths[colId] = newW;
+  _haSaveWidths(widths);
+  var col = HA_COLS.find(function(c) { return c.id === colId; });
+  if (col) col.minWidth = newW;
+
+  _haResizeState = null;
+  document.body.style.cursor    = '';
+  document.body.style.userSelect = '';
+}
+
+// ─────────────────────────────────────────────────────────────
+//  OVERDUE HELPERS (sudah ada sebelumnya — dipertahankan)
+// ─────────────────────────────────────────────────────────────
+
+function _computeOverdue(result, period) {
+  var today = new Date(); today.setHours(0, 0, 0, 0);
+  var flags = { tpp_plan: false, correction: false, corrective_action: false };
+  if (period && period.tpp_plan_due_date) {
+    var planDue = new Date(period.tpp_plan_due_date); planDue.setHours(0,0,0,0);
+    if (!result.tpp_submitted_at) { if (today > planDue) flags.tpp_plan = true; }
+    else {
+      var submitted = new Date(result.tpp_submitted_at); submitted.setHours(0,0,0,0);
+      if (submitted > planDue) flags.tpp_plan = true;
+    }
+  }
+  if (result.due_date_correction) {
+    var corrDue = new Date(result.due_date_correction); corrDue.setHours(0,0,0,0);
+    if (!result.impl_correction_submitted_at) { if (today > corrDue) flags.correction = true; }
+    else {
+      var corrSub = new Date(result.impl_correction_submitted_at); corrSub.setHours(0,0,0,0);
+      if (corrSub > corrDue) flags.correction = true;
+    }
+  }
+  if (result.due_date_corrective_action) {
+    var caDue = new Date(result.due_date_corrective_action); caDue.setHours(0,0,0,0);
+    if (!result.impl_submitted_at) { if (today > caDue) flags.corrective_action = true; }
+    else {
+      var caSub = new Date(result.impl_submitted_at); caSub.setHours(0,0,0,0);
+      if (caSub > caDue) flags.corrective_action = true;
+    }
+  }
+  return flags;
+}
+
+function _dueDateStatus(dueDateStr, submittedAtStr) {
+  if (!dueDateStr) return '';
+  var today    = new Date(); today.setHours(0,0,0,0);
+  var due      = new Date(dueDateStr); due.setHours(0,0,0,0);
+  var diffDays = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
+  if (submittedAtStr) {
+    var sub = new Date(submittedAtStr); sub.setHours(0,0,0,0);
+    var color = sub > due ? '#dc2626' : '#10b981';
+    var label = sub > due ? 'Terlambat ' + Math.abs(Math.ceil((sub-due)/86400000)) + ' hari' : 'Tepat Waktu';
+    return '<span style="font-size:11px;font-weight:600;color:' + color + '">' + label + '</span>';
+  }
+  if (today > due) {
+    return '<span style="font-size:11px;font-weight:600;color:#dc2626">Terlambat ' + Math.abs(diffDays) + ' hari</span>';
+  }
+  if (diffDays === 0) return '<span style="font-size:11px;font-weight:600;color:#f59e0b">Due hari ini</span>';
+  if (diffDays <= 7)  return '<span style="font-size:11px;color:#f59e0b">Due ' + diffDays + ' hari lagi</span>';
+  return '<span style="font-size:11px;color:#6b7280">Due ' + diffDays + ' hari</span>';
+}
+
+
 </script>
