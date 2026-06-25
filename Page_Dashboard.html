@@ -201,9 +201,15 @@ function _renderDashboardData(container, data, viewablePeriods, selectedPeriodId
     '</div>' +
 
     // ── Section 2: Approval Table ────────────────────────────
-    _dbApprovalSection(agendas, findings, s);
+    _dbApprovalSection(agendas, findings, s) +
+
+    // ── Section 3: Analytics ─────────────────────────────────
+    '<div class="card" style="margin-top:24px;padding:20px" id="analytics-section"></div>';
 
   lucide.createIcons();
+
+  // Render analytics section setelah DOM siap
+  renderAnalyticsSection(findings, period);
 }
 
 // ════════════════════════════════════════════════════════════
