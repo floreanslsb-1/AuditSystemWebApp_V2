@@ -1,531 +1,1056 @@
 <script>
 // ============================================================
-//  Page_Analytics.html
-//  Visualisasi data Hasil Audit — Bar, Pie/Donut, Line, Tabel
-//  Dipanggil dari Page_Dashboard sebagai section tambahan
-//  Dependensi: Chart.js (cdnjs), window._hasilAuditFindings
+//  Page_Analytics.html — v2
+//  Preset Laporan + Custom Chart Builder
+//  Dipanggil dari Page_Dashboard via renderAnalyticsSection()
 // ============================================================
 
-// ── Muat Chart.js sekali saja ─────────────────────────────────
-var _analyticsChartJsLoaded = false;
-function _analyticsLoadChartJs(cb) {
+// ── Chart.js loader ──────────────────────────────────────────
+var _anChartJsReady = false;
+function _anLoadChartJs(cb) {
   if (typeof Chart !== 'undefined') { cb(); return; }
-  if (_analyticsChartJsLoaded) {
-    var poll = setInterval(function() {
-      if (typeof Chart !== 'undefined') { clearInterval(poll); cb(); }
-    }, 80);
+  if (_anChartJsReady) {
+    var t = setInterval(function() { if (typeof Chart !== 'undefined') { clearInterval(t); cb(); } }, 80);
     return;
   }
-  _analyticsChartJsLoaded = true;
+  _anChartJsReady = true;
   var s = document.createElement('script');
   s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
-  s.onload  = cb;
-  s.onerror = function() { toast('Gagal memuat library Chart.js.', 'error'); };
+  s.onload = cb;
+  s.onerror = function() { toast('Gagal memuat Chart.js.', 'error'); };
   document.head.appendChild(s);
 }
 
 // ── State ─────────────────────────────────────────────────────
-var _anChart = null; // instance Chart.js aktif
+var _anActiveChart  = null;
+var _anActiveTab    = 'preset';   // 'preset' | 'custom'
+var _anActivePreset = null;       // id preset aktif
+var _anLastRows     = [];
+var _anLastDim      = null;
+var _anLastMetric   = null;
+var _anLastTitle    = '';
 
-// ── Definisi dimensi (sumbu X / groupBy) ─────────────────────
+// ── Palette ───────────────────────────────────────────────────
+var AN_PAL = {
+  blue:    '#3b82f6', emerald: '#10b981', purple: '#8b5cf6',
+  amber:   '#f59e0b', rose:    '#f43f5e', cyan:   '#06b6d4',
+  lime:    '#84cc16', pink:    '#ec4899', teal:   '#14b8a6',
+  orange:  '#f97316', slate:   '#64748b', indigo: '#6366f1',
+};
+var AN_COLORS = Object.values(AN_PAL);
+
+// ── LocalStorage helpers ──────────────────────────────────────
+var AN_LS_PRESETS = 'an_saved_presets';
+function _anLoadSavedPresets() {
+  try { return JSON.parse(localStorage.getItem(AN_LS_PRESETS) || '[]'); } catch(e) { return []; }
+}
+function _anSavePresets(arr) {
+  try { localStorage.setItem(AN_LS_PRESETS, JSON.stringify(arr)); } catch(e) {}
+}
+
+// ── Custom builder definitions ────────────────────────────────
 var AN_DIMS = [
-  { id: 'dept',          label: 'Departemen',           fn: function(f) { return f.dept || '—'; } },
-  { id: 'finding_status',label: 'Status Temuan',        fn: function(f) { return _anFsLabel(f.finding_status); } },
-  { id: 'corr_status',   label: 'Status Correction',    fn: function(f) { return _haCorrectiveStatus(f).corr; } },
-  { id: 'ca_status',     label: 'Status Corrective Action', fn: function(f) { return _haCorrectiveStatus(f).ca; } },
-  { id: 'lokasi',        label: 'Lokasi Temuan',        fn: function(f) { return f.lokasi_temuan || '—'; } },
-  { id: 'corr_due_month',label: 'Bulan Due Date Correction', fn: function(f) {
-    if (!f.due_date_correction) return '(Belum diisi)';
-    var d = new Date(f.due_date_correction);
-    return isNaN(d) ? '—' : d.toLocaleDateString('id-ID', { year:'numeric', month:'short' });
+  { id:'dept',           label:'Departemen',                fn: function(f){ return f.dept||'—'; } },
+  { id:'finding_status', label:'Status Temuan',             fn: function(f){ return _anFsLabel(f.finding_status); } },
+  { id:'corr_status',    label:'Status Correction',         fn: function(f){ return _haCorrectiveStatus(f).corr; } },
+  { id:'ca_status',      label:'Status Corrective Action',  fn: function(f){ return _haCorrectiveStatus(f).ca; } },
+  { id:'lokasi',         label:'Lokasi Temuan',             fn: function(f){ return f.lokasi_temuan||'—'; } },
+  { id:'corr_due_month', label:'Bulan Due Date Correction', fn: function(f){
+    if(!f.due_date_correction) return '(Belum diisi)';
+    var d=new Date(f.due_date_correction); return isNaN(d)?'—':d.toLocaleDateString('id-ID',{year:'numeric',month:'short'});
   }},
-  { id: 'ca_due_month',  label: 'Bulan Due Date CA',    fn: function(f) {
-    if (!f.due_date_corrective_action) return '(Belum diisi)';
-    var d = new Date(f.due_date_corrective_action);
-    return isNaN(d) ? '—' : d.toLocaleDateString('id-ID', { year:'numeric', month:'short' });
+  { id:'ca_due_month',   label:'Bulan Due Date CA',         fn: function(f){
+    if(!f.due_date_corrective_action) return '(Belum diisi)';
+    var d=new Date(f.due_date_corrective_action); return isNaN(d)?'—':d.toLocaleDateString('id-ID',{year:'numeric',month:'short'});
   }},
 ];
-
-// ── Definisi metrik (sumbu Y / nilai) ────────────────────────
 var AN_METRICS = [
-  { id: 'count',         label: 'Jumlah Temuan',
-    fn: function(rows) { return rows.length; } },
-  { id: 'closed',        label: 'Jumlah Closed',
-    fn: function(rows) { return rows.filter(function(f){ return f.finding_status === 'CLOSED'; }).length; } },
-  { id: 'open',          label: 'Jumlah Open TPP',
-    fn: function(rows) { return rows.filter(function(f){ return f.finding_status === 'OPEN'; }).length; } },
-  { id: 'open_impl',     label: 'Jumlah Open Implementasi',
-    fn: function(rows) { return rows.filter(function(f){ return f.finding_status === 'OPEN_IMPL'; }).length; } },
-  { id: 'overdue_corr',  label: 'Correction Overdue',
-    fn: function(rows) { return rows.filter(function(f){
-      if (!f.due_date_correction || f.impl_correction_submitted_at) return false;
-      return new Date() > new Date(f.due_date_correction);
-    }).length; } },
-  { id: 'overdue_ca',    label: 'Corrective Action Overdue',
-    fn: function(rows) { return rows.filter(function(f){
-      if (!f.due_date_corrective_action || f.impl_submitted_at) return false;
-      return new Date() > new Date(f.due_date_corrective_action);
-    }).length; } },
-  { id: 'pct_closed',    label: '% Closed',
-    fn: function(rows) {
-      if (!rows.length) return 0;
-      return Math.round(rows.filter(function(f){ return f.finding_status === 'CLOSED'; }).length / rows.length * 100);
-    } },
+  { id:'count',       label:'Jumlah Temuan',              fn: function(r){ return r.length; } },
+  { id:'closed',      label:'Jumlah Closed',              fn: function(r){ return r.filter(function(f){ return f.finding_status==='CLOSED'; }).length; } },
+  { id:'open',        label:'Jumlah Open TPP',            fn: function(r){ return r.filter(function(f){ return f.finding_status==='OPEN'; }).length; } },
+  { id:'open_impl',   label:'Jumlah Open Implementasi',   fn: function(r){ return r.filter(function(f){ return f.finding_status==='OPEN_IMPL'; }).length; } },
+  { id:'ov_corr',     label:'Correction Overdue',         fn: function(r){ return r.filter(function(f){ return !f.due_date_correction||f.impl_correction_submitted_at?false:new Date()>new Date(f.due_date_correction); }).length; } },
+  { id:'ov_ca',       label:'CA Overdue',                 fn: function(r){ return r.filter(function(f){ return !f.due_date_corrective_action||f.impl_submitted_at?false:new Date()>new Date(f.due_date_corrective_action); }).length; } },
+  { id:'pct_closed',  label:'% Closed',                   fn: function(r){ return r.length?Math.round(r.filter(function(f){ return f.finding_status==='CLOSED'; }).length/r.length*100):0; } },
 ];
-
-// ── Chart types ───────────────────────────────────────────────
 var AN_CHART_TYPES = [
-  { id: 'bar',      label: 'Bar Chart (Vertikal)',   icon: 'bar-chart-2' },
-  { id: 'bar_h',    label: 'Bar Chart (Horizontal)', icon: 'bar-chart' },
-  { id: 'pie',      label: 'Pie Chart',              icon: 'pie-chart' },
-  { id: 'doughnut', label: 'Donut Chart',            icon: 'donut' },
-  { id: 'line',     label: 'Line Chart',             icon: 'trending-up' },
-  { id: 'table',    label: 'Tabel',                  icon: 'table-2' },
-];
-
-// ── Warna palette ─────────────────────────────────────────────
-var AN_COLORS = [
-  '#3b82f6','#10b981','#8b5cf6','#f59e0b','#f43f5e',
-  '#06b6d4','#84cc16','#ec4899','#14b8a6','#f97316',
-  '#6366f1','#a855f7','#22c55e','#eab308','#ef4444',
+  { id:'bar',      label:'Bar Chart (Vertikal)' },
+  { id:'bar_h',    label:'Bar Chart (Horizontal)' },
+  { id:'pie',      label:'Pie Chart' },
+  { id:'doughnut', label:'Donut Chart' },
+  { id:'line',     label:'Line Chart' },
+  { id:'table',    label:'Tabel' },
 ];
 
 function _anFsLabel(s) {
-  var m = {
-    'OPEN':'Open TPP','OPEN_IMPL':'Open Implementasi',
-    'APP_DEPT_HEAD':'Review Dept Head','APP_AUDITOR':'Review Auditor',
-    'APP_KOORDINATOR':'Review Koordinator','CLOSED':'Closed','OVERDUE':'Overdue',
-  };
-  return m[s] || s || '—';
+  return { OPEN:'Open TPP', OPEN_IMPL:'Open Implementasi',
+    APP_DEPT_HEAD:'Review Dept Head', APP_AUDITOR:'Review Auditor',
+    APP_KOORDINATOR:'Review Koordinator', CLOSED:'Closed', OVERDUE:'Overdue' }[s] || s || '—';
 }
 
-// ─────────────────────────────────────────────────────────────
-//  RENDER SECTION (dipanggil dari Page_Dashboard)
-// ─────────────────────────────────────────────────────────────
-
-function renderAnalyticsSection(findings, period) {
-  // Simpan ke window agar bisa diakses dari event handler
+// ═════════════════════════════════════════════════════════════
+//  ENTRY POINT — dipanggil dari _renderDashboardData
+// ═════════════════════════════════════════════════════════════
+function renderAnalyticsSection(findings, period, agendas) {
   window._anFindings = findings || [];
   window._anPeriod   = period   || null;
+  window._anAgendas  = agendas  || [];
 
   var el = document.getElementById('analytics-section');
   if (!el) return;
 
   el.innerHTML =
-    // ── Header section ────────────────────────────────────────
-    '<div style="display:flex;align-items:center;justify-content:space-between;' +
-      'margin-bottom:16px;flex-wrap:wrap;gap:8px">' +
+    // Header
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">' +
       '<div>' +
-        '<div style="font-size:13px;font-weight:700;color:var(--text)">Visualisasi Data</div>' +
-        '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">' +
-          'Eksplorasi data temuan dengan chart interaktif' +
-        '</div>' +
+        '<div style="font-size:13px;font-weight:700">Analitik & Laporan</div>' +
+        '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">Preset laporan siap pakai dan custom chart builder</div>' +
       '</div>' +
     '</div>' +
 
-    // ── Builder panel ─────────────────────────────────────────
-    '<div style="background:var(--surface2);border-radius:var(--radius);' +
-      'padding:16px;margin-bottom:16px;display:grid;' +
-      'grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;align-items:end">' +
-
-      // Dimensi X
-      '<div>' +
-        '<label style="font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--text-muted);' +
-          'display:block;margin-bottom:5px">KELOMPOKKAN PER</label>' +
-        '<select id="an-dim" class="form-control" style="font-size:12px">' +
-          AN_DIMS.map(function(d) {
-            return '<option value="' + d.id + '">' + escHtml(d.label) + '</option>';
-          }).join('') +
-        '</select>' +
-      '</div>' +
-
-      // Metrik Y
-      '<div>' +
-        '<label style="font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--text-muted);' +
-          'display:block;margin-bottom:5px">NILAI (SUMBU Y)</label>' +
-        '<select id="an-metric" class="form-control" style="font-size:12px">' +
-          AN_METRICS.map(function(m) {
-            return '<option value="' + m.id + '">' + escHtml(m.label) + '</option>';
-          }).join('') +
-        '</select>' +
-      '</div>' +
-
-      // Chart type
-      '<div>' +
-        '<label style="font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--text-muted);' +
-          'display:block;margin-bottom:5px">TIPE VISUALISASI</label>' +
-        '<select id="an-type" class="form-control" style="font-size:12px">' +
-          AN_CHART_TYPES.map(function(t) {
-            return '<option value="' + t.id + '">' + escHtml(t.label) + '</option>';
-          }).join('') +
-        '</select>' +
-      '</div>' +
-
-      // Sort
-      '<div>' +
-        '<label style="font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--text-muted);' +
-          'display:block;margin-bottom:5px">URUTAN</label>' +
-        '<select id="an-sort" class="form-control" style="font-size:12px">' +
-          '<option value="value_desc">Nilai ↓ Terbesar</option>' +
-          '<option value="value_asc">Nilai ↑ Terkecil</option>' +
-          '<option value="label_asc">Label A–Z</option>' +
-          '<option value="label_desc">Label Z–A</option>' +
-        '</select>' +
-      '</div>' +
-
-      // Tombol render
-      '<div style="display:flex;gap:6px">' +
-        '<button class="btn btn-primary" style="flex:1;font-size:12px" ' +
-          'onclick="_anRender()">' +
-          '<i data-lucide="play" style="width:13px;height:13px"></i> Tampilkan' +
-        '</button>' +
-      '</div>' +
-
+    // Tabs
+    '<div style="display:flex;gap:2px;border-bottom:2px solid var(--border);margin-bottom:20px">' +
+      '<button id="an-tab-preset" onclick="_anSwitchTab(\'preset\')" ' +
+        'style="padding:8px 16px;font-size:12px;font-weight:600;border:none;background:transparent;cursor:pointer;' +
+          'border-bottom:2px solid var(--blue,#3b82f6);margin-bottom:-2px;color:var(--blue,#3b82f6)">' +
+        '📊 Preset Laporan' +
+      '</button>' +
+      '<button id="an-tab-custom" onclick="_anSwitchTab(\'custom\')" ' +
+        'style="padding:8px 16px;font-size:12px;font-weight:600;border:none;background:transparent;cursor:pointer;' +
+          'border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--text-muted)">' +
+        '🔧 Custom Builder' +
+      '</button>' +
     '</div>' +
 
-    // ── Output area ───────────────────────────────────────────
-    '<div id="an-output" style="min-height:80px"></div>';
+    // Tab: Preset
+    '<div id="an-panel-preset">' + _anBuildPresetPanel() + '</div>' +
+
+    // Tab: Custom
+    '<div id="an-panel-custom" style="display:none">' + _anBuildCustomPanel() + '</div>' +
+
+    // Output (shared)
+    '<div id="an-output" style="margin-top:20px"></div>';
 
   lucide.createIcons(el);
 }
 
 // ─────────────────────────────────────────────────────────────
-//  CORE RENDER
+//  TAB SWITCH
 // ─────────────────────────────────────────────────────────────
-
-function _anRender() {
-  var dimId    = (document.getElementById('an-dim')    || {}).value;
-  var metricId = (document.getElementById('an-metric') || {}).value;
-  var typeId   = (document.getElementById('an-type')   || {}).value;
-  var sortId   = (document.getElementById('an-sort')   || {}).value;
-
-  var dim    = AN_DIMS.find(function(d) { return d.id === dimId; });
-  var metric = AN_METRICS.find(function(m) { return m.id === metricId; });
-  if (!dim || !metric) return;
-
-  var findings = window._anFindings || [];
-  if (!findings.length) {
-    document.getElementById('an-output').innerHTML =
-      '<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:13px">' +
-        'Tidak ada data temuan untuk divisualisasikan.' +
-      '</div>';
-    return;
-  }
-
-  // ── Group data ────────────────────────────────────────────
-  var groups = {};
-  findings.forEach(function(f) {
-    var key = dim.fn(f);
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(f);
+function _anSwitchTab(tab) {
+  _anActiveTab = tab;
+  var tabs = ['preset','custom'];
+  tabs.forEach(function(t) {
+    var btn   = document.getElementById('an-tab-' + t);
+    var panel = document.getElementById('an-panel-' + t);
+    var active = t === tab;
+    if (btn) {
+      btn.style.borderBottomColor = active ? 'var(--blue,#3b82f6)' : 'transparent';
+      btn.style.color = active ? 'var(--blue,#3b82f6)' : 'var(--text-muted)';
+    }
+    if (panel) panel.style.display = active ? '' : 'none';
   });
+  // Clear output saat pindah tab
+  var out = document.getElementById('an-output');
+  if (out) out.innerHTML = '';
+  if (_anActiveChart) { try { _anActiveChart.destroy(); } catch(e){} _anActiveChart = null; }
+}
 
-  // ── Hitung metrik per grup ────────────────────────────────
-  var rows = Object.keys(groups).map(function(label) {
-    return { label: label, value: metric.fn(groups[label]), count: groups[label].length };
-  });
+// ═════════════════════════════════════════════════════════════
+//  PRESET PANEL
+// ═════════════════════════════════════════════════════════════
+function _anBuildPresetPanel() {
+  var saved = _anLoadSavedPresets();
 
-  // ── Sort ──────────────────────────────────────────────────
-  rows.sort(function(a, b) {
-    if (sortId === 'value_desc') return b.value - a.value;
-    if (sortId === 'value_asc')  return a.value - b.value;
-    if (sortId === 'label_asc')  return a.label.localeCompare(b.label);
-    if (sortId === 'label_desc') return b.label.localeCompare(a.label);
-    return 0;
-  });
+  var builtinCards = [
+    {
+      id: 'realisasi',
+      icon: '📋',
+      title: 'Realisasi Audit',
+      desc: 'Tabel kesesuaian audit plan vs realisasi per dept, lengkap dengan jumlah temuan.',
+      color: AN_PAL.teal,
+    },
+    {
+      id: 'rekap_temuan',
+      icon: '📊',
+      title: 'Rekapitulasi Temuan',
+      desc: 'Stacked bar chart Comply vs Non Comply per departemen. Filter dept tersedia.',
+      color: AN_PAL.blue,
+    },
+    {
+      id: 'status_tpp',
+      icon: '🍩',
+      title: 'Status TPP per Dept',
+      desc: 'Donut chart distribusi status tindak lanjut (Open TPP, Closed, dll).',
+      color: AN_PAL.purple,
+    },
+  ];
 
-  // ── Render sesuai type ────────────────────────────────────
-  if (typeId === 'table') {
-    _anRenderTable(rows, dim, metric);
-  } else {
-    _analyticsLoadChartJs(function() {
-      _anRenderChart(rows, dim, metric, typeId);
-    });
-  }
+  var builtinHtml = builtinCards.map(function(c) {
+    return '<div onclick="_anRunPreset(\'' + c.id + '\')" ' +
+      'style="padding:14px 16px;border-radius:var(--radius);border:1.5px solid var(--border);' +
+        'cursor:pointer;transition:border-color .15s,box-shadow .15s;background:var(--surface)" ' +
+      'onmouseover="this.style.borderColor=\'' + c.color + '\';this.style.boxShadow=\'0 0 0 3px ' + c.color + '22\'" ' +
+      'onmouseout="this.style.borderColor=\'var(--border)\';this.style.boxShadow=\'none\'">' +
+      '<div style="font-size:22px;margin-bottom:8px">' + c.icon + '</div>' +
+      '<div style="font-size:13px;font-weight:700;margin-bottom:4px;color:var(--text)">' + escHtml(c.title) + '</div>' +
+      '<div style="font-size:11px;color:var(--text-muted);line-height:1.5">' + escHtml(c.desc) + '</div>' +
+    '</div>';
+  }).join('');
+
+  var savedHtml = saved.length ? saved.map(function(p, i) {
+    return '<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;' +
+      'border-radius:var(--radius);border:1.5px solid var(--border);background:var(--surface)">' +
+      '<div style="flex:1;cursor:pointer" onclick="_anRunSavedPreset(' + i + ')">' +
+        '<div style="font-size:12px;font-weight:600">⭐ ' + escHtml(p.name) + '</div>' +
+        '<div style="font-size:10px;color:var(--text-muted);margin-top:2px">' +
+          escHtml(p.dimLabel) + ' · ' + escHtml(p.metricLabel) + ' · ' + escHtml(p.chartLabel) +
+        '</div>' +
+      '</div>' +
+      '<button onclick="_anDeleteSavedPreset(' + i + ')" ' +
+        'style="background:transparent;border:none;cursor:pointer;color:var(--text-muted);font-size:14px;' +
+          'padding:2px 6px;border-radius:4px" title="Hapus preset">✕</button>' +
+    '</div>';
+  }).join('') : '';
+
+  return '<div style="font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--text-muted);margin-bottom:10px">LAPORAN BAWAAN</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:20px">' +
+      builtinHtml +
+    '</div>' +
+    (saved.length ? '<div style="font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--text-muted);margin-bottom:10px">PRESET TERSIMPAN</div>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px">' + savedHtml + '</div>' : '');
 }
 
 // ─────────────────────────────────────────────────────────────
-//  RENDER CHART
+//  RUN PRESET
 // ─────────────────────────────────────────────────────────────
-
-function _anRenderChart(rows, dim, metric, typeId) {
+function _anRunPreset(id) {
+  _anActivePreset = id;
   var out = document.getElementById('an-output');
   if (!out) return;
+  if (_anActiveChart) { try { _anActiveChart.destroy(); } catch(e){} _anActiveChart = null; }
 
-  // Destroy chart lama kalau ada
-  if (_anChart) { try { _anChart.destroy(); } catch(e) {} _anChart = null; }
+  if (id === 'realisasi')    { _anPresetRealisasi(out); return; }
+  if (id === 'rekap_temuan') { _anLoadChartJs(function(){ _anPresetRekapTemuan(out); }); return; }
+  if (id === 'status_tpp')   { _anLoadChartJs(function(){ _anPresetStatusTpp(out); }); return; }
+}
 
-  var labels = rows.map(function(r) { return r.label; });
-  var values = rows.map(function(r) { return r.value; });
-  var colors = rows.map(function(_, i) { return AN_COLORS[i % AN_COLORS.length]; });
-  var isPie  = typeId === 'pie' || typeId === 'doughnut';
-  var isHBar = typeId === 'bar_h';
+function _anRunSavedPreset(idx) {
+  var saved = _anLoadSavedPresets();
+  var p = saved[idx]; if (!p) return;
+  // Restore builder state
+  var dimEl    = document.getElementById('an-dim');
+  var metricEl = document.getElementById('an-metric');
+  var typeEl   = document.getElementById('an-type');
+  var sortEl   = document.getElementById('an-sort');
+  if (dimEl)    dimEl.value    = p.dim;
+  if (metricEl) metricEl.value = p.metric;
+  if (typeEl)   typeEl.value   = p.chartType;
+  if (sortEl)   sortEl.value   = p.sort || 'value_desc';
+  _anSwitchTab('custom');
+  setTimeout(_anRunCustom, 100);
+}
 
-  // ── Container ─────────────────────────────────────────────
+function _anDeleteSavedPreset(idx) {
+  var saved = _anLoadSavedPresets();
+  saved.splice(idx, 1);
+  _anSavePresets(saved);
+  // Re-render preset panel
+  var panel = document.getElementById('an-panel-preset');
+  if (panel) panel.innerHTML = _anBuildPresetPanel();
+  lucide.createIcons(panel);
+  toast('Preset dihapus.', 'success');
+}
+
+// ═════════════════════════════════════════════════════════════
+//  PRESET 1: REALISASI AUDIT
+// ═════════════════════════════════════════════════════════════
+function _anPresetRealisasi(out) {
+  var agendas  = window._anAgendas  || [];
+  var findings = window._anFindings || [];
+  var period   = window._anPeriod   || {};
+
+  if (!agendas.length) {
+    out.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted)">Tidak ada data agenda.</div>';
+    return;
+  }
+
+  // Batas periode
+  var periodStart = period.tanggal_mulai  ? new Date(period.tanggal_mulai)  : null;
+  var periodEnd   = period.tanggal_selesai? new Date(period.tanggal_selesai): null;
+  if (periodEnd) periodEnd.setHours(23,59,59);
+
+  // Build rows
+  var rows = agendas.map(function(ag) {
+    var nonComply = ag.non_comply_count || 0;
+    var comply    = ag.comply_count     || 0;
+    var ofi        = ag.ofi || '';
+
+    // Cek tanggal sesuai periode
+    var startedAt  = ag.started_at  ? new Date(ag.started_at)  : null;
+    var doneAt     = ag.done_at || ag.agreement_at ? new Date(ag.done_at || ag.agreement_at) : null;
+    var outOfRange = false;
+    if (startedAt && periodStart && startedAt < periodStart) outOfRange = true;
+    if (doneAt    && periodEnd   && doneAt    > periodEnd  ) outOfRange = true;
+
+    return {
+      dept:       ag.dept || '—',
+      area:       ag.area_sampling || '—',
+      auditors:   ag.auditor_emails ? ag.auditor_emails.split(',').map(function(e){ return e.split('@')[0]; }).join(', ') : '—',
+      started:    startedAt ? formatDate(startedAt.toISOString()) : '—',
+      done:       doneAt    ? formatDate(doneAt.toISOString())    : '—',
+      comply:     comply,
+      nonComply:  nonComply,
+      ofi:        ofi,
+      outOfRange: outOfRange,
+      status:     ag.status || '—',
+    };
+  }).sort(function(a,b){ return a.dept.localeCompare(b.dept); });
+
+  var totalNC    = rows.reduce(function(s,r){ return s+r.nonComply; }, 0);
+  var totalC     = rows.reduce(function(s,r){ return s+r.comply; }, 0);
+  var outOfCount = rows.filter(function(r){ return r.outOfRange; }).length;
+
   out.innerHTML =
-    '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);' +
-      'padding:20px">' +
-      '<div style="display:flex;justify-content:space-between;align-items:flex-start;' +
-        'margin-bottom:16px;flex-wrap:wrap;gap:8px">' +
+    '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">' +
+      // Header
+      '<div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;' +
+        'align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">' +
         '<div>' +
-          '<div style="font-size:13px;font-weight:700">' +
-            escHtml(metric.label) + ' per ' + escHtml(dim.label) +
-          '</div>' +
-          '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">' +
-            rows.length + ' kelompok · ' + (window._anFindings || []).length + ' temuan' +
+          '<div style="font-size:14px;font-weight:700">Realisasi Audit</div>' +
+          '<div style="font-size:11px;color:var(--text-muted);margin-top:3px">' +
+            escHtml((period.nama_periode||'')) + ' · ' + rows.length + ' area' +
+            (outOfCount ? ' · <span style="color:var(--rose,#f43f5e);font-weight:600">' + outOfCount + ' di luar periode</span>' : '') +
           '</div>' +
         '</div>' +
         '<div style="display:flex;gap:6px">' +
-          '<button onclick="_anDownloadPng()" ' +
-            'class="btn btn-outline btn-sm" style="font-size:11px;gap:4px">' +
-            '<i data-lucide="image" style="width:11px;height:11px"></i> PNG' +
-          '</button>' +
-          '<button onclick="_anDownloadCsv()" ' +
-            'class="btn btn-outline btn-sm" style="font-size:11px;gap:4px">' +
+          '<button onclick="_anDownloadTableCsv(\'realisasi\')" class="btn btn-outline btn-sm" style="font-size:11px">' +
             '<i data-lucide="download" style="width:11px;height:11px"></i> CSV' +
           '</button>' +
         '</div>' +
       '</div>' +
-      '<div style="position:relative;' + (isPie ? 'max-width:420px;margin:0 auto' : '') + '">' +
-        '<canvas id="an-canvas" style="width:100%;' + (isPie ? 'max-height:340px' : 'max-height:380px') + '"></canvas>' +
-      '</div>' +
-    '</div>';
-
-  lucide.createIcons(out);
-
-  var canvas  = document.getElementById('an-canvas');
-  var ctx     = canvas.getContext('2d');
-
-  // ── Chart.js config ───────────────────────────────────────
-  var isDark  = document.documentElement.getAttribute('data-theme') === 'dark' ||
-                document.body.classList.contains('dark');
-  var gridColor   = isDark ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.07)';
-  var labelColor  = isDark ? '#9ca3af' : '#6b7280';
-  var tooltipBg   = isDark ? '#1f2937' : '#fff';
-  var tooltipTxt  = isDark ? '#f9fafb' : '#111827';
-
-  var chartType = typeId === 'bar_h' ? 'bar' : typeId;
-
-  var datasets = [{
-    label: metric.label,
-    data:  values,
-    backgroundColor: isPie ? colors : colors.map(function(c) { return c + 'cc'; }),
-    borderColor:     isPie ? colors.map(function(c) { return c; }) : colors,
-    borderWidth: isPie ? 2 : 1.5,
-    borderRadius: (!isPie && !isHBar) ? 4 : 0,
-    hoverOffset: isPie ? 6 : 0,
-  }];
-
-  var config = {
-    type: chartType,
-    data: { labels: labels, datasets: datasets },
-    options: {
-      indexAxis: isHBar ? 'y' : 'x',
-      responsive: true,
-      maintainAspectRatio: true,
-      plugins: {
-        legend: {
-          display: isPie,
-          position: 'bottom',
-          labels: {
-            color: labelColor,
-            font: { size: 11 },
-            padding: 14,
-            usePointStyle: true,
-            pointStyleWidth: 10,
-          },
-        },
-        tooltip: {
-          backgroundColor: tooltipBg,
-          titleColor: tooltipTxt,
-          bodyColor: tooltipTxt,
-          borderColor: gridColor,
-          borderWidth: 1,
-          padding: 10,
-          callbacks: {
-            label: function(ctx) {
-              var v = ctx.parsed[isHBar ? 'x' : 'y'];
-              if (v === undefined) v = ctx.parsed;
-              var suffix = metricId === 'pct_closed' ? '%' : ' temuan';
-              return ' ' + metric.label + ': ' + v + suffix;
-            },
-          },
-        },
-      },
-      scales: isPie ? {} : {
-        x: {
-          ticks: { color: labelColor, font: { size: 11 } },
-          grid:  { color: isHBar ? gridColor : 'transparent' },
-        },
-        y: {
-          ticks: { color: labelColor, font: { size: 11 } },
-          grid:  { color: isHBar ? 'transparent' : gridColor },
-          beginAtZero: true,
-        },
-      },
-    },
-  };
-
-  // Simpan metricId di closure untuk tooltip
-  var metricId = (document.getElementById('an-metric') || {}).value;
-
-  _anChart = new Chart(ctx, config);
-
-  // Simpan rows untuk download
-  window._anLastRows   = rows;
-  window._anLastDim    = dim;
-  window._anLastMetric = metric;
-}
-
-// ─────────────────────────────────────────────────────────────
-//  RENDER TABEL
-// ─────────────────────────────────────────────────────────────
-
-function _anRenderTable(rows, dim, metric) {
-  // Destroy chart lama kalau ada
-  if (_anChart) { try { _anChart.destroy(); } catch(e) {} _anChart = null; }
-
-  var maxVal = Math.max.apply(null, rows.map(function(r) { return r.value; })) || 1;
-
-  var out = document.getElementById('an-output');
-  if (!out) return;
-
-  out.innerHTML =
-    '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;' +
-        'padding:14px 16px;border-bottom:1px solid var(--border)">' +
-        '<div>' +
-          '<div style="font-size:13px;font-weight:700">' +
-            escHtml(metric.label) + ' per ' + escHtml(dim.label) +
-          '</div>' +
-          '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">' +
-            rows.length + ' kelompok · ' + (window._anFindings || []).length + ' temuan' +
-          '</div>' +
-        '</div>' +
-        '<button onclick="_anDownloadCsv()" ' +
-          'class="btn btn-outline btn-sm" style="font-size:11px;gap:4px">' +
-          '<i data-lucide="download" style="width:11px;height:11px"></i> CSV' +
-        '</button>' +
-      '</div>' +
+      // Legend
+      (outOfCount ? '<div style="padding:8px 20px;background:rgba(244,63,94,.06);border-bottom:1px solid var(--border);' +
+        'font-size:11px;color:var(--rose,#f43f5e);display:flex;align-items:center;gap:6px">' +
+        '<i data-lucide="alert-circle" style="width:12px;height:12px;flex-shrink:0"></i>' +
+        'Baris merah = tanggal pelaksanaan di luar periode ' +
+        (periodStart ? formatDate(periodStart.toISOString()) : '') + ' — ' +
+        (periodEnd   ? formatDate(periodEnd.toISOString())   : '') +
+      '</div>' : '') +
+      // Tabel
       '<div style="overflow-x:auto">' +
-        '<table style="width:100%;border-collapse:collapse">' +
+        '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
           '<thead>' +
             '<tr style="background:var(--surface2)">' +
-              '<th style="padding:9px 14px;text-align:left;font-size:10px;font-weight:700;' +
-                'letter-spacing:.06em;color:var(--text-muted);border-bottom:1px solid var(--border);' +
-                'white-space:nowrap">NO</th>' +
-              '<th style="padding:9px 14px;text-align:left;font-size:10px;font-weight:700;' +
-                'letter-spacing:.06em;color:var(--text-muted);border-bottom:1px solid var(--border)">' +
-                escHtml(dim.label.toUpperCase()) + '</th>' +
-              '<th style="padding:9px 14px;text-align:right;font-size:10px;font-weight:700;' +
-                'letter-spacing:.06em;color:var(--text-muted);border-bottom:1px solid var(--border);' +
-                'white-space:nowrap">' + escHtml(metric.label.toUpperCase()) + '</th>' +
-              '<th style="padding:9px 14px;text-align:left;font-size:10px;font-weight:700;' +
-                'letter-spacing:.06em;color:var(--text-muted);border-bottom:1px solid var(--border);' +
-                'min-width:120px">DISTRIBUSI</th>' +
+              _anTh('No', 'width:36px;text-align:center') +
+              _anTh('Dept') + _anTh('Area / Ruang Lingkup') + _anTh('Auditor') +
+              _anTh('Mulai Audit') + _anTh('Selesai Audit') +
+              _anTh('Comply', 'text-align:center;color:'+AN_PAL.emerald) +
+              _anTh('Non Comply', 'text-align:center;color:'+AN_PAL.rose) +
+              _anTh('OFI') + _anTh('Status Agenda') +
             '</tr>' +
           '</thead>' +
           '<tbody>' +
             rows.map(function(r, i) {
-              var pct = Math.round(r.value / maxVal * 100);
-              var color = AN_COLORS[i % AN_COLORS.length];
-              return '<tr style="border-bottom:1px solid var(--border)">' +
-                '<td style="padding:10px 14px;font-size:11px;color:var(--text-muted);' +
-                  'font-weight:600;white-space:nowrap">' + (i+1) + '</td>' +
-                '<td style="padding:10px 14px;font-size:12px;font-weight:600">' +
-                  escHtml(r.label) + '</td>' +
-                '<td style="padding:10px 14px;font-size:13px;font-weight:700;' +
-                  'text-align:right;color:' + color + '">' + r.value + '</td>' +
-                '<td style="padding:10px 14px">' +
-                  '<div style="height:8px;background:var(--surface2);border-radius:4px;overflow:hidden">' +
-                    '<div style="height:100%;width:' + pct + '%;background:' + color + ';' +
-                      'border-radius:4px;transition:width .3s"></div>' +
-                  '</div>' +
-                '</td>' +
+              var red = r.outOfRange ? 'color:var(--rose,#f43f5e);' : '';
+              var bg  = r.outOfRange ? 'background:rgba(244,63,94,.04);' : '';
+              var td  = 'padding:10px 12px;border-bottom:1px solid var(--border);font-size:12px;' + bg;
+              return '<tr>' +
+                '<td style="' + td + 'text-align:center;color:var(--text-muted);font-weight:600">' + (i+1) + '</td>' +
+                '<td style="' + td + 'font-weight:700;' + red + '">' + escHtml(r.dept) + '</td>' +
+                '<td style="' + td + '">' + escHtml(r.area) + '</td>' +
+                '<td style="' + td + 'color:var(--text-muted)">' + escHtml(r.auditors) + '</td>' +
+                '<td style="' + td + 'white-space:nowrap;' + red + '">' + escHtml(r.started) + '</td>' +
+                '<td style="' + td + 'white-space:nowrap;' + red + '">' + escHtml(r.done) + '</td>' +
+                '<td style="' + td + 'text-align:center;font-weight:700;color:' + AN_PAL.emerald + '">' + (r.comply||'—') + '</td>' +
+                '<td style="' + td + 'text-align:center;font-weight:700;color:' + AN_PAL.rose + '">' + (r.nonComply||'—') + '</td>' +
+                '<td style="' + td + 'max-width:200px;color:var(--text-muted)">' + escHtml(r.ofi||'—') + '</td>' +
+                '<td style="' + td + '">' + _anStatusBadge(r.status) + '</td>' +
               '</tr>';
             }).join('') +
           '</tbody>' +
-          // Total row
           '<tfoot>' +
-            '<tr style="background:var(--surface2)">' +
-              '<td colspan="2" style="padding:9px 14px;font-size:11px;font-weight:700;' +
-                'letter-spacing:.04em;color:var(--text-muted)">TOTAL</td>' +
-              '<td style="padding:9px 14px;font-size:13px;font-weight:700;text-align:right">' +
-                rows.reduce(function(s,r){ return s+r.value; }, 0) +
-              '</td>' +
-              '<td></td>' +
+            '<tr style="background:var(--surface2);font-weight:700">' +
+              '<td colspan="6" style="padding:10px 12px;font-size:11px;letter-spacing:.05em;color:var(--text-muted)">TOTAL</td>' +
+              '<td style="padding:10px 12px;text-align:center;font-size:13px;color:' + AN_PAL.emerald + '">' + totalC + '</td>' +
+              '<td style="padding:10px 12px;text-align:center;font-size:13px;color:' + AN_PAL.rose + '">' + totalNC + '</td>' +
+              '<td colspan="2"></td>' +
             '</tr>' +
           '</tfoot>' +
         '</table>' +
       '</div>' +
     '</div>';
 
+  // Simpan untuk CSV
+  window._anRealisasiRows = rows;
+  window._anRealisasiPeriod = period;
+  lucide.createIcons(out);
+}
+
+function _anStatusBadge(s) {
+  var map = { PLANNED:'var(--text-muted)', STARTED:'var(--amber,#f59e0b)', DONE:'var(--emerald,#10b981)' };
+  var c = map[s] || 'var(--text-muted)';
+  return '<span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;' +
+    'background:' + c + '1a;color:' + c + ';border:1px solid ' + c + '44">' + (s||'—') + '</span>';
+}
+
+function _anTh(label, extraStyle) {
+  return '<th style="padding:9px 12px;text-align:left;font-size:10px;font-weight:700;' +
+    'letter-spacing:.06em;color:var(--text-muted);border-bottom:1px solid var(--border);' +
+    'white-space:nowrap;' + (extraStyle||'') + '">' + escHtml(label) + '</th>';
+}
+
+// ═════════════════════════════════════════════════════════════
+//  PRESET 2: REKAPITULASI TEMUAN (stacked bar)
+// ═════════════════════════════════════════════════════════════
+function _anPresetRekapTemuan(out) {
+  var findings = window._anFindings || [];
+  var agendas  = window._anAgendas  || [];
+  var period   = window._anPeriod   || {};
+
+  // Kumpulkan semua dept dari agendas (bukan hanya yg punya temuan)
+  var allDepts = [];
+  agendas.forEach(function(ag) { if (ag.dept && allDepts.indexOf(ag.dept) === -1) allDepts.push(ag.dept); });
+  allDepts.sort();
+
+  // Filter panel dept
+  out.innerHTML =
+    '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">' +
+      '<div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;' +
+        'align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">' +
+        '<div>' +
+          '<div style="font-size:14px;font-weight:700">Rekapitulasi Temuan</div>' +
+          '<div style="font-size:11px;color:var(--text-muted);margin-top:3px">' + escHtml(period.nama_periode||'') + '</div>' +
+        '</div>' +
+        '<div style="display:flex;gap:6px">' +
+          '<button onclick="_anRenderRekapChart()" class="btn btn-primary btn-sm" style="font-size:11px">' +
+            '<i data-lucide="refresh-cw" style="width:11px;height:11px"></i> Update' +
+          '</button>' +
+          '<button onclick="_anDownloadPng()" class="btn btn-outline btn-sm" style="font-size:11px">' +
+            '<i data-lucide="image" style="width:11px;height:11px"></i> PNG' +
+          '</button>' +
+          '<button onclick="_anDownloadTableCsv(\'rekap\')" class="btn btn-outline btn-sm" style="font-size:11px">' +
+            '<i data-lucide="download" style="width:11px;height:11px"></i> CSV' +
+          '</button>' +
+        '</div>' +
+      '</div>' +
+      // Filter dept
+      '<div style="padding:12px 20px;border-bottom:1px solid var(--border);' +
+        'display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+        '<span style="font-size:11px;font-weight:700;color:var(--text-muted)">TAMPILKAN DEPT:</span>' +
+        '<label style="font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer">' +
+          '<input type="checkbox" id="an-rekap-all" checked onchange="_anToggleAllDepts(this)" ' +
+            'style="accent-color:var(--blue)"> Semua' +
+        '</label>' +
+        allDepts.map(function(d) {
+          return '<label style="font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer">' +
+            '<input type="checkbox" class="an-dept-cb" value="' + escAttr(d) + '" checked ' +
+              'onchange="_anSyncAllCheck()" style="accent-color:var(--blue)">' +
+            escHtml(d) + '</label>';
+        }).join('') +
+      '</div>' +
+      // Canvas
+      // HTML legend manual (di luar canvas, tidak nabrak)
+      '<div style="display:flex;align-items:center;justify-content:center;gap:20px;' +
+        'padding:12px 20px 0;font-size:12px;font-weight:600">' +
+        '<span style="display:flex;align-items:center;gap:6px">' +
+          '<span style="display:inline-block;width:14px;height:14px;border-radius:2px;background:#5c0808"></span>' +
+          'Non Comply' +
+        '</span>' +
+        '<span style="display:flex;align-items:center;gap:6px">' +
+          '<span style="display:inline-block;width:14px;height:14px;border-radius:2px;background:#065f46"></span>' +
+          'Comply' +
+        '</span>' +
+      '</div>' +
+      '<div style="padding:12px 20px 20px">' +
+        '<canvas id="an-canvas" style="max-height:400px"></canvas>' +
+      '</div>' +
+    '</div>';
+
+  window._anRekapAllDepts = allDepts;
+  lucide.createIcons(out);
+  _anRenderRekapChart();
+}
+
+function _anToggleAllDepts(cb) {
+  document.querySelectorAll('.an-dept-cb').forEach(function(el) { el.checked = cb.checked; });
+  _anRenderRekapChart();
+}
+function _anSyncAllCheck() {
+  var all = Array.from(document.querySelectorAll('.an-dept-cb'));
+  var allCb = document.getElementById('an-rekap-all');
+  if (allCb) allCb.checked = all.every(function(cb){ return cb.checked; });
+  _anRenderRekapChart();
+}
+
+function _anRenderRekapChart() {
+  var agendas  = window._anAgendas  || [];
+  var selectedDepts = Array.from(document.querySelectorAll('.an-dept-cb:checked')).map(function(cb){ return cb.value; });
+
+  var deptData = {};
+  agendas.filter(function(ag){ return selectedDepts.indexOf(ag.dept) !== -1; }).forEach(function(ag) {
+    if (!deptData[ag.dept]) deptData[ag.dept] = { comply:0, nonComply:0 };
+    deptData[ag.dept].nonComply += (ag.non_comply_count || 0);
+    deptData[ag.dept].comply    += (ag.comply_count     || 0);
+  });
+
+  var labels  = Object.keys(deptData).sort();
+  var ncVals  = labels.map(function(d){ return deptData[d].nonComply; });
+  var cVals   = labels.map(function(d){ return deptData[d].comply; });
+
+  if (_anActiveChart) { try { _anActiveChart.destroy(); } catch(e){} _anActiveChart = null; }
+  var canvas = document.getElementById('an-canvas'); if (!canvas) return;
+  var ctx    = canvas.getContext('2d');
+
+  var isDark     = document.documentElement.getAttribute('data-theme') === 'dark';
+  var labelColor = isDark ? '#9ca3af' : '#4b5563';
+  var gridColor  = isDark ? 'rgba(255,255,255,.07)' : 'rgba(0,0,0,.06)';
+
+  // ── Warna bold dark ──────────────────────────────────────
+  var COLOR_NC = { face:'#5c0808', side:'#3d0505', top:'#6e0f0f' }; // merah maroon sangat gelap
+  var COLOR_C  = { face:'#065f46', side:'#064e3b', top:'#047857' }; // hijau gelap
+
+  // ── 3D plugin ────────────────────────────────────────────
+  var DEPTH = 7; // kedalaman efek 3D (px)
+
+  var plugin3d = {
+    id: 'rekap-3d',
+    afterDatasetsDraw: function(chart) {
+      var ctx3 = chart.ctx;
+      chart.data.datasets.forEach(function(dataset, di) {
+        var isNC   = di === 0; // dataset 0 = Non Comply
+        var colors = isNC ? COLOR_NC : COLOR_C;
+        var meta   = chart.getDatasetMeta(di);
+        meta.data.forEach(function(bar) {
+          var x = bar.x, y = bar.y;
+          var w = bar.width, base = bar.base;
+          var left  = x - w / 2;
+          var right = x + w / 2;
+          var barH  = base - y;
+          if (barH <= 0) return;
+
+          ctx3.save();
+
+          // Sisi kanan (parallelogram)
+          ctx3.beginPath();
+          ctx3.moveTo(right, y);
+          ctx3.lineTo(right + DEPTH, y - DEPTH);
+          ctx3.lineTo(right + DEPTH, base - DEPTH);
+          ctx3.lineTo(right, base);
+          ctx3.closePath();
+          ctx3.fillStyle = colors.side;
+          ctx3.fill();
+
+          // Sisi atas (parallelogram)
+          ctx3.beginPath();
+          ctx3.moveTo(left,  y);
+          ctx3.lineTo(right, y);
+          ctx3.lineTo(right + DEPTH, y - DEPTH);
+          ctx3.lineTo(left  + DEPTH, y - DEPTH);
+          ctx3.closePath();
+          ctx3.fillStyle = colors.top;
+          ctx3.fill();
+
+          ctx3.restore();
+        });
+      });
+    },
+    // Label: NC di dalam bar, total di atas bar
+    afterDraw: function(chart) {
+      var ctx3 = chart.ctx;
+      var ncMeta = chart.getDatasetMeta(0);
+      var cMeta  = chart.getDatasetMeta(1);
+
+      // Label Non Comply — di dalam bar kalau cukup tinggi, di atas bar NC kalau kecil
+      ncMeta.data.forEach(function(bar, i) {
+        var val = chart.data.datasets[0].data[i];
+        if (!val) return;
+        var barH = bar.base - bar.y;
+        ctx3.save();
+        ctx3.font      = '700 10px system-ui,sans-serif';
+        ctx3.textAlign = 'center';
+        if (barH >= 14) {
+          // Cukup tinggi — tulis di tengah bar NC
+          ctx3.fillStyle    = '#fde8e8';
+          ctx3.textBaseline = 'middle';
+          ctx3.fillText(val, bar.x, bar.y + barH / 2);
+        } else {
+          // Bar NC terlalu kecil — tulis tepat di atas bar NC
+          ctx3.fillStyle    = '#fde8e8';
+          ctx3.textBaseline = 'bottom';
+          ctx3.fillText(val, bar.x, bar.y - 2);
+        }
+        ctx3.restore();
+      });
+
+      // Total di atas bar Comply
+      cMeta.data.forEach(function(bar, i) {
+        var total = (chart.data.datasets[0].data[i]||0) + (chart.data.datasets[1].data[i]||0);
+        if (!total) return;
+        ctx3.save();
+        ctx3.font      = '700 11px system-ui,sans-serif';
+        ctx3.fillStyle = labelColor;
+        ctx3.textAlign = 'center';
+        ctx3.textBaseline = 'bottom';
+        ctx3.fillText(total, bar.x, bar.y - DEPTH - 6);
+        ctx3.restore();
+      });
+    },
+  };
+
+  _anActiveChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        { label:'Non Comply', data:ncVals, backgroundColor:'#5c0808', borderColor:'#3d0505', borderWidth:0, borderRadius:0, borderSkipped:'bottom' },
+        { label:'Comply',     data:cVals,  backgroundColor:'#065f46', borderColor:'#064e3b', borderWidth:0, borderRadius:0, borderSkipped:'bottom' },
+      ],
+    },
+    options: {
+      responsive:true, maintainAspectRatio:true,
+      layout: { padding: { top:28, right: DEPTH + 4 } },
+      plugins: {
+        legend: { display:true, position:'top', labels:{ font:{size:11}, usePointStyle:true, padding:16,
+          generateLabels: function(chart) {
+            return [
+              { text:'Non Comply', fillStyle:'#7f1111', strokeStyle:'#7f1111', lineWidth:0, pointStyle:'rect', hidden:false, datasetIndex:0 },
+              { text:'Comply',     fillStyle:'#065f46', strokeStyle:'#065f46', lineWidth:0, pointStyle:'rect', hidden:false, datasetIndex:1 },
+            ];
+          },
+        }},
+        tooltip: { mode:'index', intersect:false },
+      },
+      scales: {
+        x: {
+          stacked:true,
+          ticks:{ font:{size:10}, color:labelColor, maxRotation:35 },
+          grid:{ color:'transparent' },
+          title:{ display:true, text:'Departemen', color:labelColor, font:{size:11,weight:'600'}, padding:{top:8} },
+        },
+        y: {
+          stacked:true, beginAtZero:true,
+          ticks:{ font:{size:11}, color:labelColor },
+          grid:{ color:gridColor },
+          title:{ display:true, text:'Jumlah Temuan', color:labelColor, font:{size:11,weight:'600'}, padding:{bottom:8} },
+        },
+      },
+    },
+    plugins: [plugin3d],
+  });
+
+  window._anRekapRows = labels.map(function(d){ return { dept:d, nonComply:deptData[d].nonComply, comply:deptData[d].comply }; });
+  _anLastTitle = 'Rekapitulasi Temuan';
+}
+
+// ═════════════════════════════════════════════════════════════
+//  PRESET 3: STATUS TPP PER DEPT (donut per status)
+// ═════════════════════════════════════════════════════════════
+function _anPresetStatusTpp(out) {
+  var findings = window._anFindings || [];
+  var period   = window._anPeriod   || {};
+
+  // Group by status
+  var statusGroups = {};
+  var fsLabel = { OPEN:'Open TPP', OPEN_IMPL:'Open Implementasi',
+    APP_DEPT_HEAD:'Review Dept Head', APP_AUDITOR:'Review Auditor',
+    APP_KOORDINATOR:'Review Koordinator', CLOSED:'Closed', OVERDUE:'Overdue' };
+  var fsColor = { OPEN:AN_PAL.rose, OPEN_IMPL:AN_PAL.blue,
+    APP_DEPT_HEAD:AN_PAL.purple, APP_AUDITOR:AN_PAL.purple,
+    APP_KOORDINATOR:AN_PAL.indigo, CLOSED:AN_PAL.emerald, OVERDUE:AN_PAL.rose };
+
+  findings.forEach(function(f) {
+    var lbl = fsLabel[f.finding_status] || f.finding_status;
+    if (!statusGroups[lbl]) statusGroups[lbl] = { count:0, color: fsColor[f.finding_status]||AN_PAL.slate };
+    statusGroups[lbl].count++;
+  });
+
+  var labels = Object.keys(statusGroups);
+  var values = labels.map(function(l){ return statusGroups[l].count; });
+  var colors = labels.map(function(l){ return statusGroups[l].color; });
+  var total  = values.reduce(function(s,v){ return s+v; }, 0);
+
+  out.innerHTML =
+    '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">' +
+      '<div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;' +
+        'align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">' +
+        '<div>' +
+          '<div style="font-size:14px;font-weight:700">Status TPP per Dept</div>' +
+          '<div style="font-size:11px;color:var(--text-muted);margin-top:3px">' +
+            escHtml(period.nama_periode||'') + ' · ' + total + ' temuan Non Comply' +
+          '</div>' +
+        '</div>' +
+        '<div style="display:flex;gap:6px">' +
+          '<button onclick="_anDownloadPng()" class="btn btn-outline btn-sm" style="font-size:11px">' +
+            '<i data-lucide="image" style="width:11px;height:11px"></i> PNG' +
+          '</button>' +
+          '<button onclick="_anDownloadTableCsv(\'tpp\')" class="btn btn-outline btn-sm" style="font-size:11px">' +
+            '<i data-lucide="download" style="width:11px;height:11px"></i> CSV' +
+          '</button>' +
+        '</div>' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;padding:20px;align-items:center">' +
+        // Donut chart
+        '<div style="max-width:320px;margin:0 auto;width:100%">' +
+          '<canvas id="an-canvas" style="max-height:300px"></canvas>' +
+        '</div>' +
+        // Legend tabel
+        '<div>' +
+          '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
+            '<thead><tr style="background:var(--surface2)">' +
+              _anTh('Status') + _anTh('Jumlah','text-align:center') + _anTh('%','text-align:center') +
+            '</tr></thead><tbody>' +
+            labels.map(function(lbl, i) {
+              var pct = total ? Math.round(values[i]/total*100) : 0;
+              return '<tr style="border-bottom:1px solid var(--border)">' +
+                '<td style="padding:9px 12px;display:flex;align-items:center;gap:8px">' +
+                  '<span style="width:10px;height:10px;border-radius:50%;background:' + colors[i] + ';flex-shrink:0"></span>' +
+                  escHtml(lbl) +
+                '</td>' +
+                '<td style="padding:9px 12px;text-align:center;font-weight:700">' + values[i] + '</td>' +
+                '<td style="padding:9px 12px;text-align:center;color:var(--text-muted)">' + pct + '%</td>' +
+              '</tr>';
+            }).join('') +
+            '</tbody><tfoot><tr style="background:var(--surface2);font-weight:700">' +
+              '<td style="padding:9px 12px">Total</td>' +
+              '<td style="padding:9px 12px;text-align:center">' + total + '</td>' +
+              '<td style="padding:9px 12px;text-align:center">100%</td>' +
+            '</tr></tfoot>' +
+          '</table>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
   lucide.createIcons(out);
 
-  // Simpan untuk download
-  window._anLastRows   = rows;
-  window._anLastDim    = dim;
-  window._anLastMetric = metric;
+  if (_anActiveChart) { try { _anActiveChart.destroy(); } catch(e){} _anActiveChart = null; }
+  var canvas = document.getElementById('an-canvas'); if (!canvas) return;
+  _anActiveChart = new Chart(canvas.getContext('2d'), {
+    type: 'doughnut',
+    data: { labels: labels, datasets:[{ data:values, backgroundColor: colors.map(function(c){ return c+'cc'; }), borderColor:colors, borderWidth:2, hoverOffset:6 }] },
+    options: {
+      responsive:true, maintainAspectRatio:true, cutout:'62%',
+      plugins: {
+        legend:{ display:false },
+        tooltip:{ callbacks:{ label: function(ctx){ return ' ' + ctx.label + ': ' + ctx.raw + ' (' + Math.round(ctx.raw/total*100) + '%)'; } } },
+      },
+    },
+  });
+
+  window._anTppRows  = labels.map(function(l,i){ return { status:l, count:values[i] }; });
+  _anLastTitle = 'Status TPP';
+}
+
+// ═════════════════════════════════════════════════════════════
+//  CUSTOM BUILDER PANEL
+// ═════════════════════════════════════════════════════════════
+function _anBuildCustomPanel() {
+  return '<div style="background:var(--surface2);border-radius:var(--radius);padding:16px;' +
+    'display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;align-items:end;margin-bottom:4px">' +
+
+    '<div><label style="font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--text-muted);display:block;margin-bottom:5px">KELOMPOKKAN PER</label>' +
+    '<select id="an-dim" class="form-control" style="font-size:12px">' +
+      AN_DIMS.map(function(d){ return '<option value="'+d.id+'">'+escHtml(d.label)+'</option>'; }).join('') +
+    '</select></div>' +
+
+    '<div><label style="font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--text-muted);display:block;margin-bottom:5px">NILAI (SUMBU Y)</label>' +
+    '<select id="an-metric" class="form-control" style="font-size:12px">' +
+      AN_METRICS.map(function(m){ return '<option value="'+m.id+'">'+escHtml(m.label)+'</option>'; }).join('') +
+    '</select></div>' +
+
+    '<div><label style="font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--text-muted);display:block;margin-bottom:5px">TIPE VISUALISASI</label>' +
+    '<select id="an-type" class="form-control" style="font-size:12px">' +
+      AN_CHART_TYPES.map(function(t){ return '<option value="'+t.id+'">'+escHtml(t.label)+'</option>'; }).join('') +
+    '</select></div>' +
+
+    '<div><label style="font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--text-muted);display:block;margin-bottom:5px">URUTAN</label>' +
+    '<select id="an-sort" class="form-control" style="font-size:12px">' +
+      '<option value="value_desc">Nilai ↓ Terbesar</option>' +
+      '<option value="value_asc">Nilai ↑ Terkecil</option>' +
+      '<option value="label_asc">Label A–Z</option>' +
+      '<option value="label_desc">Label Z–A</option>' +
+    '</select></div>' +
+
+    '<div style="display:flex;flex-direction:column;gap:6px">' +
+      '<button class="btn btn-primary" style="font-size:12px" onclick="_anRunCustom()">' +
+        '<i data-lucide="play" style="width:13px;height:13px"></i> Tampilkan' +
+      '</button>' +
+      '<button class="btn btn-outline" style="font-size:11px" onclick="_anSaveCurrentAsPreset()">' +
+        '<i data-lucide="bookmark" style="width:12px;height:12px"></i> Simpan Preset' +
+      '</button>' +
+    '</div>' +
+  '</div>';
+}
+
+// ─────────────────────────────────────────────────────────────
+//  RUN CUSTOM
+// ─────────────────────────────────────────────────────────────
+function _anRunCustom() {
+  var dimId    = (document.getElementById('an-dim')    ||{}).value;
+  var metricId = (document.getElementById('an-metric') ||{}).value;
+  var typeId   = (document.getElementById('an-type')   ||{}).value;
+  var sortId   = (document.getElementById('an-sort')   ||{}).value;
+
+  var dim    = AN_DIMS.find(function(d){ return d.id===dimId; });
+  var metric = AN_METRICS.find(function(m){ return m.id===metricId; });
+  if (!dim||!metric) return;
+
+  var findings = window._anFindings || [];
+  var groups = {};
+  findings.forEach(function(f) {
+    var key = dim.fn(f);
+    if (!groups[key]) groups[key]=[];
+    groups[key].push(f);
+  });
+
+  var rows = Object.keys(groups).map(function(label) {
+    return { label:label, value:metric.fn(groups[label]), count:groups[label].length };
+  });
+
+  rows.sort(function(a,b){
+    if (sortId==='value_desc') return b.value-a.value;
+    if (sortId==='value_asc')  return a.value-b.value;
+    if (sortId==='label_asc')  return a.label.localeCompare(b.label);
+    if (sortId==='label_desc') return b.label.localeCompare(a.label);
+    return 0;
+  });
+
+  _anLastRows   = rows;
+  _anLastDim    = dim;
+  _anLastMetric = metric;
+  _anLastTitle  = metric.label + ' per ' + dim.label;
+
+  var out = document.getElementById('an-output');
+  if (!out) return;
+  if (_anActiveChart) { try { _anActiveChart.destroy(); } catch(e){} _anActiveChart = null; }
+
+  if (typeId==='table') { _anRenderCustomTable(rows, dim, metric, out); return; }
+  _anLoadChartJs(function(){ _anRenderCustomChart(rows, dim, metric, typeId, out); });
+}
+
+function _anRenderCustomChart(rows, dim, metric, typeId, out) {
+  var labels  = rows.map(function(r){ return r.label; });
+  var values  = rows.map(function(r){ return r.value; });
+  var colors  = rows.map(function(_,i){ return AN_COLORS[i%AN_COLORS.length]; });
+  var isPie   = typeId==='pie'||typeId==='doughnut';
+  var isHBar  = typeId==='bar_h';
+  var period  = window._anPeriod||{};
+
+  out.innerHTML =
+    '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px">' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap;gap:8px">' +
+        '<div>' +
+          '<div style="font-size:13px;font-weight:700">' + escHtml(_anLastTitle) + '</div>' +
+          '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">' +
+            escHtml(period.nama_periode||'') + ' · ' + rows.length + ' kelompok · ' + (window._anFindings||[]).length + ' temuan' +
+          '</div>' +
+        '</div>' +
+        '<div style="display:flex;gap:6px">' +
+          '<button onclick="_anDownloadPng()" class="btn btn-outline btn-sm" style="font-size:11px">' +
+            '<i data-lucide="image" style="width:11px;height:11px"></i> PNG</button>' +
+          '<button onclick="_anDownloadCustomCsv()" class="btn btn-outline btn-sm" style="font-size:11px">' +
+            '<i data-lucide="download" style="width:11px;height:11px"></i> CSV</button>' +
+        '</div>' +
+      '</div>' +
+      '<div style="' + (isPie?'max-width:420px;margin:0 auto':'') + '">' +
+        '<canvas id="an-canvas" style="width:100%;max-height:380px"></canvas>' +
+      '</div>' +
+    '</div>';
+
+  lucide.createIcons(out);
+
+  var chartType = isHBar?'bar':typeId;
+  var isDark2     = document.documentElement.getAttribute('data-theme') === 'dark';
+  var labelColor2 = isDark2 ? '#9ca3af' : '#6b7280';
+  var gridColor2  = isDark2 ? 'rgba(255,255,255,.07)' : 'rgba(0,0,0,.06)';
+  var xTitle      = isHBar ? metric.label : dim.label;
+  var yTitle      = isHBar ? dim.label    : metric.label;
+
+  _anActiveChart = new Chart(document.getElementById('an-canvas').getContext('2d'), {
+    type: chartType,
+    data: { labels:labels, datasets:[{
+      label: metric.label, data:values,
+      backgroundColor: colors.map(function(c){ return c+'cc'; }),
+      borderColor: colors, borderWidth: isPie?2:1.5,
+      borderRadius: (!isPie&&!isHBar)?4:0, hoverOffset: isPie?6:0,
+      borderSkipped: false,
+    }]},
+    options:{
+      indexAxis: isHBar?'y':'x', responsive:true, maintainAspectRatio:true,
+      layout: { padding: { top: isPie?0:24, right: isHBar?32:8 } },
+      plugins:{
+        legend:{ display:isPie, position:'bottom', labels:{ font:{size:11}, usePointStyle:true, padding:14 } },
+        tooltip:{ callbacks:{ label:function(ctx){ var v=ctx.parsed[isHBar?'x':'y']; return '  '+metric.label+': '+v; } } },
+      },
+      scales: isPie ? {} : {
+        x:{
+          ticks:{ font:{size:11}, color:labelColor2, maxRotation:35 },
+          grid:{ color: isHBar ? gridColor2 : 'transparent' },
+          title:{ display:true, text:xTitle, color:labelColor2, font:{size:11,weight:'600'}, padding:{top:8} },
+          beginAtZero: isHBar,
+        },
+        y:{
+          ticks:{ font:{size:11}, color:labelColor2 },
+          grid:{ color: isHBar ? 'transparent' : gridColor2 },
+          title:{ display:!isHBar, text:yTitle, color:labelColor2, font:{size:11,weight:'600'}, padding:{bottom:8} },
+          beginAtZero:true,
+        },
+      },
+    },
+    plugins: isPie ? [] : [{
+      id:'custom-datalabels',
+      afterDatasetsDraw: function(chart) {
+        var ctx3 = chart.ctx;
+        chart.getDatasetMeta(0).data.forEach(function(bar, i) {
+          var val = chart.data.datasets[0].data[i];
+          if (!val) return;
+          ctx3.save();
+          ctx3.font      = '700 11px system-ui,sans-serif';
+          ctx3.fillStyle = labelColor2;
+          ctx3.textAlign    = isHBar ? 'left'   : 'center';
+          ctx3.textBaseline = isHBar ? 'middle'  : 'bottom';
+          var x = isHBar ? bar.x + 5 : bar.x;
+          var y = isHBar ? bar.y     : bar.y - 4;
+          ctx3.fillText(val, x, y);
+          ctx3.restore();
+        });
+      },
+    }],
+  });
+}
+
+function _anRenderCustomTable(rows, dim, metric, out) {
+  var maxVal  = Math.max.apply(null, rows.map(function(r){ return r.value; }))||1;
+  var period  = window._anPeriod||{};
+  out.innerHTML =
+    '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1px solid var(--border)">' +
+        '<div>' +
+          '<div style="font-size:13px;font-weight:700">' + escHtml(_anLastTitle) + '</div>' +
+          '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">' + escHtml(period.nama_periode||'') + '</div>' +
+        '</div>' +
+        '<button onclick="_anDownloadCustomCsv()" class="btn btn-outline btn-sm" style="font-size:11px">' +
+          '<i data-lucide="download" style="width:11px;height:11px"></i> CSV</button>' +
+      '</div>' +
+      '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">' +
+        '<thead><tr style="background:var(--surface2)">' +
+          _anTh('No','width:36px;text-align:center') + _anTh(dim.label) + _anTh(metric.label,'text-align:right') + _anTh('Distribusi','min-width:120px') +
+        '</tr></thead><tbody>' +
+        rows.map(function(r,i){
+          var pct=Math.round(r.value/maxVal*100); var color=AN_COLORS[i%AN_COLORS.length];
+          return '<tr style="border-bottom:1px solid var(--border)">' +
+            '<td style="padding:10px 12px;text-align:center;font-size:11px;color:var(--text-muted);font-weight:600">'+(i+1)+'</td>'+
+            '<td style="padding:10px 12px;font-size:12px;font-weight:600">'+escHtml(r.label)+'</td>'+
+            '<td style="padding:10px 12px;text-align:right;font-size:13px;font-weight:700;color:'+color+'">'+r.value+'</td>'+
+            '<td style="padding:10px 12px"><div style="height:8px;background:var(--surface2);border-radius:4px;overflow:hidden">'+
+              '<div style="height:100%;width:'+pct+'%;background:'+color+';border-radius:4px"></div></div></td>'+
+          '</tr>';
+        }).join('')+
+        '</tbody><tfoot><tr style="background:var(--surface2);font-weight:700">'+
+          '<td colspan="2" style="padding:9px 12px;font-size:11px;color:var(--text-muted)">TOTAL</td>'+
+          '<td style="padding:9px 12px;text-align:right;font-size:13px">'+rows.reduce(function(s,r){ return s+r.value; },0)+'</td>'+
+          '<td></td></tr></tfoot>'+
+      '</table></div></div>';
+  lucide.createIcons(out);
+}
+
+// ─────────────────────────────────────────────────────────────
+//  SIMPAN PRESET
+// ─────────────────────────────────────────────────────────────
+function _anSaveCurrentAsPreset() {
+  var dimEl    = document.getElementById('an-dim');
+  var metricEl = document.getElementById('an-metric');
+  var typeEl   = document.getElementById('an-type');
+  var sortEl   = document.getElementById('an-sort');
+  if (!dimEl||!metricEl||!typeEl) { toast('Jalankan chart dulu sebelum menyimpan preset.','error'); return; }
+
+  var dim    = AN_DIMS.find(function(d){ return d.id===dimEl.value; });
+  var metric = AN_METRICS.find(function(m){ return m.id===metricEl.value; });
+  var type   = AN_CHART_TYPES.find(function(t){ return t.id===typeEl.value; });
+  if (!dim||!metric||!type) return;
+
+  var name = prompt('Nama preset:');
+  if (!name||!name.trim()) return;
+
+  var saved = _anLoadSavedPresets();
+  saved.push({
+    name:        name.trim(),
+    dim:         dimEl.value,
+    dimLabel:    dim.label,
+    metric:      metricEl.value,
+    metricLabel: metric.label,
+    chartType:   typeEl.value,
+    chartLabel:  type.label,
+    sort:        (sortEl||{}).value||'value_desc',
+    savedAt:     new Date().toISOString(),
+  });
+  _anSavePresets(saved);
+
+  // Update panel preset
+  var panel = document.getElementById('an-panel-preset');
+  if (panel) panel.innerHTML = _anBuildPresetPanel();
+  lucide.createIcons(panel);
+  toast('Preset "' + name.trim() + '" tersimpan.', 'success');
 }
 
 // ─────────────────────────────────────────────────────────────
 //  DOWNLOAD
 // ─────────────────────────────────────────────────────────────
-
 function _anDownloadPng() {
   var canvas = document.getElementById('an-canvas');
-  if (!canvas) { toast('Tidak ada chart untuk didownload.', 'error'); return; }
-
-  // Render ke canvas baru dengan background putih (untuk PNG yang bersih)
-  var offCanvas = document.createElement('canvas');
-  offCanvas.width  = canvas.width;
-  offCanvas.height = canvas.height;
-  var ctx = offCanvas.getContext('2d');
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, offCanvas.width, offCanvas.height);
-  ctx.drawImage(canvas, 0, 0);
-
-  var a = document.createElement('a');
-  var period = window._anPeriod;
-  var periodeLabel = period ? period.nama_periode.replace(/[^a-zA-Z0-9_-]/g,'_') : 'analytics';
-  a.download = 'Analytics_' + periodeLabel + '_' + new Date().toISOString().slice(0,10) + '.png';
-  a.href     = offCanvas.toDataURL('image/png');
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  toast('Chart berhasil didownload.', 'success');
+  if (!canvas) { toast('Tidak ada chart untuk didownload.','error'); return; }
+  var off = document.createElement('canvas');
+  off.width=canvas.width; off.height=canvas.height;
+  var ctx=off.getContext('2d'); ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,off.width,off.height); ctx.drawImage(canvas,0,0);
+  var a=document.createElement('a');
+  var period=window._anPeriod;
+  a.download='Analytics_'+(period?period.nama_periode.replace(/[^a-zA-Z0-9_-]/g,'_'):'chart')+'_'+new Date().toISOString().slice(0,10)+'.png';
+  a.href=off.toDataURL('image/png'); document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  toast('Chart berhasil didownload.','success');
 }
 
-function _anDownloadCsv() {
-  var rows   = window._anLastRows;
-  var dim    = window._anLastDim;
-  var metric = window._anLastMetric;
-  if (!rows || !rows.length) { toast('Tidak ada data untuk didownload.', 'error'); return; }
+function _anDownloadCustomCsv() {
+  var rows=_anLastRows; var dim=_anLastDim; var metric=_anLastMetric;
+  if (!rows||!rows.length) { toast('Tidak ada data.','error'); return; }
+  function q(v){ var s=String(v||''); return (s.indexOf(',')!==-1||s.indexOf('"')!==-1)?'"'+s.replace(/"/g,'""')+'"':s; }
+  var csv=[[q(dim.label),q(metric.label),'Jumlah di Grup'].join(',')]
+    .concat(rows.map(function(r){ return [q(r.label),q(r.value),q(r.count)].join(','); })).join('\r\n');
+  _anTriggerCsvDownload(csv, 'Custom_Analytics');
+}
 
-  function _q(v) {
-    var s = String(v || '');
-    return (s.indexOf(',') !== -1 || s.indexOf('"') !== -1 || s.indexOf('\n') !== -1)
-      ? '"' + s.replace(/"/g,'""') + '"' : s;
+function _anDownloadTableCsv(type) {
+  var csv='', filename='';
+  function q(v){ var s=String(v||''); return (s.indexOf(',')!==-1||s.indexOf('"')!==-1)?'"'+s.replace(/"/g,'""')+'"':s; }
+
+  if (type==='realisasi') {
+    var rows=window._anRealisasiRows||[];
+    csv=[['No','Dept','Area','Auditor','Mulai Audit','Selesai Audit','Comply','Non Comply','OFI','Status'].join(',')]
+      .concat(rows.map(function(r,i){ return [i+1,q(r.dept),q(r.area),q(r.auditors),q(r.started),q(r.done),r.comply,r.nonComply,q(r.ofi),q(r.status)].join(','); })).join('\r\n');
+    filename='Realisasi_Audit';
+  } else if (type==='rekap') {
+    var rows=window._anRekapRows||[];
+    csv=[['Dept','Non Comply','Comply'].join(',')]
+      .concat(rows.map(function(r){ return [q(r.dept),r.nonComply,r.comply].join(','); })).join('\r\n');
+    filename='Rekapitulasi_Temuan';
+  } else if (type==='tpp') {
+    var rows=window._anTppRows||[];
+    csv=[['Status','Jumlah'].join(',')]
+      .concat(rows.map(function(r){ return [q(r.status),r.count].join(','); })).join('\r\n');
+    filename='Status_TPP';
   }
+  if (csv) _anTriggerCsvDownload(csv, filename);
+}
 
-  var csv = [
-    [_q(dim.label), _q(metric.label), 'Jumlah Temuan di Grup'].join(','),
-  ].concat(rows.map(function(r) {
-    return [_q(r.label), _q(r.value), _q(r.count)].join(',');
-  })).join('\r\n');
-
-  var bom  = '\uFEFF';
-  var blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
-  var url  = URL.createObjectURL(blob);
-  var a    = document.createElement('a');
-  var period = window._anPeriod;
-  var periodeLabel = period ? period.nama_periode.replace(/[^a-zA-Z0-9_-]/g,'_') : 'analytics';
-  a.href     = url;
-  a.download = 'Analytics_' + periodeLabel + '_' + new Date().toISOString().slice(0,10) + '.csv';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+function _anTriggerCsvDownload(csv, filename) {
+  var period=window._anPeriod;
+  var bom='\uFEFF';
+  var blob=new Blob([bom+csv],{type:'text/csv;charset=utf-8;'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  a.href=url;
+  a.download=(filename||'Analytics')+'_'+(period?period.nama_periode.replace(/[^a-zA-Z0-9_-]/g,'_'):'')+'_'+new Date().toISOString().slice(0,10)+'.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
-  toast('CSV berhasil didownload.', 'success');
+  toast('CSV berhasil didownload.','success');
 }
 </script>
