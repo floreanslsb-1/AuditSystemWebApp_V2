@@ -337,7 +337,7 @@ function _renderHasilAuditData(container, findings, selectedId, period) {
 
     // ── Tabel ─────────────────────────────────────────────────
     '<div style="overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border)">' +
-      '<table id="ha-table" style="width:100%;border-collapse:collapse;font-size:12px">' +
+      '<table id="ha-table" style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed">' +
         '<thead id="ha-thead"></thead>' +
         '<tbody id="ha-tbody"></tbody>' +
       '</table>' +
@@ -416,7 +416,7 @@ function _haRebuildTable(hidden, widths) {
     colHtml += '<th data-col-id="' + c.id + '" ' +
       'style="position:relative;padding:10px 28px 10px 12px;text-align:left;font-size:10px;font-weight:700;' +
         'letter-spacing:.06em;border-bottom:1px solid var(--border);white-space:nowrap;' +
-        'min-width:' + c.minWidth + 'px;' +
+        'width:' + c.minWidth + 'px;min-width:' + c.minWidth + 'px;overflow:hidden;' +
         'background:' + groupColor + borderRight + ';cursor:pointer;user-select:none;' +
         'color:' + (hasFilter ? 'var(--blue,#3b82f6)' : 'var(--text-muted)') + '" ' +
       (c.type !== 'none' ? 'onclick="event.stopPropagation();_haOpenFilterPop(\'' + c.id + '\',this)"' : '') + '>' +
@@ -533,7 +533,7 @@ function _haBuildRow(f, period, visibleCols) {
   var isRed   = f.finding_status === 'OPEN' && overdue.tpp_plan && !f.tpp_submitted_at;
   var textCol = isRed ? 'color:#dc2626' : 'color:#111827';
 
-  var td      = 'font-size:12px;padding:10px 12px;vertical-align:top;overflow-wrap:break-word;word-break:break-word;max-width:0;' + textCol;
+  var td      = 'font-size:12px;padding:10px 12px;vertical-align:top;overflow-wrap:break-word;word-break:break-word;overflow:hidden;' + textCol;
   var tdNw    = 'font-size:12px;padding:10px 12px;vertical-align:top;white-space:nowrap;' + textCol;
   var tdMono  = 'font-family:monospace;font-size:11px;white-space:nowrap;padding:10px 12px;vertical-align:top;' + textCol;
 
@@ -582,18 +582,18 @@ function _haBuildRow(f, period, visibleCols) {
     'lokasi':        '<td style="' + tdNw + '">'                                                          + _cell(f.lokasi_temuan || '—') + '</td>',
     'bukti_temuan':  '<td style="' + tdNw + '">'                                                          + _fotoLinks(f.foto_urls) + '</td>',
     'status_temuan': '<td style="' + tdNw + ';border-right:2px solid var(--border)">'                    + fsBadge + '</td>',
-    'correction':    '<td style="' + td + ';min-width:140px">'                                            + _cell(f.correction || '—') + '</td>',
+    'correction':    '<td style="' + td + '">'                                                            + _cell(f.correction || '—') + '</td>',
     'corr_status':   '<td style="' + tdNw + ';color:' + statusColor(cs.corr) + ';font-weight:600">'      + _cell(cs.corr) + '</td>',
     'corr_due':      '<td style="' + tdNw + '">'                                                          + _cell(f.due_date_correction ? formatDate(f.due_date_correction) : '—') + '</td>',
     'corr_aktual':   '<td style="' + tdNw + '">'                                                          + _cell(f.impl_correction_submitted_at ? formatDate(f.impl_correction_submitted_at) : '—') + '</td>',
     'corr_bukti':    '<td style="' + tdNw + '">'                                                          + _fotoLinks(f.impl_correction_foto_urls) + '</td>',
-    'corr_ket':      '<td style="' + td + ';min-width:120px;border-right:2px solid var(--border)">'      + _cell(f.impl_correction_keterangan || '—') + '</td>',
-    'ca':            '<td style="' + td + ';min-width:140px">'                                            + _cell(f.corrective_action || '—') + '</td>',
+    'corr_ket':      '<td style="' + td + ';border-right:2px solid var(--border)">'                      + _cell(f.impl_correction_keterangan || '—') + '</td>',
+    'ca':            '<td style="' + td + '">'                                                            + _cell(f.corrective_action || '—') + '</td>',
     'ca_status':     '<td style="' + tdNw + ';color:' + statusColor(cs.ca) + ';font-weight:600">'        + _cell(cs.ca) + '</td>',
     'ca_due':        '<td style="' + tdNw + '">'                                                          + _cell(f.due_date_corrective_action ? formatDate(f.due_date_corrective_action) : '—') + '</td>',
     'ca_aktual':     '<td style="' + tdNw + '">'                                                          + _cell(f.impl_submitted_at ? formatDate(f.impl_submitted_at) : '—') + '</td>',
     'ca_bukti':      '<td style="' + tdNw + '">'                                                          + _fotoLinks(f.impl_corrective_action_foto_urls) + '</td>',
-    'ca_ket':        '<td style="' + td + ';min-width:120px">'                                            + _cell(f.impl_corrective_action_keterangan || '—') + '</td>',
+    'ca_ket':        '<td style="' + td + '">'                                                            + _cell(f.impl_corrective_action_keterangan || '—') + '</td>',
   };
 
   var rowStyle = isRed ? ' style="background:rgba(254,242,242,.5)"' : '';
@@ -1053,6 +1053,7 @@ function _haResizeMove(e) {
   // Hanya update minWidth di th — table tetap auto-layout
   var colId = _haResizeState.colId;
   document.querySelectorAll('#ha-thead th[data-col-id="' + colId + '"]').forEach(function(th) {
+    th.style.width    = newW + 'px';
     th.style.minWidth = newW + 'px';
   });
   _haResizeState.currentW = newW;
