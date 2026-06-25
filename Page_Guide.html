@@ -54,11 +54,11 @@ function guideShowWelcome(forceShow) {
 
   // Kumpulkan semua role yang dimiliki user
   var availableRoles = [];
-  if (p.isKoordinator) availableRoles.push('koordinator');
-  if (p.isAuditor)     availableRoles.push('auditor');
-  if (p.isDeptHead)    availableRoles.push('depthead');
-  if (p.isAuditee)     availableRoles.push('auditee');
-  if (!availableRoles.length) availableRoles.push('viewer');
+  if (p.isKoordinator)               availableRoles.push('koordinator');
+  if (p.isAuditor)                   availableRoles.push('auditor');
+  if (p.isDeptHead)                  availableRoles.push('depthead');
+  if (p.isAuditee && !p.isDeptHead)  availableRoles.push('auditee');
+  if (!availableRoles.length)        availableRoles.push('viewer');
 
   // Kalau multi-role, tampilkan selector dulu
   if (availableRoles.length > 1) {
