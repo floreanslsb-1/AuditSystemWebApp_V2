@@ -338,22 +338,22 @@ var GUIDE_TOURS = {
       position:'center',
     },
     {
-      target:  '.db-progress-grid',
+      target:  '#db-progress-card-header',
       title:   'Progres Audit',
       text:    'Donut chart menunjukkan berapa area yang sudah selesai, sedang berjalan, dan belum dimulai. Angka di bawah menunjukkan total temuan Non Comply di periode ini.',
       position:'bottom',
     },
     {
-      target:  '.card:has(.db-ofi-tbl) .card-header',
+      target:  '#db-ofi-card-header',
       title:   'OFI Summary',
       text:    'OFI (Opportunity for Improvement) adalah catatan peluang perbaikan dari auditor — bukan temuan wajib, tapi perlu diperhatikan. Kamu bisa search per dept di kolom kanan.',
       position:'bottom',
     },
     {
-      target:  '.db-tbl',
+      target:  '#db-approval-card-header',
       title:   'Status Tindak Lanjut Temuan',
       text:    'Tabel ini menampilkan jumlah temuan per area berdasarkan statusnya — Open TPP (belum isi rencana), Open Implementasi, dalam proses Approval Dept Head/Auditor/Koordinator, dan Closed.',
-      position:'top',
+      position:'bottom',
     },
   ],
   'mytask': [
@@ -583,6 +583,7 @@ function _guidePositionTooltip(tooltip, rect, position) {
     left = Math.max(margin, Math.min(rect.left, vw - tw - margin));
     top  = rect.top - th - 12;
     if (top < margin) top = rect.bottom + 12;
+    if (top + th > vh - margin) top = Math.max(margin, (vh - th) / 2);
   } else {
     left = Math.max(margin, (vw - tw) / 2);
     top  = Math.max(margin, (vh - th) / 2);
