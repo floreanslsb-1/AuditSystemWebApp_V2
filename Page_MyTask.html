@@ -197,11 +197,12 @@ function _renderMyTask(container, tasks, period) {
     var approvalImplTasks = tasks.filter(function(t) { return t.type === 'APPROVAL_IMPL'; });
 
     // Helper: render satu section dengan header + table
-    function _taskSection(sectionTitle, sectionIcon, sectionColor, sectionTasks, massApproveBtn) {
+    function _taskSection(sectionTitle, sectionIcon, sectionColor, sectionTasks, massApproveBtn, headerId) {
       if (!sectionTasks.length) return '';
       return '<div class="card mb-16">' +
         // Section header
-        '<div style="padding:10px 16px;border-bottom:1px solid var(--border);background:var(--bg);' +
+        '<div ' + (headerId ? 'id="' + headerId + '" ' : '') +
+            'style="padding:10px 16px;border-bottom:1px solid var(--border);background:var(--bg);' +
             'display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">' +
           '<span style="display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:' + sectionColor + '">' +
             sectionTitle +
@@ -416,13 +417,37 @@ function _renderMyTask(container, tasks, period) {
 
     // (overdueImplNote_ui dihapus — status overdue sudah ditampilkan per kolom di tabel)
 
+    var p = App.profile || {};
+    var _sectionOrPlaceholder = function(id, title, color, sectionTasks, alwaysShow, massApproveBtn) {
+      var inner = sectionTasks.length
+        ? _taskSection(title, '', color, sectionTasks, massApproveBtn, id)
+        : (alwaysShow
+          ? '<div class="card mb-16">' +
+              '<div id="' + id + '" style="padding:10px 16px;border-bottom:1px solid var(--border);background:var(--bg);' +
+                  'display:flex;align-items:center;gap:6px">' +
+                '<span style="font-size:13px;font-weight:700;color:' + color + '">' + title + '</span>' +
+                '<span style="font-size:11px;font-weight:600;padding:1px 7px;border-radius:10px;' +
+                    'background:' + color + '18;color:' + color + '">0</span>' +
+              '</div>' +
+              '<div style="padding:24px 16px;text-align:center;font-size:12px;color:var(--text-muted)">' +
+                'Tidak ada tugas di bagian ini saat ini.' +
+              '</div>' +
+            '</div>'
+          : '');
+      return '<div id="' + id + '">' + inner + '</div>';
+    };
+
     listHtml =
-      _taskSection('Verifikasi Temuan', '', 'var(--amber,#f59e0b)', verifikasiTasks) +
-      _taskSection('Rencana Tindakan Perbaikan dan Pencegahan (TPP)', '', 'var(--blue,#3b82f6)', isiTppTasks) +
-      _taskSection('Bukti Implementasi', '', 'var(--purple,#8b5cf6)', uploadImplTasks) +
-      _taskSection(
-        'Approval Tindak Lanjut Temuan', '', 'var(--emerald,#10b981)', approvalImplTasks,
-        (approvalImplTasks.length > 1 && App.profile.isKoordinator
+      _taskSection('Verifikasi Temuan', '', 'var(--amber,#f59e0b)', verifikasiTasks, '', 'mytask-section-verifikasi') +
+      _sectionOrPlaceholder('mytask-section-tpp',  'Rencana Tindakan Perbaikan dan Pencegahan (TPP)', 'var(--blue,#3b82f6)',   isiTppTasks,       p.isAuditee) +
+      _sectionOrPlaceholder('mytask-section-impl',     'Bukti Implementasi',                              'var(--purple,#8b5cf6)', uploadImplTasks,   p.isAuditee) +
+      _sectionOrPlaceholder(
+        'mytask-section-approval',
+        'Approval Tindak Lanjut Temuan',
+        'var(--emerald,#10b981)',
+        approvalImplTasks,
+        p.isAuditor || p.isDeptHead || p.isKoordinator,
+        (approvalImplTasks.length > 1 && p.isKoordinator
           ? '<button class="btn btn-outline btn-sm" onclick="_massApproveAll(\'IMPL\')">' +
               '<i data-lucide="check-circle" style="width:13px;height:13px"></i> ' +
               'Approve Semua (' + approvalImplTasks.length + ')' +
@@ -432,7 +457,7 @@ function _renderMyTask(container, tasks, period) {
   }
 
   container.innerHTML =
-    '<div class="page-hero mb-24">' +
+    '<div class="page-hero mb-24" id="mytask-period-info">' +
       '<h1 style="display:flex;align-items:center;gap:10px">' +
         '<i data-lucide="list-checks" style="width:24px;height:24px"></i> My Task' +
       '</h1>' +
