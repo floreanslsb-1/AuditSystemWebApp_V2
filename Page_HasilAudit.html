@@ -533,8 +533,8 @@ function _haBuildRow(f, period, visibleCols) {
   var isRed   = f.finding_status === 'OPEN' && overdue.tpp_plan && !f.tpp_submitted_at;
   var textCol = isRed ? 'color:#dc2626' : 'color:#111827';
 
-  var td      = 'font-size:12px;padding:10px 12px;vertical-align:top;' + textCol;
-  var tdNw    = td + ';white-space:nowrap';
+  var td      = 'font-size:12px;padding:10px 12px;vertical-align:top;overflow-wrap:break-word;word-break:break-word;max-width:0;' + textCol;
+  var tdNw    = 'font-size:12px;padding:10px 12px;vertical-align:top;white-space:nowrap;' + textCol;
   var tdMono  = 'font-family:monospace;font-size:11px;white-space:nowrap;padding:10px 12px;vertical-align:top;' + textCol;
 
   function _cell(text) { return escHtml(String(text || '')); }
