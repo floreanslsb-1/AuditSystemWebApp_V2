@@ -65,6 +65,57 @@ function cachedApi(action, payload, ttlSeconds) {
   });
 }
 
+// Preload flag apakah user (auditee) masih punya temuan OPEN TPP di periode ini.
+// Disimpan di App.hasOpenTppOverdue. Dipanggil sekali saat init, hasilnya di-cache 5 menit.
+function _preloadOpenTppFlag(period) {
+  if (!App.profile || !App.profile.isAuditee) {
+    App.hasOpenTppOverdue = false;
+    return Promise.resolve(false);
+  }
+  if (!period || !period.tpp_plan_due_date) {
+    App.hasOpenTppOverdue = false;
+    return Promise.resolve(false);
+  }
+  var today = new Date(); today.setHours(0,0,0,0);
+  var due   = new Date(period.tpp_plan_due_date); due.setHours(0,0,0,0);
+  if (today <= due) {
+    // Belum overdue — banner muncul normal (semua auditee)
+    App.hasOpenTppOverdue = null; // null = belum lewat, banner tetap tampil
+    return Promise.resolve(null);
+  }
+  // Sudah lewat due date — cek apakah user punya temuan OPEN
+  return cachedApi('GET_MY_OPEN_TPP_COUNT', { period_id: period.period_id }, 300)
+    .then(function(res) {
+      App.hasOpenTppOverdue = !!(res && res.count > 0);
+      return App.hasOpenTppOverdue;
+    })
+    .catch(function() {
+      App.hasOpenTppOverdue = false;
+      return false;
+    });
+}
+
+// Prefetch data yang sering dipakai, dijalankan sekali di background setelah init.
+// Tujuan: mengisi App.cache agar Dashboard, Hasil Audit, dan My Task langsung dari cache.
+// Hanya prefetch data ringan — GET_DASHBOARD dan GET_HASIL_AUDIT TIDAK diprefetch
+// karena membuka spreadsheet eksternal dan bisa berebut koneksi GAS dengan request user.
+function _prefetchCommonData() {
+  var period = App.activePeriod;
+  if (!period) return;
+
+  // GET_PERIODS — dipakai oleh Dashboard, Hasil Audit, selector periode
+  cachedApi('GET_PERIODS', {}, 60).catch(function() {});
+
+  // GET_AGENDAS_BY_PERIOD — dipakai oleh My Task, Dashboard, Form Audit
+  cachedApi('GET_AGENDAS_BY_PERIOD', { period_id: period.period_id }, 30).catch(function() {});
+
+  // GET_ALL_FINDINGS_BY_PERIOD — dipakai oleh My Task (task list + badge)
+  // Diberi jeda 1 detik agar tidak barengan dengan GET_AGENDAS
+  setTimeout(function() {
+    cachedApi('GET_ALL_FINDINGS_BY_PERIOD', { period_id: period.period_id }, 15).catch(function() {});
+  }, 1000);
+}
+
 function clearCache(actionPrefix) {
   if (!actionPrefix) { App.cache = {}; return; }
   Object.keys(App.cache).forEach(function(k) {
@@ -348,23 +399,80 @@ function setupUploadZone(zoneId, previewId, onFilesChange) {
   return { getFiles: function() { return files; } };
 }
 
-function filesToBase64(files) {
-  return Promise.all(Array.from(files).map(function(f) {
-    return new Promise(function(res, rej) {
+// Kompres satu file gambar via Canvas — max 1600px, JPEG quality 0.82
+// PDF dan file non-image dilewati langsung tanpa kompresi
+function _compressImageFile(file) {
+  return new Promise(function(res, rej) {
+    // Non-image (PDF, dll) — skip kompresi
+    if (!file.type.startsWith('image/')) {
       var r = new FileReader();
       r.onload = function(e) {
         var dataUrl = e.target.result;
-        var commaIdx = dataUrl.indexOf(',');
-        var base64 = commaIdx >= 0 ? dataUrl.substring(commaIdx + 1) : dataUrl;
-        if (!base64 || base64.length === 0) {
-          rej(new Error('File "' + f.name + '" gagal dikonversi ke base64.'));
-          return;
-        }
-        res({ base64: base64, name: f.name, mime_type: f.type || 'application/octet-stream' });
+        var comma   = dataUrl.indexOf(',');
+        var b64     = comma >= 0 ? dataUrl.substring(comma + 1) : dataUrl;
+        if (!b64) { rej(new Error('Gagal baca file: ' + file.name)); return; }
+        res({ base64: b64, name: file.name, mime_type: file.type || 'application/octet-stream' });
       };
-      r.onerror = function() { rej(new Error('Gagal membaca file: ' + f.name)); };
-      r.readAsDataURL(f);
-    });
+      r.onerror = function() { rej(new Error('Gagal membaca file: ' + file.name)); };
+      r.readAsDataURL(file);
+      return;
+    }
+
+    // Image — load ke Image element dulu
+    var url = URL.createObjectURL(file);
+    var img = new Image();
+    img.onload = function() {
+      URL.revokeObjectURL(url);
+
+      var MAX  = 1600;
+      var w    = img.naturalWidth;
+      var h    = img.naturalHeight;
+
+      // Scale down kalau lebih besar dari MAX
+      if (w > MAX || h > MAX) {
+        if (w >= h) { h = Math.round(h * MAX / w); w = MAX; }
+        else        { w = Math.round(w * MAX / h); h = MAX; }
+      }
+
+      var canvas  = document.createElement('canvas');
+      canvas.width  = w;
+      canvas.height = h;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+
+      // Selalu output JPEG untuk konsistensi ukuran kecil
+      // (PNG transparan jadi putih — acceptable untuk foto bukti audit)
+      var quality  = 0.82;
+      var dataUrl  = canvas.toDataURL('image/jpeg', quality);
+      var comma    = dataUrl.indexOf(',');
+      var b64      = comma >= 0 ? dataUrl.substring(comma + 1) : dataUrl;
+
+      if (!b64) { rej(new Error('Gagal kompresi gambar: ' + file.name)); return; }
+
+      // Pakai nama file asli tapi ganti ekstensi ke .jpg
+      var baseName = file.name.replace(/\.[^.]+$/, '') || file.name;
+      res({ base64: b64, name: baseName + '.jpg', mime_type: 'image/jpeg' });
+    };
+    img.onerror = function() {
+      URL.revokeObjectURL(url);
+      // Fallback: kalau gagal load sebagai Image, kirim as-is tanpa kompresi
+      var r = new FileReader();
+      r.onload = function(e) {
+        var dataUrl = e.target.result;
+        var comma   = dataUrl.indexOf(',');
+        var b64     = comma >= 0 ? dataUrl.substring(comma + 1) : dataUrl;
+        res({ base64: b64, name: file.name, mime_type: file.type });
+      };
+      r.onerror = function() { rej(new Error('Gagal membaca file: ' + file.name)); };
+      r.readAsDataURL(file);
+    };
+    img.src = url;
+  });
+}
+
+function filesToBase64(files) {
+  return Promise.all(Array.from(files).map(function(f) {
+    return _compressImageFile(f);
   }));
 }
 
@@ -467,9 +575,21 @@ function _openFotoLightbox(url, filename) {
     var spinner = lb.querySelector('#lb-spinner');
     api('GET_DRIVE_IMAGE_BASE64', { url: url }).then(function(dataUri) {
       if (!dataUri) {
+        // Bukan gambar — fallback ke link buka tab baru
         if (spinner) spinner.style.display = 'none';
-        var errEl = lb.querySelector('#lb-err');
-        if (errEl) errEl.style.display = 'block';
+        if (imgEl)   imgEl.style.display   = 'none';
+        var contentDiv = lb.querySelector('div[style*="max-width:90vw"]');
+        if (contentDiv) contentDiv.innerHTML =
+          '<div style="background:#fff;border-radius:12px;padding:28px 36px;text-align:center;max-width:340px">' +
+            '<div style="font-size:36px;margin-bottom:10px">📄</div>' +
+            '<div style="font-size:13px;font-weight:600;margin-bottom:6px">' + escHtml(filename || 'Dokumen') + '</div>' +
+            '<div style="font-size:12px;color:#666;margin-bottom:14px">File ini tidak bisa ditampilkan langsung. Klik tombol di bawah untuk membukanya.</div>' +
+            '<a href="' + escHtml(url) + '" target="_blank" ' +
+              'style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;' +
+              'background:#1F3864;color:#fff;border-radius:6px;font-size:13px;text-decoration:none">' +
+              '↗ Buka di Tab Baru' +
+            '</a>' +
+          '</div>';
         return;
       }
       if (_driveImgCache) _driveImgCache[url] = dataUri;
@@ -478,6 +598,7 @@ function _openFotoLightbox(url, filename) {
           if (spinner) spinner.style.display = 'none';
         };
         imgEl.onerror = function() {
+          // Data uri ada tapi bukan gambar valid — fallback
           imgEl.style.display = 'none';
           if (spinner) spinner.style.display = 'none';
           var errEl = lb.querySelector('#lb-err');
@@ -488,8 +609,18 @@ function _openFotoLightbox(url, filename) {
       }
     }).catch(function() {
       if (spinner) spinner.style.display = 'none';
-      var errEl = lb.querySelector('#lb-err');
-      if (errEl) errEl.style.display = 'block';
+      var contentDiv = lb.querySelector('div[style*="max-width:90vw"]');
+      if (contentDiv) contentDiv.innerHTML =
+        '<div style="background:#fff;border-radius:12px;padding:28px 36px;text-align:center;max-width:340px">' +
+          '<div style="font-size:36px;margin-bottom:10px">📄</div>' +
+          '<div style="font-size:13px;font-weight:600;margin-bottom:6px">' + escHtml(filename || 'Dokumen') + '</div>' +
+          '<div style="font-size:12px;color:#666;margin-bottom:14px">Gagal memuat file. Klik tombol di bawah untuk membukanya.</div>' +
+          '<a href="' + escHtml(url) + '" target="_blank" ' +
+            'style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;' +
+            'background:#1F3864;color:#fff;border-radius:6px;font-size:13px;text-decoration:none">' +
+            '↗ Buka di Tab Baru' +
+          '</a>' +
+        '</div>';
     });
   }
 }
@@ -617,6 +748,9 @@ async function initApp() {
 
     App.activePeriod = periodsData.find(function(p) { return p.status === 'ACTIVE'; }) || null;
 
+    // Preload flag open TPP (async, fire-and-forget — banner sudah render dengan default)
+    _preloadOpenTppFlag(App.activePeriod);
+
     renderSidebar();
     renderUserInfo();
     App.ready = true;
@@ -627,8 +761,10 @@ async function initApp() {
       _startParams[_initKey] = _initParam;
     }
     navigateTo(_startPage, _startParams);
+    // Prefetch data ringan di background — mengisi App.cache agar halaman berikutnya cepat
+    setTimeout(_prefetchCommonData, 300);
     // Background fetch task badge — non-blocking
-    setTimeout(_fetchAndRenderTaskBadge, 500);
+    setTimeout(_fetchAndRenderTaskBadge, 800);
 
   } catch(err) {
     App.ready = true;
@@ -693,6 +829,14 @@ function _renderTppPlanDueDateBanner(period) {
   var today   = new Date(); today.setHours(0,0,0,0);
   var due     = new Date(period.tpp_plan_due_date); due.setHours(0,0,0,0);
   var diff    = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
+
+  // Jika sudah lewat due date: hanya tampilkan banner untuk auditee
+  // yang masih punya temuan OPEN TPP (cek dari flag yang di-preload saat init).
+  // App.hasOpenTppOverdue === null  → belum lewat due date, semua user lihat
+  // App.hasOpenTppOverdue === true  → lewat + user masih punya OPEN → tampil
+  // App.hasOpenTppOverdue === false → lewat + user tidak ada OPEN (atau bukan auditee) → sembunyikan
+  if (diff < 0 && App.hasOpenTppOverdue === false) return '';
+
   var color, bg, icon, label;
   if (diff < 0) {
     color = 'var(--rose,#f43f5e)'; bg = 'rgba(244,63,94,.08)';
