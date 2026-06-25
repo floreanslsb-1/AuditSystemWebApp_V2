@@ -78,6 +78,7 @@ function _haInitColFilters() {
 function _haUniqueValues(colId, findings, period) {
   var vals = {};
   var fsLabel = {
+    'PENDING_VERIFICATION': 'Verifikasi',
     'OPEN':'Open TPP','OPEN_IMPL':'Open Implementasi',
     'APP_DEPT_HEAD':'Review Dept Head','APP_AUDITOR':'Review Auditor',
     'APP_KOORDINATOR':'Review Koordinator','CLOSED':'Closed','OVERDUE':'Overdue',
@@ -464,10 +465,18 @@ function _haRenderBody(visibleCols) {
 
     var cs = _haCorrectiveStatus(f);
     var fsLabel = {
-      'OPEN':'Open TPP','OPEN_IMPL':'Open Implementasi',
-      'APP_DEPT_HEAD':'Review Dept Head','APP_AUDITOR':'Review Auditor',
-      'APP_KOORDINATOR':'Review Koordinator','CLOSED':'Closed','OVERDUE':'Overdue',
-    };
+    'PENDING_VERIFICATION': 'Verifikasi',
+    'OPEN':'Open TPP','OPEN_IMPL':'Open Implementasi',
+    'APP_DEPT_HEAD':'Review Dept Head','APP_AUDITOR':'Review Auditor',
+    'APP_KOORDINATOR':'Review Koordinator','CLOSED':'Closed','OVERDUE':'Overdue',
+  };
+  var isPending = f.finding_status === 'PENDING_VERIFICATION';
+  var fsLbl = isRed
+    ? fsLabel[f.finding_status] + ' <span style="font-weight:700">(Overdue)</span>'
+    : (fsLabel[f.finding_status] || f.finding_status || '—');
+  var badgeColor  = isRed ? 'rgba(244,63,94,.08)' : isPending ? 'rgba(245,158,11,.08)' : 'rgba(55,65,81,.07)';
+  var badgeBorder = isRed ? 'rgba(244,63,94,.25)' : isPending ? 'rgba(245,158,11,.25)' : 'rgba(55,65,81,.2)';
+  var badgeTxt    = isRed ? '#dc2626' : isPending ? '#b45309' : '#374151';
 
     // Per-kolom filter
     for (var colId in filters) {
@@ -538,16 +547,18 @@ function _haBuildRow(f, period, visibleCols) {
   function _cell(text) { return escHtml(String(text || '')); }
 
   var fsLabel = {
+    'PENDING_VERIFICATION': 'Verifikasi',
     'OPEN':'Open TPP','OPEN_IMPL':'Open Implementasi',
     'APP_DEPT_HEAD':'Review Dept Head','APP_AUDITOR':'Review Auditor',
     'APP_KOORDINATOR':'Review Koordinator','CLOSED':'Closed','OVERDUE':'Overdue',
   };
+  var isPending = f.finding_status === 'PENDING_VERIFICATION';
   var fsLbl = isRed
     ? fsLabel[f.finding_status] + ' <span style="font-weight:700">(Overdue)</span>'
     : (fsLabel[f.finding_status] || f.finding_status || '—');
-  var badgeColor  = isRed ? 'rgba(244,63,94,.08)' : 'rgba(55,65,81,.07)';
-  var badgeBorder = isRed ? 'rgba(244,63,94,.25)' : 'rgba(55,65,81,.2)';
-  var badgeTxt    = isRed ? '#dc2626' : '#374151';
+  var badgeColor  = isRed ? 'rgba(244,63,94,.08)' : isPending ? 'rgba(245,158,11,.08)' : 'rgba(55,65,81,.07)';
+  var badgeBorder = isRed ? 'rgba(244,63,94,.25)' : isPending ? 'rgba(245,158,11,.25)' : 'rgba(55,65,81,.2)';
+  var badgeTxt    = isRed ? '#dc2626' : isPending ? '#b45309' : '#374151';
   var fsBadge = '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;' +
     'border-radius:4px;font-size:11px;font-weight:600;' +
     'background:' + badgeColor + ';color:' + badgeTxt + ';border:1px solid ' + badgeBorder + '">' + fsLbl + '</span>';
@@ -845,6 +856,7 @@ function _haDownloadCsv(filteredOnly) {
     var filters = window._haColFilters || {};
     var search  = (document.getElementById('ha-search') || {}).value || '';
     var fsLabel = {
+      'PENDING_VERIFICATION': 'Verifikasi',
       'OPEN':'Open TPP','OPEN_IMPL':'Open Implementasi',
       'APP_DEPT_HEAD':'Review Dept Head','APP_AUDITOR':'Review Auditor',
       'APP_KOORDINATOR':'Review Koordinator','CLOSED':'Closed','OVERDUE':'Overdue',
@@ -905,6 +917,7 @@ function _haDownloadCsv(filteredOnly) {
   var colRow = visibleCols.map(function(c) { return c.label; });
 
   var fsLabel = {
+    'PENDING_VERIFICATION': 'Verifikasi',
     'OPEN':'Open TPP','OPEN_IMPL':'Open Implementasi',
     'APP_DEPT_HEAD':'Review Dept Head','APP_AUDITOR':'Review Auditor',
     'APP_KOORDINATOR':'Review Koordinator','CLOSED':'Closed','OVERDUE':'Overdue',
