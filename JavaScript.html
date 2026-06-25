@@ -753,6 +753,7 @@ async function initApp() {
 
     renderSidebar();
     renderUserInfo();
+    if (typeof guideInit === 'function') guideInit();
     App.ready = true;
     // Kalau dibuka dari link email (ada ?page=...), langsung ke halaman tersebut
     var _startPage   = (typeof _initPage  !== 'undefined' && _initPage)  ? _initPage  : 'home';
