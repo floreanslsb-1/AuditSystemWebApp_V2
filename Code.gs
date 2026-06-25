@@ -833,9 +833,9 @@ function _routeAction(action, payload, profile) {
       );
       return findings_ha
         .filter(function(f) {
-          return f.status === CONFIG.RESULT_STATUS.NON_COMPLY &&
-                 doneAgendaIds_ha.has(f.agenda_id) &&
-                 f.finding_status !== CONFIG.FINDING_STATUS.PENDING_VERIFICATION;
+          return doneAgendaIds_ha.has(f.agenda_id) &&
+                 (f.status === CONFIG.RESULT_STATUS.NON_COMPLY ||
+                  f.finding_status === CONFIG.FINDING_STATUS.PENDING_VERIFICATION);
         })
         .map(function(f) {
           var ag = agendas_ha.find(function(a) { return a.agenda_id === f.agenda_id; });
@@ -875,6 +875,23 @@ function _getDashboardData(profile, periodId) {
 
     const agendas  = getCachedAgendasByPeriod(period.period_id).map(_sanitizeObj);
     let   findings = getAllFindingsByPeriod(period.spreadsheet_id, period.period_id);
+
+    // Hitung comply & non comply per agenda untuk analytics
+    const allResults = getAuditResultsByPeriod(period.spreadsheet_id, period.period_id);
+    const resultCountByAgenda = {};
+    allResults.forEach(function(r) {
+      var aid = r.agenda_id;
+      if (!resultCountByAgenda[aid]) resultCountByAgenda[aid] = { comply: 0, non_comply: 0, total: 0 };
+      if (r.status === CONFIG.RESULT_STATUS.COMPLY)     resultCountByAgenda[aid].comply++;
+      else if (r.status === CONFIG.RESULT_STATUS.NON_COMPLY) resultCountByAgenda[aid].non_comply++;
+      resultCountByAgenda[aid].total++;
+    });
+    agendas.forEach(function(ag) {
+      var counts = resultCountByAgenda[ag.agenda_id] || { comply: 0, non_comply: 0, total: 0 };
+      ag.comply_count     = counts.comply;
+      ag.non_comply_count = counts.non_comply;
+      ag.total_items      = counts.total;
+    });
 
     // Filter: hanya masukkan findings dari agenda yang sudah DONE
     const doneAgendaIds = new Set(
