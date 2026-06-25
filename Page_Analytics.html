@@ -1,0 +1,531 @@
+<script>
+// ============================================================
+//  Page_Analytics.html
+//  Visualisasi data Hasil Audit — Bar, Pie/Donut, Line, Tabel
+//  Dipanggil dari Page_Dashboard sebagai section tambahan
+//  Dependensi: Chart.js (cdnjs), window._hasilAuditFindings
+// ============================================================
+
+// ── Muat Chart.js sekali saja ─────────────────────────────────
+var _analyticsChartJsLoaded = false;
+function _analyticsLoadChartJs(cb) {
+  if (typeof Chart !== 'undefined') { cb(); return; }
+  if (_analyticsChartJsLoaded) {
+    var poll = setInterval(function() {
+      if (typeof Chart !== 'undefined') { clearInterval(poll); cb(); }
+    }, 80);
+    return;
+  }
+  _analyticsChartJsLoaded = true;
+  var s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
+  s.onload  = cb;
+  s.onerror = function() { toast('Gagal memuat library Chart.js.', 'error'); };
+  document.head.appendChild(s);
+}
+
+// ── State ─────────────────────────────────────────────────────
+var _anChart = null; // instance Chart.js aktif
+
+// ── Definisi dimensi (sumbu X / groupBy) ─────────────────────
+var AN_DIMS = [
+  { id: 'dept',          label: 'Departemen',           fn: function(f) { return f.dept || '—'; } },
+  { id: 'finding_status',label: 'Status Temuan',        fn: function(f) { return _anFsLabel(f.finding_status); } },
+  { id: 'corr_status',   label: 'Status Correction',    fn: function(f) { return _haCorrectiveStatus(f).corr; } },
+  { id: 'ca_status',     label: 'Status Corrective Action', fn: function(f) { return _haCorrectiveStatus(f).ca; } },
+  { id: 'lokasi',        label: 'Lokasi Temuan',        fn: function(f) { return f.lokasi_temuan || '—'; } },
+  { id: 'corr_due_month',label: 'Bulan Due Date Correction', fn: function(f) {
+    if (!f.due_date_correction) return '(Belum diisi)';
+    var d = new Date(f.due_date_correction);
+    return isNaN(d) ? '—' : d.toLocaleDateString('id-ID', { year:'numeric', month:'short' });
+  }},
+  { id: 'ca_due_month',  label: 'Bulan Due Date CA',    fn: function(f) {
+    if (!f.due_date_corrective_action) return '(Belum diisi)';
+    var d = new Date(f.due_date_corrective_action);
+    return isNaN(d) ? '—' : d.toLocaleDateString('id-ID', { year:'numeric', month:'short' });
+  }},
+];
+
+// ── Definisi metrik (sumbu Y / nilai) ────────────────────────
+var AN_METRICS = [
+  { id: 'count',         label: 'Jumlah Temuan',
+    fn: function(rows) { return rows.length; } },
+  { id: 'closed',        label: 'Jumlah Closed',
+    fn: function(rows) { return rows.filter(function(f){ return f.finding_status === 'CLOSED'; }).length; } },
+  { id: 'open',          label: 'Jumlah Open TPP',
+    fn: function(rows) { return rows.filter(function(f){ return f.finding_status === 'OPEN'; }).length; } },
+  { id: 'open_impl',     label: 'Jumlah Open Implementasi',
+    fn: function(rows) { return rows.filter(function(f){ return f.finding_status === 'OPEN_IMPL'; }).length; } },
+  { id: 'overdue_corr',  label: 'Correction Overdue',
+    fn: function(rows) { return rows.filter(function(f){
+      if (!f.due_date_correction || f.impl_correction_submitted_at) return false;
+      return new Date() > new Date(f.due_date_correction);
+    }).length; } },
+  { id: 'overdue_ca',    label: 'Corrective Action Overdue',
+    fn: function(rows) { return rows.filter(function(f){
+      if (!f.due_date_corrective_action || f.impl_submitted_at) return false;
+      return new Date() > new Date(f.due_date_corrective_action);
+    }).length; } },
+  { id: 'pct_closed',    label: '% Closed',
+    fn: function(rows) {
+      if (!rows.length) return 0;
+      return Math.round(rows.filter(function(f){ return f.finding_status === 'CLOSED'; }).length / rows.length * 100);
+    } },
+];
+
+// ── Chart types ───────────────────────────────────────────────
+var AN_CHART_TYPES = [
+  { id: 'bar',      label: 'Bar Chart (Vertikal)',   icon: 'bar-chart-2' },
+  { id: 'bar_h',    label: 'Bar Chart (Horizontal)', icon: 'bar-chart' },
+  { id: 'pie',      label: 'Pie Chart',              icon: 'pie-chart' },
+  { id: 'doughnut', label: 'Donut Chart',            icon: 'donut' },
+  { id: 'line',     label: 'Line Chart',             icon: 'trending-up' },
+  { id: 'table',    label: 'Tabel',                  icon: 'table-2' },
+];
+
+// ── Warna palette ─────────────────────────────────────────────
+var AN_COLORS = [
+  '#3b82f6','#10b981','#8b5cf6','#f59e0b','#f43f5e',
+  '#06b6d4','#84cc16','#ec4899','#14b8a6','#f97316',
+  '#6366f1','#a855f7','#22c55e','#eab308','#ef4444',
+];
+
+function _anFsLabel(s) {
+  var m = {
+    'OPEN':'Open TPP','OPEN_IMPL':'Open Implementasi',
+    'APP_DEPT_HEAD':'Review Dept Head','APP_AUDITOR':'Review Auditor',
+    'APP_KOORDINATOR':'Review Koordinator','CLOSED':'Closed','OVERDUE':'Overdue',
+  };
+  return m[s] || s || '—';
+}
+
+// ─────────────────────────────────────────────────────────────
+//  RENDER SECTION (dipanggil dari Page_Dashboard)
+// ─────────────────────────────────────────────────────────────
+
+function renderAnalyticsSection(findings, period) {
+  // Simpan ke window agar bisa diakses dari event handler
+  window._anFindings = findings || [];
+  window._anPeriod   = period   || null;
+
+  var el = document.getElementById('analytics-section');
+  if (!el) return;
+
+  el.innerHTML =
+    // ── Header section ────────────────────────────────────────
+    '<div style="display:flex;align-items:center;justify-content:space-between;' +
+      'margin-bottom:16px;flex-wrap:wrap;gap:8px">' +
+      '<div>' +
+        '<div style="font-size:13px;font-weight:700;color:var(--text)">Visualisasi Data</div>' +
+        '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">' +
+          'Eksplorasi data temuan dengan chart interaktif' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+
+    // ── Builder panel ─────────────────────────────────────────
+    '<div style="background:var(--surface2);border-radius:var(--radius);' +
+      'padding:16px;margin-bottom:16px;display:grid;' +
+      'grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;align-items:end">' +
+
+      // Dimensi X
+      '<div>' +
+        '<label style="font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--text-muted);' +
+          'display:block;margin-bottom:5px">KELOMPOKKAN PER</label>' +
+        '<select id="an-dim" class="form-control" style="font-size:12px">' +
+          AN_DIMS.map(function(d) {
+            return '<option value="' + d.id + '">' + escHtml(d.label) + '</option>';
+          }).join('') +
+        '</select>' +
+      '</div>' +
+
+      // Metrik Y
+      '<div>' +
+        '<label style="font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--text-muted);' +
+          'display:block;margin-bottom:5px">NILAI (SUMBU Y)</label>' +
+        '<select id="an-metric" class="form-control" style="font-size:12px">' +
+          AN_METRICS.map(function(m) {
+            return '<option value="' + m.id + '">' + escHtml(m.label) + '</option>';
+          }).join('') +
+        '</select>' +
+      '</div>' +
+
+      // Chart type
+      '<div>' +
+        '<label style="font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--text-muted);' +
+          'display:block;margin-bottom:5px">TIPE VISUALISASI</label>' +
+        '<select id="an-type" class="form-control" style="font-size:12px">' +
+          AN_CHART_TYPES.map(function(t) {
+            return '<option value="' + t.id + '">' + escHtml(t.label) + '</option>';
+          }).join('') +
+        '</select>' +
+      '</div>' +
+
+      // Sort
+      '<div>' +
+        '<label style="font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--text-muted);' +
+          'display:block;margin-bottom:5px">URUTAN</label>' +
+        '<select id="an-sort" class="form-control" style="font-size:12px">' +
+          '<option value="value_desc">Nilai ↓ Terbesar</option>' +
+          '<option value="value_asc">Nilai ↑ Terkecil</option>' +
+          '<option value="label_asc">Label A–Z</option>' +
+          '<option value="label_desc">Label Z–A</option>' +
+        '</select>' +
+      '</div>' +
+
+      // Tombol render
+      '<div style="display:flex;gap:6px">' +
+        '<button class="btn btn-primary" style="flex:1;font-size:12px" ' +
+          'onclick="_anRender()">' +
+          '<i data-lucide="play" style="width:13px;height:13px"></i> Tampilkan' +
+        '</button>' +
+      '</div>' +
+
+    '</div>' +
+
+    // ── Output area ───────────────────────────────────────────
+    '<div id="an-output" style="min-height:80px"></div>';
+
+  lucide.createIcons(el);
+}
+
+// ─────────────────────────────────────────────────────────────
+//  CORE RENDER
+// ─────────────────────────────────────────────────────────────
+
+function _anRender() {
+  var dimId    = (document.getElementById('an-dim')    || {}).value;
+  var metricId = (document.getElementById('an-metric') || {}).value;
+  var typeId   = (document.getElementById('an-type')   || {}).value;
+  var sortId   = (document.getElementById('an-sort')   || {}).value;
+
+  var dim    = AN_DIMS.find(function(d) { return d.id === dimId; });
+  var metric = AN_METRICS.find(function(m) { return m.id === metricId; });
+  if (!dim || !metric) return;
+
+  var findings = window._anFindings || [];
+  if (!findings.length) {
+    document.getElementById('an-output').innerHTML =
+      '<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:13px">' +
+        'Tidak ada data temuan untuk divisualisasikan.' +
+      '</div>';
+    return;
+  }
+
+  // ── Group data ────────────────────────────────────────────
+  var groups = {};
+  findings.forEach(function(f) {
+    var key = dim.fn(f);
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(f);
+  });
+
+  // ── Hitung metrik per grup ────────────────────────────────
+  var rows = Object.keys(groups).map(function(label) {
+    return { label: label, value: metric.fn(groups[label]), count: groups[label].length };
+  });
+
+  // ── Sort ──────────────────────────────────────────────────
+  rows.sort(function(a, b) {
+    if (sortId === 'value_desc') return b.value - a.value;
+    if (sortId === 'value_asc')  return a.value - b.value;
+    if (sortId === 'label_asc')  return a.label.localeCompare(b.label);
+    if (sortId === 'label_desc') return b.label.localeCompare(a.label);
+    return 0;
+  });
+
+  // ── Render sesuai type ────────────────────────────────────
+  if (typeId === 'table') {
+    _anRenderTable(rows, dim, metric);
+  } else {
+    _analyticsLoadChartJs(function() {
+      _anRenderChart(rows, dim, metric, typeId);
+    });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  RENDER CHART
+// ─────────────────────────────────────────────────────────────
+
+function _anRenderChart(rows, dim, metric, typeId) {
+  var out = document.getElementById('an-output');
+  if (!out) return;
+
+  // Destroy chart lama kalau ada
+  if (_anChart) { try { _anChart.destroy(); } catch(e) {} _anChart = null; }
+
+  var labels = rows.map(function(r) { return r.label; });
+  var values = rows.map(function(r) { return r.value; });
+  var colors = rows.map(function(_, i) { return AN_COLORS[i % AN_COLORS.length]; });
+  var isPie  = typeId === 'pie' || typeId === 'doughnut';
+  var isHBar = typeId === 'bar_h';
+
+  // ── Container ─────────────────────────────────────────────
+  out.innerHTML =
+    '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);' +
+      'padding:20px">' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;' +
+        'margin-bottom:16px;flex-wrap:wrap;gap:8px">' +
+        '<div>' +
+          '<div style="font-size:13px;font-weight:700">' +
+            escHtml(metric.label) + ' per ' + escHtml(dim.label) +
+          '</div>' +
+          '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">' +
+            rows.length + ' kelompok · ' + (window._anFindings || []).length + ' temuan' +
+          '</div>' +
+        '</div>' +
+        '<div style="display:flex;gap:6px">' +
+          '<button onclick="_anDownloadPng()" ' +
+            'class="btn btn-outline btn-sm" style="font-size:11px;gap:4px">' +
+            '<i data-lucide="image" style="width:11px;height:11px"></i> PNG' +
+          '</button>' +
+          '<button onclick="_anDownloadCsv()" ' +
+            'class="btn btn-outline btn-sm" style="font-size:11px;gap:4px">' +
+            '<i data-lucide="download" style="width:11px;height:11px"></i> CSV' +
+          '</button>' +
+        '</div>' +
+      '</div>' +
+      '<div style="position:relative;' + (isPie ? 'max-width:420px;margin:0 auto' : '') + '">' +
+        '<canvas id="an-canvas" style="width:100%;' + (isPie ? 'max-height:340px' : 'max-height:380px') + '"></canvas>' +
+      '</div>' +
+    '</div>';
+
+  lucide.createIcons(out);
+
+  var canvas  = document.getElementById('an-canvas');
+  var ctx     = canvas.getContext('2d');
+
+  // ── Chart.js config ───────────────────────────────────────
+  var isDark  = document.documentElement.getAttribute('data-theme') === 'dark' ||
+                document.body.classList.contains('dark');
+  var gridColor   = isDark ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.07)';
+  var labelColor  = isDark ? '#9ca3af' : '#6b7280';
+  var tooltipBg   = isDark ? '#1f2937' : '#fff';
+  var tooltipTxt  = isDark ? '#f9fafb' : '#111827';
+
+  var chartType = typeId === 'bar_h' ? 'bar' : typeId;
+
+  var datasets = [{
+    label: metric.label,
+    data:  values,
+    backgroundColor: isPie ? colors : colors.map(function(c) { return c + 'cc'; }),
+    borderColor:     isPie ? colors.map(function(c) { return c; }) : colors,
+    borderWidth: isPie ? 2 : 1.5,
+    borderRadius: (!isPie && !isHBar) ? 4 : 0,
+    hoverOffset: isPie ? 6 : 0,
+  }];
+
+  var config = {
+    type: chartType,
+    data: { labels: labels, datasets: datasets },
+    options: {
+      indexAxis: isHBar ? 'y' : 'x',
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: {
+          display: isPie,
+          position: 'bottom',
+          labels: {
+            color: labelColor,
+            font: { size: 11 },
+            padding: 14,
+            usePointStyle: true,
+            pointStyleWidth: 10,
+          },
+        },
+        tooltip: {
+          backgroundColor: tooltipBg,
+          titleColor: tooltipTxt,
+          bodyColor: tooltipTxt,
+          borderColor: gridColor,
+          borderWidth: 1,
+          padding: 10,
+          callbacks: {
+            label: function(ctx) {
+              var v = ctx.parsed[isHBar ? 'x' : 'y'];
+              if (v === undefined) v = ctx.parsed;
+              var suffix = metricId === 'pct_closed' ? '%' : ' temuan';
+              return ' ' + metric.label + ': ' + v + suffix;
+            },
+          },
+        },
+      },
+      scales: isPie ? {} : {
+        x: {
+          ticks: { color: labelColor, font: { size: 11 } },
+          grid:  { color: isHBar ? gridColor : 'transparent' },
+        },
+        y: {
+          ticks: { color: labelColor, font: { size: 11 } },
+          grid:  { color: isHBar ? 'transparent' : gridColor },
+          beginAtZero: true,
+        },
+      },
+    },
+  };
+
+  // Simpan metricId di closure untuk tooltip
+  var metricId = (document.getElementById('an-metric') || {}).value;
+
+  _anChart = new Chart(ctx, config);
+
+  // Simpan rows untuk download
+  window._anLastRows   = rows;
+  window._anLastDim    = dim;
+  window._anLastMetric = metric;
+}
+
+// ─────────────────────────────────────────────────────────────
+//  RENDER TABEL
+// ─────────────────────────────────────────────────────────────
+
+function _anRenderTable(rows, dim, metric) {
+  // Destroy chart lama kalau ada
+  if (_anChart) { try { _anChart.destroy(); } catch(e) {} _anChart = null; }
+
+  var maxVal = Math.max.apply(null, rows.map(function(r) { return r.value; })) || 1;
+
+  var out = document.getElementById('an-output');
+  if (!out) return;
+
+  out.innerHTML =
+    '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;' +
+        'padding:14px 16px;border-bottom:1px solid var(--border)">' +
+        '<div>' +
+          '<div style="font-size:13px;font-weight:700">' +
+            escHtml(metric.label) + ' per ' + escHtml(dim.label) +
+          '</div>' +
+          '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">' +
+            rows.length + ' kelompok · ' + (window._anFindings || []).length + ' temuan' +
+          '</div>' +
+        '</div>' +
+        '<button onclick="_anDownloadCsv()" ' +
+          'class="btn btn-outline btn-sm" style="font-size:11px;gap:4px">' +
+          '<i data-lucide="download" style="width:11px;height:11px"></i> CSV' +
+        '</button>' +
+      '</div>' +
+      '<div style="overflow-x:auto">' +
+        '<table style="width:100%;border-collapse:collapse">' +
+          '<thead>' +
+            '<tr style="background:var(--surface2)">' +
+              '<th style="padding:9px 14px;text-align:left;font-size:10px;font-weight:700;' +
+                'letter-spacing:.06em;color:var(--text-muted);border-bottom:1px solid var(--border);' +
+                'white-space:nowrap">NO</th>' +
+              '<th style="padding:9px 14px;text-align:left;font-size:10px;font-weight:700;' +
+                'letter-spacing:.06em;color:var(--text-muted);border-bottom:1px solid var(--border)">' +
+                escHtml(dim.label.toUpperCase()) + '</th>' +
+              '<th style="padding:9px 14px;text-align:right;font-size:10px;font-weight:700;' +
+                'letter-spacing:.06em;color:var(--text-muted);border-bottom:1px solid var(--border);' +
+                'white-space:nowrap">' + escHtml(metric.label.toUpperCase()) + '</th>' +
+              '<th style="padding:9px 14px;text-align:left;font-size:10px;font-weight:700;' +
+                'letter-spacing:.06em;color:var(--text-muted);border-bottom:1px solid var(--border);' +
+                'min-width:120px">DISTRIBUSI</th>' +
+            '</tr>' +
+          '</thead>' +
+          '<tbody>' +
+            rows.map(function(r, i) {
+              var pct = Math.round(r.value / maxVal * 100);
+              var color = AN_COLORS[i % AN_COLORS.length];
+              return '<tr style="border-bottom:1px solid var(--border)">' +
+                '<td style="padding:10px 14px;font-size:11px;color:var(--text-muted);' +
+                  'font-weight:600;white-space:nowrap">' + (i+1) + '</td>' +
+                '<td style="padding:10px 14px;font-size:12px;font-weight:600">' +
+                  escHtml(r.label) + '</td>' +
+                '<td style="padding:10px 14px;font-size:13px;font-weight:700;' +
+                  'text-align:right;color:' + color + '">' + r.value + '</td>' +
+                '<td style="padding:10px 14px">' +
+                  '<div style="height:8px;background:var(--surface2);border-radius:4px;overflow:hidden">' +
+                    '<div style="height:100%;width:' + pct + '%;background:' + color + ';' +
+                      'border-radius:4px;transition:width .3s"></div>' +
+                  '</div>' +
+                '</td>' +
+              '</tr>';
+            }).join('') +
+          '</tbody>' +
+          // Total row
+          '<tfoot>' +
+            '<tr style="background:var(--surface2)">' +
+              '<td colspan="2" style="padding:9px 14px;font-size:11px;font-weight:700;' +
+                'letter-spacing:.04em;color:var(--text-muted)">TOTAL</td>' +
+              '<td style="padding:9px 14px;font-size:13px;font-weight:700;text-align:right">' +
+                rows.reduce(function(s,r){ return s+r.value; }, 0) +
+              '</td>' +
+              '<td></td>' +
+            '</tr>' +
+          '</tfoot>' +
+        '</table>' +
+      '</div>' +
+    '</div>';
+
+  lucide.createIcons(out);
+
+  // Simpan untuk download
+  window._anLastRows   = rows;
+  window._anLastDim    = dim;
+  window._anLastMetric = metric;
+}
+
+// ─────────────────────────────────────────────────────────────
+//  DOWNLOAD
+// ─────────────────────────────────────────────────────────────
+
+function _anDownloadPng() {
+  var canvas = document.getElementById('an-canvas');
+  if (!canvas) { toast('Tidak ada chart untuk didownload.', 'error'); return; }
+
+  // Render ke canvas baru dengan background putih (untuk PNG yang bersih)
+  var offCanvas = document.createElement('canvas');
+  offCanvas.width  = canvas.width;
+  offCanvas.height = canvas.height;
+  var ctx = offCanvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, offCanvas.width, offCanvas.height);
+  ctx.drawImage(canvas, 0, 0);
+
+  var a = document.createElement('a');
+  var period = window._anPeriod;
+  var periodeLabel = period ? period.nama_periode.replace(/[^a-zA-Z0-9_-]/g,'_') : 'analytics';
+  a.download = 'Analytics_' + periodeLabel + '_' + new Date().toISOString().slice(0,10) + '.png';
+  a.href     = offCanvas.toDataURL('image/png');
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  toast('Chart berhasil didownload.', 'success');
+}
+
+function _anDownloadCsv() {
+  var rows   = window._anLastRows;
+  var dim    = window._anLastDim;
+  var metric = window._anLastMetric;
+  if (!rows || !rows.length) { toast('Tidak ada data untuk didownload.', 'error'); return; }
+
+  function _q(v) {
+    var s = String(v || '');
+    return (s.indexOf(',') !== -1 || s.indexOf('"') !== -1 || s.indexOf('\n') !== -1)
+      ? '"' + s.replace(/"/g,'""') + '"' : s;
+  }
+
+  var csv = [
+    [_q(dim.label), _q(metric.label), 'Jumlah Temuan di Grup'].join(','),
+  ].concat(rows.map(function(r) {
+    return [_q(r.label), _q(r.value), _q(r.count)].join(',');
+  })).join('\r\n');
+
+  var bom  = '\uFEFF';
+  var blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
+  var url  = URL.createObjectURL(blob);
+  var a    = document.createElement('a');
+  var period = window._anPeriod;
+  var periodeLabel = period ? period.nama_periode.replace(/[^a-zA-Z0-9_-]/g,'_') : 'analytics';
+  a.href     = url;
+  a.download = 'Analytics_' + periodeLabel + '_' + new Date().toISOString().slice(0,10) + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('CSV berhasil didownload.', 'success');
+}
+</script>
