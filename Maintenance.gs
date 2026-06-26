@@ -253,3 +253,94 @@ function _mnt_uniqueDepts(agendas) {
   agendas.forEach(function(a) { if (a.dept) depts[a.dept] = true; });
   return Object.keys(depts).sort();
 }
+
+/**
+ * Migrasi APPROVAL_LOG: rename stage lama ke stage baru.
+ * Jalankan SEKALI dari Apps Script editor.
+ * CORRECTION → IMPL_CORRECTION
+ * IMPL (action=SUBMITTED) → IMPL_CA
+ */
+function migrateApprovalLogStages() {
+  const periods = getAllPeriods(true);
+  let totalUpdated = 0;
+
+  periods.forEach(function(period) {
+    if (!period.spreadsheet_id) return;
+    try {
+      const sheet = SpreadsheetApp.openById(period.spreadsheet_id)
+        .getSheetByName('APPROVAL_LOG');
+      if (!sheet || sheet.getLastRow() < 3) return;
+
+      const lastRow = sheet.getLastRow();
+      const data    = sheet.getRange(3, 1, lastRow - 2, 11).getValues();
+      // Kolom: 0=log_id, 1=result_id, 2=agenda_id, 3=stage, 4=level, 5=action, ...
+
+      data.forEach(function(row, i) {
+        const rowIndex = i + 3;
+        const stage    = String(row[3]);
+        const action   = String(row[5]);
+        var newStage   = null;
+
+        if (stage === 'CORRECTION') {
+          newStage = 'IMPL_CORRECTION';
+        } else if (stage === 'IMPL' && action === 'SUBMITTED') {
+          newStage = 'IMPL_CA';
+        }
+
+        if (newStage) {
+          sheet.getRange(rowIndex, 4).setValue(newStage); // kolom 4 = stage
+          totalUpdated++;
+          console.log('[MIGRATE] period=' + period.period_id +
+            ' row=' + rowIndex +
+            ' stage: ' + stage + ' → ' + newStage +
+            ' action=' + action);
+        }
+      });
+    } catch(e) {
+      console.warn('[MIGRATE] Gagal proses period ' + period.period_id + ':', e.message);
+    }
+  });
+
+  console.log('[MIGRATE] Selesai. Total baris diupdate: ' + totalUpdated);
+  return { success: true, totalUpdated };
+}
+
+function kirimEmailSusulan() {
+  var PERIOD_ID = 'PRD_INTERNAL_INTEGRASI_CROSS_DEPT_2026';
+  var TEST_DEPT = ''; // ← isi nama dept untuk test satu dulu. Kosongkan '' untuk kirim semua.
+
+  var period = getPeriodById(PERIOD_ID);
+  if (!period) { console.log('Period tidak ditemukan'); return; }
+
+  var spreadsheetId = period.spreadsheet_id;
+  var agendas = getAgendasByPeriod(PERIOD_ID);
+
+  if (TEST_DEPT) {
+    agendas = agendas.filter(function(ag) { return ag.dept === TEST_DEPT; });
+    console.log('TEST MODE: hanya dept "' + TEST_DEPT + '" — ' + agendas.length + ' agenda ditemukan');
+  }
+
+  if (!agendas.length) {
+    console.log('Tidak ada agenda. Cek nama dept (case sensitive).');
+    return;
+  }
+
+  var successCount = 0;
+  agendas.forEach(function(ag) {
+    try {
+      var openFindings = getAuditResultsByAgenda(spreadsheetId, ag.agenda_id)
+        .filter(function(r) { return r.finding_status === CONFIG.FINDING_STATUS.OPEN; });
+      console.log('Agenda ' + ag.dept + ': ' + openFindings.length + ' temuan OPEN | auditee: ' + ag.auditee_emails);
+      if (openFindings.length > 0) {
+        notifyFindingsVerified(ag, openFindings);
+        console.log('✓ Email dikirim ke: ' + ag.auditee_emails);
+        successCount++;
+      } else {
+        console.log('- Skip ' + ag.dept + ': tidak ada temuan OPEN');
+      }
+    } catch(e) {
+      console.error('✗ Gagal ' + ag.dept + ': ' + e.message);
+    }
+  });
+  console.log('Selesai. Berhasil: ' + successCount + ' dari ' + agendas.length + ' agenda.');
+}
