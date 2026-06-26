@@ -774,6 +774,15 @@
     /* Modal footer — cegah tombol overflow di layar sempit */
     .modal-footer { flex-wrap: wrap; gap: 8px; }
     .modal-footer .btn { flex: 1 1 auto; min-width: 100px; justify-content: center; }
+
+    /* My Task table mobile */
+    .task-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .task-table-wrap table { min-width: 480px; font-size: 11px; }
+    .task-table-wrap th, .task-table-wrap td { padding: 8px 8px; font-size: 11px; }
+
+    /* Detail Temuan card — kolom stacked di mobile */
+    .detail-temuan-cols { flex-direction: column !important; }
+    .detail-temuan-cols > div { width: 100% !important; border-right: none !important; }
   }
 
   /* ── Mobile Bottom Nav Bar ───────────────────────────────── */
