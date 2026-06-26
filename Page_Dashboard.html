@@ -241,7 +241,10 @@ function _dbStyles() {
     '.db-tbl td:last-child,.db-tbl th:last-child{border-right:none}' +
     '.db-tbl thead tr:first-child th{position:sticky;top:0;z-index:1}' +
     '.db-tbl thead tr:last-child th{position:sticky;top:37px;z-index:1}' +
-    '.db-col-area{position:sticky!important;left:0;z-index:2!important;background:var(--surface2);min-width:160px;text-align:left!important}' +
+    '.db-col-area{position:sticky!important;left:0;z-index:2!important;background:var(--surface2);min-width:120px;text-align:left!important}' +
+    '.db-scroll-hint{display:none;align-items:center;justify-content:center;gap:6px;' +
+      'padding:5px 12px;background:rgba(37,99,235,.06);border-bottom:1px solid var(--border);' +
+      'font-size:11px;color:var(--blue,#2563eb);font-weight:600}' +
     'thead .db-col-area{z-index:3!important}' +
     '<th rowspan="2" class="db-col-area" style="vertical-align:middle;text-align:center!important;z-index:2;border-bottom:1px solid var(--border)">Area</th>' +
     '.db-total-row td{background:var(--surface2)!important;font-weight:700;border-top:none!important;border-bottom:none!important}' +
@@ -276,19 +279,14 @@ function _dbStyles() {
     '@media(max-width:900px){.db-top-row{grid-template-columns:1fr;}}' +
 
     /* Approval table mobile */
-    '.db-tbl-scroll-wrap{overflow-x:auto;overflow-y:auto;max-height:348px;-webkit-overflow-scrolling:touch}' +
+    '.db-tbl-scroll-wrap{overflow-x:auto;overflow-y:auto;max-height:348px;-webkit-overflow-scrolling:touch;position:relative}' +
     '@media(max-width:768px){' +
-      '.db-tbl-scroll-wrap{max-height:none;position:relative}' +
-      '.db-tbl-scroll-wrap::after{' +
-        'content:"← geser untuk melihat semua kolom →";' +
-        'display:block;text-align:center;font-size:11px;' +
-        'color:var(--text-muted);padding:6px 0 2px;' +
-        'border-top:1px solid var(--border);' +
-      '}' +
+      '.db-tbl-scroll-wrap{max-height:260px}' +
       '.db-tbl{font-size:11px}' +
-      '.db-tbl th{padding:7px 6px;font-size:9px}' +
-      '.db-tbl td{padding:8px 6px;font-size:11px}' +
-      '.db-col-area{min-width:120px}' +
+      '.db-tbl th{padding:6px 5px;font-size:9px;letter-spacing:0}' +
+      '.db-tbl td{padding:7px 5px;font-size:11px}' +
+      '.db-col-area{min-width:90px}' +
+      '.db-scroll-hint{display:flex!important}' +
     '}' +
 
     /* OFI table */
@@ -829,6 +827,11 @@ function _dbApprovalSection(agendas, findings, s) {
     '</div>' +
     '<div id="db-approval-body">' +
       '<div class="db-tbl-scroll-wrap">' +
+          '<div class="db-scroll-hint">' +
+            '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>' +
+            'Geser untuk lihat semua kolom' +
+            '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>' +
+          '</div>' +
           '<table class="db-tbl">' +
             '<thead>' + gh + ch + '</thead>' +
             '<tbody>' + dataRows + totalRow + '</tbody>' +
