@@ -90,6 +90,7 @@ const CONFIG = {
 
   NOTIFICATIONS_ENABLED: true,   // ← set false untuk disable semua notifikasi
   TEST_MODE_EMAIL: '', // ← kosong = kirim ke penerima asli
+  PRODUCTION_URL: 'https://script.google.com/a/macros/wingscorp.com/s/AKfycbx4cU0VzjaJPNdQzVwjZ44SzWCZHd-E_Mzaw9a9SW4wEgzep9HqYF0V9vBLvv7XDgy2/exec', // ← hardcode URL deployment production
 
   LOCK_TIMEOUT_MINUTES: 60,
   CACHE_TTL_SECONDS:    21600,
