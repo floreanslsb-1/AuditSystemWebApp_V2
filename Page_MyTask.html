@@ -1372,43 +1372,48 @@ async function _renderIsiTppPage(container, task, period) {
 
     var historyHtml = _renderApprovalHistory(log, 'TPP');
 
-    // ── Header dokumen — Opsi C (Header bar + meta strip) ────
+    // ── Detail Temuan card — sama persis dengan Upload Impl ──
+    var _tppAprRow = function(label, value, first) {
+      return '<div style="display:flex;align-items:baseline;gap:12px;padding:8px 0;' + (first ? '' : 'border-top:0.5px solid var(--border)') + '">' +
+        '<span style="font-size:12px;color:var(--text-muted);width:110px;flex-shrink:0">' + label + '</span>' +
+        '<span style="font-size:13px;color:var(--text);line-height:1.6">' + value + '</span>' +
+      '</div>';
+    };
+
+    var fotoTemuanTppButtons = f && f.foto_urls
+      ? f.foto_urls.split(',').filter(Boolean).map(function(url, i) {
+          return '<button onclick="_openFotoLightbox(\'' + escAttr(url) + '\',\'Foto ' + (i+1) + '\')" ' +
+            'class="btn btn-outline btn-sm" style="font-size:11px">' +
+            '<i data-lucide="image" style="width:11px;height:11px"></i> Foto ' + (i+1) + '</button>';
+        }).join(' ')
+      : '<span style="font-size:12px;color:var(--text-muted)">-</span>';
+
     var headerCard =
       '<div class="card mb-16" style="overflow:hidden">' +
-
-        // Header biru dengan judul + subtitle ringkas
-        '<div style="background:var(--primary,#1F3864);padding:12px 16px">' +
-          '<div style="color:#fff;font-size:14px;font-weight:700">' +
-            'Rencana Tindakan Perbaikan dan Pencegahan' +
+        '<div style="background:var(--primary,#1F3864);padding:10px 16px">' +
+          '<span style="color:#fff;font-size:13px;font-weight:700">Detail Temuan</span>' +
+        '</div>' +
+        '<div style="display:flex;flex-wrap:wrap">' +
+          '<div style="width:280px;flex-shrink:0;padding:10px 16px;border-right:0.5px solid var(--border);' +
+            'min-width:0;flex-grow:0;box-sizing:border-box;' +
+            'max-width:100%;border-bottom:0.5px solid var(--border)">' +
+            _tppAprRow('Result ID',     '<span style="font-family:monospace;font-size:12px">' + escHtml(f ? f.result_id : '-') + '</span>', true) +
+            _tppAprRow('Periode Audit', escHtml(period.nama_periode || '-')) +
+            _tppAprRow('Dept / Area',   escHtml(task.agenda ? task.agenda.dept : '-')) +
+          '</div>' +
+          '<div style="flex:1;min-width:280px;padding:10px 16px">' +
+            _tppAprRow('Deskripsi',  escHtml(f ? f.deskripsi_temuan : '-'), true) +
+            _tppAprRow('Lokasi',     escHtml(f ? f.lokasi_temuan || '-' : '-')) +
+            '<div style="display:flex;align-items:flex-start;gap:12px;padding:8px 0;border-top:0.5px solid var(--border)">' +
+              '<span style="font-size:12px;color:var(--text-muted);width:110px;flex-shrink:0;padding-top:2px">Bukti foto</span>' +
+              '<div style="display:flex;flex-wrap:wrap;gap:5px">' + fotoTemuanTppButtons + '</div>' +
+            '</div>' +
           '</div>' +
         '</div>' +
+      '</div>';
 
-        // Meta strip — 3 kolom tipis
-        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;' +
-            'border-bottom:1px solid var(--border);background:var(--surface-2,#f8f9fa)">' +
-          '<div style="padding:8px 14px;border-right:1px solid var(--border)">' +
-            '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em">NO. DOKUMEN</div>' +
-            '<div style="font-size:12px;font-weight:600;font-family:monospace">' + escHtml(f ? f.result_id : '-') + '</div>' +
-          '</div>' +
-          '<div style="padding:8px 14px;border-right:1px solid var(--border)">' +
-            '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em">PERIODE AUDIT</div>' +
-            '<div style="font-size:12px;font-weight:600">' + escHtml(period.nama_periode || '-') + '</div>' +
-          '</div>' +
-          '<div style="padding:8px 14px">' +
-            '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em">DEPT / AREA</div>' +
-            '<div style="font-size:12px;font-weight:600">' + escHtml(task.agenda ? task.agenda.dept : '-') + '</div>' +
-          '</div>' +
-        '</div>' +
-
-        // Info temuan — 2 kolom
-        '<div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--border)">' +
-          '<div style="padding:10px 14px;border-right:1px solid var(--border)">' +
-            '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em;margin-bottom:4px">DESKRIPSI KETIDAKSESUAIAN</div>' +
-            '<div style="font-size:13px">' + escHtml(f ? f.deskripsi_temuan : '-') + '</div>' +
-          '</div>' +
-          '<div style="padding:10px 14px">' +
-            '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em;margin-bottom:4px">LOKASI</div>' +
-            '<div style="font-size:13px;margin-bottom:10px">' + escHtml(f ? f.lokasi_temuan || '-' : '-') + '</div>' +
+    // ── DUMMY LINE — akan dilanjutkan dengan kode existing ───
+    var _tppDummy = (f ? f.lokasi_temuan || '-' : '-') + '</div>' +
             '<div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:.05em;margin-bottom:4px">BUKTI FOTO</div>' +
             (f && f.foto_urls
               ? '<div style="display:flex;flex-wrap:wrap;gap:6px">' +
