@@ -275,6 +275,22 @@ function _dbStyles() {
     '.db-top-row{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:stretch;margin-bottom:24px}' +
     '@media(max-width:900px){.db-top-row{grid-template-columns:1fr;}}' +
 
+    /* Approval table mobile */
+    '.db-tbl-scroll-wrap{overflow-x:auto;overflow-y:auto;max-height:348px;-webkit-overflow-scrolling:touch}' +
+    '@media(max-width:768px){' +
+      '.db-tbl-scroll-wrap{max-height:none;position:relative}' +
+      '.db-tbl-scroll-wrap::after{' +
+        'content:"← geser untuk melihat semua kolom →";' +
+        'display:block;text-align:center;font-size:11px;' +
+        'color:var(--text-muted);padding:6px 0 2px;' +
+        'border-top:1px solid var(--border);' +
+      '}' +
+      '.db-tbl{font-size:11px}' +
+      '.db-tbl th{padding:7px 6px;font-size:9px}' +
+      '.db-tbl td{padding:8px 6px;font-size:11px}' +
+      '.db-col-area{min-width:120px}' +
+    '}' +
+
     /* OFI table */
     '.db-ofi-tbl{width:100%;border-collapse:collapse}' +
     '.db-ofi-tbl th{' +
@@ -418,8 +434,8 @@ function _dbOfiSection(agendas) {
         'Belum ada OFI yang tercatat.' +
       '</td></tr>';
 
-  return '<div class="card" style="flex:1;min-width:0;display:flex;flex-direction:column;height:100%">' +
-    '<div class="card-header" style="flex-wrap:wrap;gap:10px">' +
+  return '<div class="card" id="db-ofi-card" style="flex:1;min-width:0;display:flex;flex-direction:column;height:100%">' +
+    '<div class="card-header" id="db-ofi-card-header" style="flex-wrap:wrap;gap:10px">' +
       '<div>' +
         '<div class="card-title">OFI Summary</div>' +
         '<div class="card-subtitle">Opportunity for Improvement per area</div>' +
@@ -812,7 +828,7 @@ function _dbApprovalSection(agendas, findings, s) {
       '</button>' +
     '</div>' +
     '<div id="db-approval-body">' +
-      '<div style="overflow-x:auto;overflow-y:auto;max-height:348px">' +
+      '<div class="db-tbl-scroll-wrap">' +
           '<table class="db-tbl">' +
             '<thead>' + gh + ch + '</thead>' +
             '<tbody>' + dataRows + totalRow + '</tbody>' +
