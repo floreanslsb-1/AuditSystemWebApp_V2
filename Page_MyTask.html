@@ -1940,13 +1940,15 @@ async function _renderUploadImplPage(container, task, period) {
         '<div style="background:var(--primary,#1F3864);padding:10px 16px">' +
           '<span style="color:#fff;font-size:13px;font-weight:700">Detail Temuan</span>' +
         '</div>' +
-        '<div style="display:flex">' +
-          '<div style="width:280px;flex-shrink:0;padding:10px 16px;border-right:0.5px solid var(--border)">' +
+        '<div style="display:flex;flex-wrap:wrap">' +
+          '<div style="width:280px;flex-shrink:0;padding:10px 16px;border-right:0.5px solid var(--border);' +
+            'min-width:0;flex-grow:0;box-sizing:border-box;' +
+            'max-width:100%;border-bottom:0.5px solid var(--border)">' +
             _implAprRow('Result ID',     '<span style="font-family:monospace;font-size:12px">' + escHtml(f ? f.result_id : '-') + '</span>', true) +
             _implAprRow('Periode Audit', escHtml(period.nama_periode || '-')) +
             _implAprRow('Dept / Area',   escHtml(task.agenda ? task.agenda.dept : '-')) +
           '</div>' +
-          '<div style="flex:1;min-width:0;padding:10px 16px">' +
+          '<div style="flex:1;min-width:280px;padding:10px 16px">' +
             _implAprRow('Deskripsi',  escHtml(f ? f.deskripsi_temuan : '-'), true) +
             _implAprRow('Lokasi',     escHtml(f ? f.lokasi_temuan || '-' : '-')) +
             '<div style="display:flex;align-items:flex-start;gap:12px;padding:8px 0;border-top:0.5px solid var(--border)">' +
@@ -2477,17 +2479,19 @@ async function _renderApprovalPage(container, task, period) {
         '<div style="background:var(--primary,#1F3864);padding:10px 16px">' +
           '<span style="color:#fff;font-size:13px;font-weight:700">Detail Temuan</span>' +
         '</div>' +
-        '<div style="display:flex">' +
+        '<div style="display:flex;flex-wrap:wrap">' +
 
-          // Kolom kiri — fixed 280px
-          '<div style="width:280px;flex-shrink:0;padding:10px 16px;border-right:0.5px solid var(--border)">' +
+          // Kolom kiri — fixed 280px desktop, full width mobile
+          '<div style="width:280px;flex-shrink:0;padding:10px 16px;border-right:0.5px solid var(--border);' +
+            'min-width:0;flex-grow:0;box-sizing:border-box;' +
+            'max-width:100%;border-bottom:0.5px solid var(--border)">' +
             _aprRow('Result ID',     '<span style="font-family:monospace;font-size:12px">' + escHtml(f ? f.result_id : '-') + '</span>', true) +
             _aprRow('Periode Audit', escHtml(period.nama_periode || '-')) +
             _aprRow('Dept / Area',   escHtml(task.agenda ? task.agenda.dept : '-')) +
           '</div>' +
 
-          // Kolom kanan — flex:1
-          '<div style="flex:1;min-width:0;padding:10px 16px">' +
+          // Kolom kanan — flex:1, full width di mobile
+          '<div style="flex:1;min-width:280px;padding:10px 16px">' +
             _aprRow('Deskripsi',  escHtml(f ? f.deskripsi_temuan : '-'), true) +
             _aprRow('Lokasi',     escHtml(f ? f.lokasi_temuan || '-' : '-')) +
             '<div style="display:flex;align-items:flex-start;gap:12px;padding:8px 0;border-top:0.5px solid var(--border)">' +
