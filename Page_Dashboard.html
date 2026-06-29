@@ -231,8 +231,14 @@ function _dbStyles() {
     '.db-tbl th{' +
       'padding:9px 10px;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;' +
       'color:var(--text-muted);background:var(--surface2);text-align:center;white-space:nowrap;' +
-      'border-bottom:1px solid var(--border);border-right:1px solid var(--border)' +
+      'border-bottom:1px solid var(--border);border-right:1px solid var(--border);' +
+      'isolation:isolate' +
     '}' +
+    '.db-gh-open{background-image:linear-gradient(rgba(244,63,94,.06),rgba(244,63,94,.06)),linear-gradient(var(--surface),var(--surface))!important}' +
+    '.db-gh-impl-open{background-image:linear-gradient(rgba(59,130,246,.07),rgba(59,130,246,.07)),linear-gradient(var(--surface),var(--surface))!important}' +
+    '.db-gh-impl{background-image:linear-gradient(rgba(139,92,246,.06),rgba(139,92,246,.06)),linear-gradient(var(--surface),var(--surface))!important}' +
+    '.db-gh-closed{background-image:linear-gradient(rgba(16,185,129,.07),rgba(16,185,129,.07)),linear-gradient(var(--surface),var(--surface))!important}' +
+    '.db-gh-open,.db-gh-impl-open,.db-gh-impl,.db-gh-closed{background-color:unset!important}' +
     '.db-tbl td{' +
       'padding:11px 10px;font-size:13px;border-bottom:1px solid var(--border);' +
       'border-right:1px solid var(--border);text-align:center;vertical-align:middle' +
