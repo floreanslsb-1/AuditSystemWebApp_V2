@@ -234,11 +234,6 @@ function _dbStyles() {
       'border-bottom:1px solid var(--border);border-right:1px solid var(--border);' +
       'isolation:isolate' +
     '}' +
-    '.db-gh-open{background-image:linear-gradient(rgba(244,63,94,.06),rgba(244,63,94,.06)),linear-gradient(var(--surface),var(--surface))!important}' +
-    '.db-gh-impl-open{background-image:linear-gradient(rgba(59,130,246,.07),rgba(59,130,246,.07)),linear-gradient(var(--surface),var(--surface))!important}' +
-    '.db-gh-impl{background-image:linear-gradient(rgba(139,92,246,.06),rgba(139,92,246,.06)),linear-gradient(var(--surface),var(--surface))!important}' +
-    '.db-gh-closed{background-image:linear-gradient(rgba(16,185,129,.07),rgba(16,185,129,.07)),linear-gradient(var(--surface),var(--surface))!important}' +
-    '.db-gh-open,.db-gh-impl-open,.db-gh-impl,.db-gh-closed{background-color:unset!important}' +
     '.db-tbl td{' +
       'padding:11px 10px;font-size:13px;border-bottom:1px solid var(--border);' +
       'border-right:1px solid var(--border);text-align:center;vertical-align:middle' +
@@ -270,13 +265,13 @@ function _dbStyles() {
     '.db-g-closed{background:rgba(16,185,129,.05)}' +
     '.db-g-overdue{background:rgba(244,63,94,.08)}' +
 
-    /* Group header tints */
-    '.db-gh-open{background:rgba(244,63,94,.06)!important}' +
-    '.db-gh-tpp{background:rgba(245,158,11,.06)!important}' +
-    '.db-gh-impl-open{background:rgba(59,130,246,.07)!important}' +
-    '.db-gh-impl{background:rgba(139,92,246,.06)!important}' +
-    '.db-gh-closed{background:rgba(16,185,129,.07)!important}' +
-    '.db-gh-overdue{background:rgba(244,63,94,.12)!important}' +
+    /* Group header tints — pre-calculated solid (rgba blend on #ffffff) agar opaque saat sticky */
+    '.db-gh-open{background:#feecee!important}' +
+    '.db-gh-tpp{background:#fef8ec!important}' +
+    '.db-gh-impl-open{background:#edf3fe!important}' +
+    '.db-gh-impl{background:#f1eefe!important}' +
+    '.db-gh-closed{background:#edfbf5!important}' +
+    '.db-gh-overdue{background:#fcd8dd!important}' +
 
     /* Hover row */
     '.db-tbl tbody tr:hover td{background:var(--surface2);transition:background .1s}' +
@@ -747,16 +742,19 @@ function _dbApprovalSection(agendas, findings, s) {
   '</tr>';
 
   // ── Data rows ─────────────────────────────────────────────
-  var dataRows = tableData.map(function(row, idx) {
+  var displayIdx = 0;
+  var dataRows = tableData.map(function(row) {
     var hasAny = (row.n_open + row.n_open_impl +
                   row.n_app_dh + row.n_app_aud + row.n_app_koor +
                   row.n_closed + row.n_overdue) > 0;
 
-    return '<tr' + (!hasAny ? ' style="opacity:.5"' : '') + '>' +
+    if (!hasAny) return '';
+    displayIdx++;
+    return '<tr>' +
       '<td class="db-col-area">' +
         '<div style="display:flex;align-items:center;gap:16px">' +
           '<span style="font-size:11px;font-weight:700;color:var(--text-muted);' +
-            'min-width:18px;text-align:right;flex-shrink:0">' + (idx + 1) + '</span>' +
+            'min-width:18px;text-align:right;flex-shrink:0">' + displayIdx + '</span>' +
           '<div>' +
             '<div style="font-size:13px;font-weight:600">' + escHtml(row.dept) + '</div>' +
             (row.kategori ? '<div style="font-size:10px;color:var(--text-muted);font-weight:400">' + escHtml(row.kategori) + '</div>' : '') +
