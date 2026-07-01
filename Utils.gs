@@ -290,15 +290,31 @@ function sendEmail(to, subject, htmlBody) {
   }
 
   // ── PRODUCTION: kirim ke penerima asli ───────────────────────
-  try {
-    GmailApp.sendEmail(originalRecipients, subject, '', {
-      htmlBody,
-      name: 'Audit System - Integrated Management System',
-    });
-    console.log('[Notif SENT] To:', originalRecipients, '| Subject:', subject);
-  } catch (e) {
-    console.error('sendEmail error:', e.message);
+  // Batasi 45 penerima per email (limit GAS: 50 recipients/message) —
+  // kalau lebih, dipecah jadi beberapa email dengan isi yang sama.
+  const BATCH_SIZE = 45;
+  const recipientList = Array.isArray(to) ? to : [to];
+  let sentCount = 0;
+
+  for (let i = 0; i < recipientList.length; i += BATCH_SIZE) {
+    const batch = recipientList.slice(i, i + BATCH_SIZE);
+    try {
+      GmailApp.sendEmail(batch.join(','), subject, '', {
+        htmlBody,
+        from: 'info.ims@wingscorp.com',
+        name: 'IMS Audit System - PT Sayap Mas Utama',
+      });
+      sentCount += batch.length;
+      console.log('[Notif SENT] To:', batch.join(', '), '| Subject:', subject);
+    } catch (e) {
+      console.error('sendEmail error (batch mulai index ' + i + '):', e.message);
+      if (/quota|too many times|Limit Exceeded/i.test(e.message)) {
+        console.error('[Notif] STOP — kuota email habis. Terkirim: ' + sentCount + '/' + recipientList.length + ' | Subject: ' + subject);
+        break;
+      }
+    }
   }
+  return { sent: sentCount, total: recipientList.length };
 }
 
 /**
