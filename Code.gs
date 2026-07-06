@@ -349,7 +349,7 @@ function _routeAction(action, payload, profile) {
       const period_sa  = getPeriodById(payload.period_id);
       const folder_sa  = getOrCreateFolder(
         payload.agenda_id,
-        getOrCreateFolder(payload.period_id, getOrCreateFolder(CONFIG.DRIVE_ROOT_FOLDER_NAME))
+        getOrCreateFolder(payload.period_id, getAuditRootFolder())
       );
       const fileUrl_sa = uploadFileToDrive(
         payload.file_base64, payload.file_name, payload.mime_type, folder_sa
@@ -444,7 +444,7 @@ function _routeAction(action, payload, profile) {
                     item.result_id,
                     getOrCreateFolder(
                       payload.agenda_id,
-                      getOrCreateFolder(payload.period_id, getOrCreateFolder(CONFIG.DRIVE_ROOT_FOLDER_NAME))
+                      getOrCreateFolder(payload.period_id, getAuditRootFolder())
                     )
                   )
                 );
@@ -529,7 +529,7 @@ function _routeAction(action, payload, profile) {
       const period_vf = getPeriodById(payload.period_id);
       const folder_vf = getOrCreateFolder(
         payload.agenda_id,
-        getOrCreateFolder(payload.period_id, getOrCreateFolder(CONFIG.DRIVE_ROOT_FOLDER_NAME))
+        getOrCreateFolder(payload.period_id, getAuditRootFolder())
       );
       // Upload foto baru per item (kalau ada), gabungkan dengan existing_foto_urls
       const updates_vf = (payload.updates || []).map(function(upd) {
@@ -647,7 +647,7 @@ function _routeAction(action, payload, profile) {
           getOrCreateFolder(
             payload.agenda_id,
             getOrCreateFolder(
-              payload.period_id, getOrCreateFolder(CONFIG.DRIVE_ROOT_FOLDER_NAME))
+              payload.period_id, getAuditRootFolder())
           )
         )
       );
@@ -682,7 +682,7 @@ function _routeAction(action, payload, profile) {
           getOrCreateFolder(
             payload.agenda_id,
             getOrCreateFolder(
-              payload.period_id, getOrCreateFolder(CONFIG.DRIVE_ROOT_FOLDER_NAME))
+              payload.period_id, getAuditRootFolder())
           )
         )
       );
@@ -715,7 +715,7 @@ function _routeAction(action, payload, profile) {
           payload.result_id,
           getOrCreateFolder(
             payload.agenda_id,
-            getOrCreateFolder(payload.period_id, getOrCreateFolder(CONFIG.DRIVE_ROOT_FOLDER_NAME))
+            getOrCreateFolder(payload.period_id, getAuditRootFolder())
           )
         )
       );
@@ -730,7 +730,7 @@ function _routeAction(action, payload, profile) {
           payload.result_id,
           getOrCreateFolder(
             payload.agenda_id,
-            getOrCreateFolder(payload.period_id, getOrCreateFolder(CONFIG.DRIVE_ROOT_FOLDER_NAME))
+            getOrCreateFolder(payload.period_id, getAuditRootFolder())
           )
         )
       );
