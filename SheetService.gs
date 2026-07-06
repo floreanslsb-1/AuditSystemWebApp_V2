@@ -926,7 +926,7 @@ function archiveAgendaToFile(periodId, spreadsheetId) {
 // ════════════════════════════════════════════════════════════
 
 function _createAuditSpreadsheet(periodId, namaPeriode) {
-  const rootFolder   = getOrCreateFolder(CONFIG.DRIVE_ROOT_FOLDER_NAME);
+  const rootFolder   = getAuditRootFolder();
   const periodFolder = getOrCreateFolder(periodId, rootFolder);
   const ss           = SpreadsheetApp.create('AUDIT_' + periodId);
   const file         = DriveApp.getFileById(ss.getId());
@@ -1102,10 +1102,12 @@ function getFindingsByAgenda(spreadsheetId, agendaId) {
 
 // markOverdueFindings dihapus — overdue logic dipindah ke dashboard (tidak mengubah finding_status)
 
-// Ambil semua Non Comply lintas agenda untuk satu periode (dashboard)
+// Ambil semua Non Comply lintas agenda untuk satu periode (dashboard + hasil audit)
+// Termasuk PENDING_VERIFICATION agar tampil di Hasil Audit
 function getAllFindingsByPeriod(spreadsheetId, periodId) {
   return getAuditResultsByPeriod(spreadsheetId, periodId).filter(r =>
-    r.status === CONFIG.RESULT_STATUS.NON_COMPLY
+    r.status === CONFIG.RESULT_STATUS.NON_COMPLY ||
+    r.finding_status === CONFIG.FINDING_STATUS.PENDING_VERIFICATION
   );
 }
 
