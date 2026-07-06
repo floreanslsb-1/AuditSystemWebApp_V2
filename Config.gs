@@ -17,6 +17,7 @@ const CONFIG = {
   MASTER_SPREADSHEET_ID: '1l2U7tp04J5zx8oDCPnLie8a3g-FOQzeS9hppPBTgkAU',
   ALLOWED_DOMAIN:        'wingscorp.com',
   DRIVE_ROOT_FOLDER_NAME:'AUDIT_SYSTEM',
+  DRIVE_PARENT_FOLDER_ID:'1omdlocUctdDeNrTIEtxc78Ix9QGAnJlc',
 
   // ── Sheet names di Master Spreadsheet ───────────────────────
   SHEETS: {
