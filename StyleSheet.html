@@ -235,12 +235,22 @@
   .user-name  { color: #fff; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .user-role  { color: rgba(255,255,255,.45); font-size: 10px; }
 
+  .sidebar-watermark {
+    padding: 6px 14px 14px;
+    text-align: center;
+    font-size: 10px;
+    color: rgba(255,255,255,.3);
+    letter-spacing: .02em;
+    flex-shrink: 0;
+  }
+
   /* ── Sidebar Collapsed ───────────────────────────────────── */
   #sidebar.collapsed .logo-text-wrap,
   #sidebar.collapsed .nav-label,
   #sidebar.collapsed .user-info,
   #sidebar.collapsed .sidebar-period,
   #sidebar.collapsed .nav-section-label,
+  #sidebar.collapsed .sidebar-watermark,
   #sidebar.collapsed .logo-icon {
     display: none;
   }
