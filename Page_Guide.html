@@ -1119,7 +1119,34 @@ function _guideEndTour() {
     var cb = _guideOnTourEndCallback;
     _guideOnTourEndCallback = null;
     setTimeout(cb, 400);
-  } else if (typeof toast === 'function') toast('Tour selesai! Klik tombol \u003f di pojok kanan bawah untuk mengulang panduan kapan saja.', 'info', 4000);
+  } else {
+    var endHtml =
+      '<div id="guide-welcome-overlay" style="position:fixed;inset:0;background:rgba(15,31,61,.45);' +
+        'backdrop-filter:blur(3px);z-index:2000;display:flex;align-items:center;justify-content:center;padding:20px">' +
+        '<div style="background:#fff;border-radius:14px;box-shadow:0 16px 48px rgba(0,0,0,.16);' +
+          'width:100%;max-width:340px;padding:24px;animation:_guideSlideIn .25s ease;text-align:center">' +
+          '<div style="font-size:28px;margin-bottom:12px">🎉</div>' +
+          '<div style="font-size:16px;font-weight:800;color:#0f172a;margin-bottom:8px">Tour selesai!</div>' +
+          '<div style="font-size:13px;color:#64748b;line-height:1.6;margin-bottom:20px">' +
+            'Butuh panduan lagi? Klik tombol ' +
+            '<span style="display:inline-flex;align-items:center;justify-content:center;' +
+              'width:22px;height:22px;border-radius:50%;' +
+              'background:linear-gradient(135deg,#2563eb,#06b6d4);' +
+              'color:#fff;font-size:13px;font-weight:800;vertical-align:middle;margin:0 2px">?</span>' +
+            ' di pojok kanan bawah layar kapan saja.' +
+          '</div>' +
+          '<button onclick="_guideWelcomeClose()" ' +
+            'style="width:100%;padding:10px 16px;border-radius:8px;border:none;' +
+              'background:linear-gradient(135deg,#2563eb,#06b6d4);color:#fff;' +
+              'font-size:13px;font-weight:700;cursor:pointer">' +
+            'Oke, mengerti!' +
+          '</button>' +
+        '</div>' +
+      '</div>';
+    var existing = document.getElementById('guide-welcome-overlay');
+    if (existing) existing.remove();
+    document.body.insertAdjacentHTML('beforeend', endHtml);
+  }
 }
 
 function _guideCleanup(full) {
