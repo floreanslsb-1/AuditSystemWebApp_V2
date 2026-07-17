@@ -337,7 +337,7 @@ function _renderHasilAuditData(container, findings, selectedId, period) {
 
     // ── Tabel ─────────────────────────────────────────────────
     '<div style="overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border)">' +
-      '<table id="ha-table" style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed">' +
+      '<table id="ha-table" style="width:100%;border-collapse:collapse;font-size:12px">' +
         '<thead id="ha-thead"></thead>' +
         '<tbody id="ha-tbody"></tbody>' +
       '</table>' +
@@ -416,7 +416,7 @@ function _haRebuildTable(hidden, widths) {
     colHtml += '<th data-col-id="' + c.id + '" ' +
       'style="position:relative;padding:10px 28px 10px 12px;text-align:left;font-size:10px;font-weight:700;' +
         'letter-spacing:.06em;border-bottom:1px solid var(--border);white-space:nowrap;' +
-        'width:' + c.minWidth + 'px;min-width:' + c.minWidth + 'px;overflow:hidden;' +
+        'min-width:' + c.minWidth + 'px;' +
         'background:' + groupColor + borderRight + ';cursor:pointer;user-select:none;' +
         'color:' + (hasFilter ? 'var(--blue,#3b82f6)' : 'var(--text-muted)') + '" ' +
       (c.type !== 'none' ? 'onclick="event.stopPropagation();_haOpenFilterPop(\'' + c.id + '\',this)"' : '') + '>' +
@@ -436,6 +436,17 @@ function _haRebuildTable(hidden, widths) {
     '</th>';
   });
   colHtml += '</tr>';
+
+  // Inject colgroup untuk mengikat lebar kolom ke tbody
+  var colgroupHtml = '<colgroup>' +
+    visibleCols.map(function(c) {
+      return '<col style="width:' + c.minWidth + 'px;min-width:' + c.minWidth + 'px">';
+    }).join('') +
+  '</colgroup>';
+  var tableEl = document.getElementById('ha-table');
+  var existingColgroup = tableEl ? tableEl.querySelector('colgroup') : null;
+  if (existingColgroup) existingColgroup.remove();
+  if (tableEl) tableEl.insertAdjacentHTML('afterbegin', colgroupHtml);
 
   document.getElementById('ha-thead').innerHTML = grpHtml + colHtml;
 
@@ -533,7 +544,7 @@ function _haBuildRow(f, period, visibleCols) {
   var isRed   = f.finding_status === 'OPEN' && overdue.tpp_plan && !f.tpp_submitted_at;
   var textCol = isRed ? 'color:#dc2626' : 'color:#111827';
 
-  var td      = 'font-size:12px;padding:10px 12px;vertical-align:top;overflow-wrap:break-word;word-break:break-word;overflow:hidden;' + textCol;
+  var td      = 'font-size:12px;padding:10px 12px;vertical-align:top;' + textCol;
   var tdNw    = 'font-size:12px;padding:10px 12px;vertical-align:top;white-space:nowrap;' + textCol;
   var tdMono  = 'font-family:monospace;font-size:11px;white-space:nowrap;padding:10px 12px;vertical-align:top;' + textCol;
 
@@ -576,10 +587,10 @@ function _haBuildRow(f, period, visibleCols) {
 
   // Map kolom → HTML cell content
   var cellMap = {
-    'result_id':     '<td style="' + tdMono + '">'                                                        + _cell(f.result_id) + '</td>',
-    'dept':          '<td style="' + tdNw + ';font-weight:600">'                                          + _cell(f.dept) + '</td>',
+    'result_id':     '<td style="' + td + ';font-family:monospace;font-size:11px;word-break:break-all">'  + _cell(f.result_id) + '</td>',
+    'dept':          '<td style="' + td + ';font-weight:600">'                                            + _cell(f.dept) + '</td>',
     'deskripsi':     '<td style="' + td + '">'                                                            + _cell(f.deskripsi_temuan || '—') + '</td>',
-    'lokasi':        '<td style="' + tdNw + '">'                                                          + _cell(f.lokasi_temuan || '—') + '</td>',
+    'lokasi':        '<td style="' + td + '">'                                                            + _cell(f.lokasi_temuan || '—') + '</td>',
     'bukti_temuan':  '<td style="' + tdNw + '">'                                                          + _fotoLinks(f.foto_urls) + '</td>',
     'status_temuan': '<td style="' + tdNw + ';border-right:2px solid var(--border)">'                    + fsBadge + '</td>',
     'correction':    '<td style="' + td + '">'                                                            + _cell(f.correction || '—') + '</td>',
@@ -1053,9 +1064,19 @@ function _haResizeMove(e) {
   // Hanya update minWidth di th — table tetap auto-layout
   var colId = _haResizeState.colId;
   document.querySelectorAll('#ha-thead th[data-col-id="' + colId + '"]').forEach(function(th) {
-    th.style.width    = newW + 'px';
     th.style.minWidth = newW + 'px';
   });
+  // Update colgroup juga agar td ikut
+  var tableEl = document.getElementById('ha-table');
+  if (tableEl) {
+    var cols = tableEl.querySelectorAll('colgroup col');
+    var visibleCols = HA_COLS.filter(function(c) { return _haLoadHidden().indexOf(c.id) === -1; });
+    var colIdx = visibleCols.findIndex(function(c) { return c.id === colId; });
+    if (colIdx !== -1 && cols[colIdx]) {
+      cols[colIdx].style.width    = newW + 'px';
+      cols[colIdx].style.minWidth = newW + 'px';
+    }
+  }
   _haResizeState.currentW = newW;
 }
 
