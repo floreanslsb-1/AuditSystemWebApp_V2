@@ -367,6 +367,18 @@ function getOrCreateFolder(name, parentFolder = null) {
 }
 
 /**
+ * Ambil folder root AUDIT_SYSTEM — ditempatkan di dalam folder tujuan
+ * (CONFIG.DRIVE_PARENT_FOLDER_ID). Fallback ke root Drive kalau kosong.
+ * @returns {DriveApp.Folder}
+ */
+function getAuditRootFolder() {
+  const parent = CONFIG.DRIVE_PARENT_FOLDER_ID
+    ? DriveApp.getFolderById(CONFIG.DRIVE_PARENT_FOLDER_ID)
+    : DriveApp.getRootFolder();
+  return getOrCreateFolder(CONFIG.DRIVE_ROOT_FOLDER_NAME, parent);
+}
+
+/**
  * Buat struktur folder untuk satu finding
  * Path: AUDIT_SYSTEM / {period_id} / {area_id} / {finding_id}
  * @param {string} periodId
@@ -375,7 +387,7 @@ function getOrCreateFolder(name, parentFolder = null) {
  * @returns {DriveApp.Folder}
  */
 function createFindingFolder(periodId, areaId, findingId) {
-  const root    = getOrCreateFolder(CONFIG.DRIVE_ROOT_FOLDER_NAME);
+  const root    = getAuditRootFolder();
   const period  = getOrCreateFolder(periodId, root);
   const area    = getOrCreateFolder(areaId, period);
   return getOrCreateFolder(findingId, area);
