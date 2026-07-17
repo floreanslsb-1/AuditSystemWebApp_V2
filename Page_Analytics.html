@@ -101,24 +101,30 @@ function renderAnalyticsSection(findings, period, agendas) {
 
   el.innerHTML =
     // Header
-    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">' +
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap">' +
+      '<div style="width:34px;height:34px;border-radius:var(--radius-sm);background:rgba(37,99,235,.1);' +
+        'display:flex;align-items:center;justify-content:center;flex-shrink:0">' +
+        '<i data-lucide="bar-chart-3" style="width:17px;height:17px;color:var(--blue,#2563eb)"></i>' +
+      '</div>' +
       '<div>' +
-        '<div style="font-size:13px;font-weight:700">Analitik & Laporan</div>' +
-        '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">Preset laporan siap pakai dan custom chart builder</div>' +
+        '<div style="font-size:13px;font-weight:700;color:var(--text)">Analitik & Laporan</div>' +
+        '<div style="font-size:11px;color:var(--text-muted);margin-top:1px">Preset laporan siap pakai dan custom chart builder</div>' +
       '</div>' +
     '</div>' +
 
     // Tabs
-    '<div style="display:flex;gap:2px;border-bottom:2px solid var(--border);margin-bottom:20px">' +
+    '<div style="display:flex;gap:4px;border-bottom:1.5px solid var(--border);margin-bottom:20px">' +
       '<button id="an-tab-preset" onclick="_anSwitchTab(\'preset\')" ' +
-        'style="padding:8px 16px;font-size:12px;font-weight:600;border:none;background:transparent;cursor:pointer;' +
-          'border-bottom:2px solid var(--blue,#3b82f6);margin-bottom:-2px;color:var(--blue,#3b82f6)">' +
-        '📊 Preset Laporan' +
+        'style="display:inline-flex;align-items:center;gap:6px;padding:9px 16px;font-size:12.5px;font-weight:600;' +
+          'border:none;background:transparent;cursor:pointer;' +
+          'border-bottom:2px solid var(--blue,#3b82f6);margin-bottom:-1.5px;color:var(--blue,#3b82f6)">' +
+        '<i data-lucide="layout-grid" style="width:14px;height:14px"></i> Preset Laporan' +
       '</button>' +
       '<button id="an-tab-custom" onclick="_anSwitchTab(\'custom\')" ' +
-        'style="padding:8px 16px;font-size:12px;font-weight:600;border:none;background:transparent;cursor:pointer;' +
-          'border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--text-muted)">' +
-        '🔧 Custom Builder' +
+        'style="display:inline-flex;align-items:center;gap:6px;padding:9px 16px;font-size:12.5px;font-weight:600;' +
+          'border:none;background:transparent;cursor:pointer;' +
+          'border-bottom:2px solid transparent;margin-bottom:-1.5px;color:var(--text-muted)">' +
+        '<i data-lucide="sliders-horizontal" style="width:14px;height:14px"></i> Custom Builder' +
       '</button>' +
     '</div>' +
 
@@ -165,51 +171,65 @@ function _anBuildPresetPanel() {
   var builtinCards = [
     {
       id: 'realisasi',
-      icon: '📋',
+      icon: 'clipboard-check',
       title: 'Realisasi Audit',
       desc: 'Tabel kesesuaian audit plan vs realisasi per dept, lengkap dengan jumlah temuan.',
       color: AN_PAL.teal,
     },
     {
       id: 'rekap_temuan',
-      icon: '📊',
+      icon: 'bar-chart-3',
       title: 'Rekapitulasi Temuan',
       desc: 'Stacked bar chart Comply vs Non Comply per departemen. Filter dept tersedia.',
       color: AN_PAL.blue,
     },
     {
       id: 'status_tpp',
-      icon: '🍩',
-      title: 'Status TPP per Dept',
-      desc: 'Donut chart distribusi status tindak lanjut (Open TPP, Closed, dll).',
+      icon: 'pie-chart',
+      title: 'Distribusi Status Tindak Lanjut Temuan',
+      desc: 'Donut chart sebaran temuan berdasarkan tahap penyelesaiannya (Open TPP, Review, Closed, dll).',
       color: AN_PAL.purple,
     },
   ];
 
   var builtinHtml = builtinCards.map(function(c) {
     return '<div onclick="_anRunPreset(\'' + c.id + '\')" ' +
-      'style="padding:14px 16px;border-radius:var(--radius);border:1.5px solid var(--border);' +
-        'cursor:pointer;transition:border-color .15s,box-shadow .15s;background:var(--surface)" ' +
-      'onmouseover="this.style.borderColor=\'' + c.color + '\';this.style.boxShadow=\'0 0 0 3px ' + c.color + '22\'" ' +
-      'onmouseout="this.style.borderColor=\'var(--border)\';this.style.boxShadow=\'none\'">' +
-      '<div style="font-size:22px;margin-bottom:8px">' + c.icon + '</div>' +
+      'style="padding:16px;border-radius:var(--radius);border:1.5px solid var(--border);' +
+        'cursor:pointer;transition:border-color .15s,box-shadow .15s,transform .15s;background:var(--surface)" ' +
+      'onmouseover="this.style.borderColor=\'' + c.color + '\';this.style.boxShadow=\'var(--shadow)\';this.style.transform=\'translateY(-2px)\'" ' +
+      'onmouseout="this.style.borderColor=\'var(--border)\';this.style.boxShadow=\'none\';this.style.transform=\'none\'">' +
+      '<div style="width:36px;height:36px;border-radius:var(--radius-sm);background:' + c.color + '18;' +
+        'display:flex;align-items:center;justify-content:center;margin-bottom:12px">' +
+        '<i data-lucide="' + c.icon + '" style="width:18px;height:18px;color:' + c.color + '"></i>' +
+      '</div>' +
       '<div style="font-size:13px;font-weight:700;margin-bottom:4px;color:var(--text)">' + escHtml(c.title) + '</div>' +
       '<div style="font-size:11px;color:var(--text-muted);line-height:1.5">' + escHtml(c.desc) + '</div>' +
     '</div>';
   }).join('');
 
   var savedHtml = saved.length ? saved.map(function(p, i) {
-    return '<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;' +
-      'border-radius:var(--radius);border:1.5px solid var(--border);background:var(--surface)">' +
-      '<div style="flex:1;cursor:pointer" onclick="_anRunSavedPreset(' + i + ')">' +
-        '<div style="font-size:12px;font-weight:600">⭐ ' + escHtml(p.name) + '</div>' +
-        '<div style="font-size:10px;color:var(--text-muted);margin-top:2px">' +
+    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;' +
+      'border-radius:var(--radius);border:1.5px solid var(--border);background:var(--surface);' +
+        'transition:border-color .15s" ' +
+      'onmouseover="this.style.borderColor=\'var(--amber,#f59e0b)\'" ' +
+      'onmouseout="this.style.borderColor=\'var(--border)\'">' +
+      '<div style="width:28px;height:28px;border-radius:var(--radius-sm);background:rgba(245,158,11,.12);' +
+        'display:flex;align-items:center;justify-content:center;flex-shrink:0">' +
+        '<i data-lucide="star" style="width:14px;height:14px;color:var(--amber,#f59e0b)"></i>' +
+      '</div>' +
+      '<div style="flex:1;cursor:pointer;min-width:0" onclick="_anRunSavedPreset(' + i + ')">' +
+        '<div style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHtml(p.name) + '</div>' +
+        '<div style="font-size:10px;color:var(--text-muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' +
           escHtml(p.dimLabel) + ' · ' + escHtml(p.metricLabel) + ' · ' + escHtml(p.chartLabel) +
         '</div>' +
       '</div>' +
-      '<button onclick="_anDeleteSavedPreset(' + i + ')" ' +
-        'style="background:transparent;border:none;cursor:pointer;color:var(--text-muted);font-size:14px;' +
-          'padding:2px 6px;border-radius:4px" title="Hapus preset">✕</button>' +
+      '<button onclick="_anDeleteSavedPreset(' + i + ')" title="Hapus preset" ' +
+        'style="background:transparent;border:none;cursor:pointer;color:var(--text-muted);' +
+          'padding:5px;border-radius:var(--radius-sm);flex-shrink:0;display:flex" ' +
+        'onmouseover="this.style.background=\'var(--bg)\';this.style.color=\'var(--rose,#f43f5e)\'" ' +
+        'onmouseout="this.style.background=\'transparent\';this.style.color=\'var(--text-muted)\'">' +
+        '<i data-lucide="x" style="width:13px;height:13px"></i>' +
+      '</button>' +
     '</div>';
   }).join('') : '';
 
@@ -325,7 +345,7 @@ function _anPresetRealisasi(out) {
         '</div>' +
         '<div style="display:flex;gap:6px">' +
           '<button onclick="_anDownloadTableCsv(\'realisasi\')" class="btn btn-outline btn-sm" style="font-size:11px">' +
-            '<i data-lucide="download" style="width:11px;height:11px"></i> CSV' +
+            '<i data-lucide="file-spreadsheet" style="width:11px;height:11px"></i> Excel' +
           '</button>' +
         '</div>' +
       '</div>' +
@@ -339,32 +359,33 @@ function _anPresetRealisasi(out) {
       '</div>' : '') +
       // Tabel
       '<div style="overflow-x:auto">' +
-        '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
+        '<table id="an-realisasi-table" style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed">' +
           '<thead>' +
             '<tr style="background:var(--surface2)">' +
-              _anTh('No', 'width:36px;text-align:center') +
-              _anTh('Dept') + _anTh('Area / Ruang Lingkup') + _anTh('Auditor') +
-              _anTh('Mulai Audit') + _anTh('Selesai Audit') +
-              _anTh('Comply', 'text-align:center;color:'+AN_PAL.emerald) +
-              _anTh('Non Comply', 'text-align:center;color:'+AN_PAL.rose) +
-              _anTh('OFI') + _anTh('Status Agenda') +
+              _anTh('No', 'width:40px;text-align:center') +
+              _anTh('Dept', 'width:90px') + _anTh('Area / Ruang Lingkup', 'width:160px') + _anTh('Auditor', 'width:150px') +
+              _anTh('Mulai Audit', 'width:100px') + _anTh('Selesai Audit', 'width:100px') +
+              _anTh('Comply', 'width:80px;text-align:center;color:'+AN_PAL.emerald) +
+              _anTh('Non Comply', 'width:90px;text-align:center;color:'+AN_PAL.rose) +
+              _anTh('OFI', 'width:280px') + _anTh('Status Agenda', 'width:100px') +
             '</tr>' +
           '</thead>' +
           '<tbody>' +
             rows.map(function(r, i) {
               var red = r.outOfRange ? 'color:var(--rose,#f43f5e);' : '';
               var bg  = r.outOfRange ? 'background:rgba(244,63,94,.04);' : '';
-              var td  = 'padding:10px 12px;border-bottom:1px solid var(--border);font-size:12px;' + bg;
+              var td  = 'padding:10px 12px;border-bottom:1px solid var(--border);font-size:12px;' +
+                'vertical-align:top;white-space:normal;word-break:break-word;overflow-wrap:break-word;' + bg;
               return '<tr>' +
                 '<td style="' + td + 'text-align:center;color:var(--text-muted);font-weight:600">' + (i+1) + '</td>' +
                 '<td style="' + td + 'font-weight:700;' + red + '">' + escHtml(r.dept) + '</td>' +
                 '<td style="' + td + '">' + escHtml(r.area) + '</td>' +
                 '<td style="' + td + 'color:var(--text-muted)">' + escHtml(r.auditors) + '</td>' +
-                '<td style="' + td + 'white-space:nowrap;' + red + '">' + escHtml(r.started) + '</td>' +
-                '<td style="' + td + 'white-space:nowrap;' + red + '">' + escHtml(r.done) + '</td>' +
+                '<td style="' + td + red + '">' + escHtml(r.started) + '</td>' +
+                '<td style="' + td + red + '">' + escHtml(r.done) + '</td>' +
                 '<td style="' + td + 'text-align:center;font-weight:700;color:' + AN_PAL.emerald + '">' + (r.comply||'—') + '</td>' +
                 '<td style="' + td + 'text-align:center;font-weight:700;color:' + AN_PAL.rose + '">' + (r.nonComply||'—') + '</td>' +
-                '<td style="' + td + 'max-width:200px;color:var(--text-muted)">' + escHtml(r.ofi||'—') + '</td>' +
+                '<td style="' + td + 'color:var(--text-muted)">' + escHtml(r.ofi||'—') + '</td>' +
                 '<td style="' + td + '">' + _anStatusBadge(r.status) + '</td>' +
               '</tr>';
             }).join('') +
@@ -385,6 +406,7 @@ function _anPresetRealisasi(out) {
   window._anRealisasiRows = rows;
   window._anRealisasiPeriod = period;
   lucide.createIcons(out);
+  _anEnableColResize(document.getElementById('an-realisasi-table'));
 }
 
 function _anStatusBadge(s) {
@@ -395,9 +417,44 @@ function _anStatusBadge(s) {
 }
 
 function _anTh(label, extraStyle) {
-  return '<th style="padding:9px 12px;text-align:left;font-size:10px;font-weight:700;' +
+  var handle = '<span class="an-col-resize-handle" ' +
+    'style="position:absolute;right:0;top:0;bottom:0;width:6px;cursor:col-resize;' +
+      'user-select:none;transition:background .1s" ' +
+    'onmouseover="this.style.background=\'var(--blue,#3b82f6)\'" ' +
+    'onmouseout="this.style.background=\'transparent\'"></span>';
+  return '<th style="position:relative;padding:9px 16px 9px 12px;text-align:left;font-size:10px;font-weight:700;' +
     'letter-spacing:.06em;color:var(--text-muted);border-bottom:1px solid var(--border);' +
-    'white-space:nowrap;' + (extraStyle||'') + '">' + escHtml(label) + '</th>';
+    'vertical-align:top;white-space:normal;word-break:break-word;overflow-wrap:break-word;line-height:1.4;' + (extraStyle||'') + '">' +
+    escHtml(label) + handle +
+  '</th>';
+}
+
+// ── Resizable table columns ─────────────────────────────────
+// Drag handle di sisi kanan tiap <th> untuk resize lebar kolom.
+// Butuh table-layout:fixed + width eksplisit di tiap <th> saat render.
+function _anEnableColResize(table) {
+  if (!table) return;
+  var ths = table.querySelectorAll('thead th');
+  ths.forEach(function(th) {
+    var handle = th.querySelector('.an-col-resize-handle');
+    if (!handle) return;
+    handle.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      var startX     = e.clientX;
+      var startWidth = th.offsetWidth;
+      document.body.style.cursor = 'col-resize';
+      function onMove(e2) {
+        th.style.width = Math.max(40, startWidth + (e2.clientX - startX)) + 'px';
+      }
+      function onUp() {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.body.style.cursor = '';
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  });
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -430,7 +487,7 @@ function _anPresetRekapTemuan(out) {
             '<i data-lucide="image" style="width:11px;height:11px"></i> PNG' +
           '</button>' +
           '<button onclick="_anDownloadTableCsv(\'rekap\')" class="btn btn-outline btn-sm" style="font-size:11px">' +
-            '<i data-lucide="download" style="width:11px;height:11px"></i> CSV' +
+            '<i data-lucide="file-spreadsheet" style="width:11px;height:11px"></i> Excel' +
           '</button>' +
         '</div>' +
       '</div>' +
@@ -451,19 +508,19 @@ function _anPresetRekapTemuan(out) {
       '</div>' +
       // Canvas
       // HTML legend manual (di luar canvas, tidak nabrak)
-      '<div style="display:flex;align-items:center;justify-content:center;gap:20px;' +
+      '<div id="an-legend" style="display:flex;align-items:center;justify-content:center;gap:20px;' +
         'padding:12px 20px 0;font-size:12px;font-weight:600">' +
         '<span style="display:flex;align-items:center;gap:6px">' +
-          '<span style="display:inline-block;width:14px;height:14px;border-radius:2px;background:#5c0808"></span>' +
+          '<span data-legend-color="#5c0808" data-legend-label="Non Comply" style="display:inline-block;width:14px;height:14px;border-radius:2px;background:#5c0808"></span>' +
           'Non Comply' +
         '</span>' +
         '<span style="display:flex;align-items:center;gap:6px">' +
-          '<span style="display:inline-block;width:14px;height:14px;border-radius:2px;background:#065f46"></span>' +
+          '<span data-legend-color="#065f46" data-legend-label="Comply" style="display:inline-block;width:14px;height:14px;border-radius:2px;background:#065f46"></span>' +
           'Comply' +
         '</span>' +
       '</div>' +
-      '<div style="padding:12px 20px 20px">' +
-        '<canvas id="an-canvas" style="max-height:400px"></canvas>' +
+      '<div style="padding:12px 20px 20px;position:relative;height:400px">' +
+        '<canvas id="an-canvas"></canvas>' +
       '</div>' +
     '</div>';
 
@@ -531,7 +588,7 @@ function _anRenderRekapChart() {
 
           ctx3.save();
 
-          // Sisi kanan (parallelogram)
+          // Sisi kanan (parallelogram) — semua dataset
           ctx3.beginPath();
           ctx3.moveTo(right, y);
           ctx3.lineTo(right + DEPTH, y - DEPTH);
@@ -541,15 +598,17 @@ function _anRenderRekapChart() {
           ctx3.fillStyle = colors.side;
           ctx3.fill();
 
-          // Sisi atas (parallelogram)
-          ctx3.beginPath();
-          ctx3.moveTo(left,  y);
-          ctx3.lineTo(right, y);
-          ctx3.lineTo(right + DEPTH, y - DEPTH);
-          ctx3.lineTo(left  + DEPTH, y - DEPTH);
-          ctx3.closePath();
-          ctx3.fillStyle = colors.top;
-          ctx3.fill();
+          // Sisi atas — hanya dataset Comply (di === 1) supaya tidak ditimpa face bar atasnya
+          if (!isNC) {
+            ctx3.beginPath();
+            ctx3.moveTo(left,  y);
+            ctx3.lineTo(right, y);
+            ctx3.lineTo(right + DEPTH, y - DEPTH);
+            ctx3.lineTo(left  + DEPTH, y - DEPTH);
+            ctx3.closePath();
+            ctx3.fillStyle = colors.top;
+            ctx3.fill();
+          }
 
           ctx3.restore();
         });
@@ -575,10 +634,10 @@ function _anRenderRekapChart() {
           ctx3.textBaseline = 'middle';
           ctx3.fillText(val, bar.x, bar.y + barH / 2);
         } else {
-          // Bar NC terlalu kecil — tulis tepat di atas bar NC
-          ctx3.fillStyle    = '#fde8e8';
+          // Bar NC terlalu kecil — tulis di atas bar NC
+          ctx3.fillStyle    = '#ffffff';
           ctx3.textBaseline = 'bottom';
-          ctx3.fillText(val, bar.x, bar.y - 2);
+          ctx3.fillText(val, bar.x, bar.y - 3);
         }
         ctx3.restore();
       });
@@ -608,17 +667,10 @@ function _anRenderRekapChart() {
       ],
     },
     options: {
-      responsive:true, maintainAspectRatio:true,
-      layout: { padding: { top:28, right: DEPTH + 4 } },
+      responsive:true, maintainAspectRatio:false,
+      layout: { padding: { top:20, right: DEPTH + 4 } },
       plugins: {
-        legend: { display:true, position:'top', labels:{ font:{size:11}, usePointStyle:true, padding:16,
-          generateLabels: function(chart) {
-            return [
-              { text:'Non Comply', fillStyle:'#7f1111', strokeStyle:'#7f1111', lineWidth:0, pointStyle:'rect', hidden:false, datasetIndex:0 },
-              { text:'Comply',     fillStyle:'#065f46', strokeStyle:'#065f46', lineWidth:0, pointStyle:'rect', hidden:false, datasetIndex:1 },
-            ];
-          },
-        }},
+        legend: { display: false },
         tooltip: { mode:'index', intersect:false },
       },
       scales: {
@@ -655,13 +707,13 @@ function _anPresetStatusTpp(out) {
   var fsLabel = { OPEN:'Open TPP', OPEN_IMPL:'Open Implementasi',
     APP_DEPT_HEAD:'Review Dept Head', APP_AUDITOR:'Review Auditor',
     APP_KOORDINATOR:'Review Koordinator', CLOSED:'Closed', OVERDUE:'Overdue' };
-  var fsColor = { OPEN:AN_PAL.rose, OPEN_IMPL:AN_PAL.blue,
-    APP_DEPT_HEAD:AN_PAL.purple, APP_AUDITOR:AN_PAL.purple,
-    APP_KOORDINATOR:AN_PAL.indigo, CLOSED:AN_PAL.emerald, OVERDUE:AN_PAL.rose };
+  var fsColor = { OPEN:'#9f1239', OPEN_IMPL:'#1d4ed8',
+    APP_DEPT_HEAD:'#5b21b6', APP_AUDITOR:'#5b21b6',
+    APP_KOORDINATOR:'#3730a3', CLOSED:'#065f46', OVERDUE:'#9f1239' };
 
   findings.forEach(function(f) {
     var lbl = fsLabel[f.finding_status] || f.finding_status;
-    if (!statusGroups[lbl]) statusGroups[lbl] = { count:0, color: fsColor[f.finding_status]||AN_PAL.slate };
+    if (!statusGroups[lbl]) statusGroups[lbl] = { count:0, color: fsColor[f.finding_status]||'#334155' };
     statusGroups[lbl].count++;
   });
 
@@ -675,7 +727,7 @@ function _anPresetStatusTpp(out) {
       '<div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;' +
         'align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px">' +
         '<div>' +
-          '<div style="font-size:14px;font-weight:700">Status TPP per Dept</div>' +
+          '<div style="font-size:14px;font-weight:700">Distribusi Status Tindak Lanjut Temuan</div>' +
           '<div style="font-size:11px;color:var(--text-muted);margin-top:3px">' +
             escHtml(period.nama_periode||'') + ' · ' + total + ' temuan Non Comply' +
           '</div>' +
@@ -685,38 +737,41 @@ function _anPresetStatusTpp(out) {
             '<i data-lucide="image" style="width:11px;height:11px"></i> PNG' +
           '</button>' +
           '<button onclick="_anDownloadTableCsv(\'tpp\')" class="btn btn-outline btn-sm" style="font-size:11px">' +
-            '<i data-lucide="download" style="width:11px;height:11px"></i> CSV' +
+            '<i data-lucide="file-spreadsheet" style="width:11px;height:11px"></i> Excel' +
           '</button>' +
         '</div>' +
       '</div>' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;padding:20px;align-items:center">' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;padding:24px;align-items:stretch">' +
         // Donut chart
-        '<div style="max-width:320px;margin:0 auto;width:100%">' +
-          '<canvas id="an-canvas" style="max-height:300px"></canvas>' +
+        '<div style="max-width:320px;margin:0 auto;width:100%;position:relative;height:300px;align-self:center">' +
+          '<canvas id="an-canvas"></canvas>' +
         '</div>' +
-        // Legend tabel
-        '<div>' +
-          '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
-            '<thead><tr style="background:var(--surface2)">' +
-              _anTh('Status') + _anTh('Jumlah','text-align:center') + _anTh('%','text-align:center') +
-            '</tr></thead><tbody>' +
+        // Legend card — mengisi tinggi yang sama dengan donut, konten di-center vertikal
+        '<div style="display:flex;align-items:center">' +
+          '<div id="an-legend-table" data-total="' + total + '" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:20px 22px">' +
+            '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--border)">' +
+              '<span style="font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--text-muted)">TOTAL TEMUAN NON COMPLY</span>' +
+              '<span style="font-size:22px;font-weight:800;color:var(--text)">' + total + '</span>' +
+            '</div>' +
             labels.map(function(lbl, i) {
               var pct = total ? Math.round(values[i]/total*100) : 0;
-              return '<tr style="border-bottom:1px solid var(--border)">' +
-                '<td style="padding:9px 12px;display:flex;align-items:center;gap:8px">' +
-                  '<span style="width:10px;height:10px;border-radius:50%;background:' + colors[i] + ';flex-shrink:0"></span>' +
-                  escHtml(lbl) +
-                '</td>' +
-                '<td style="padding:9px 12px;text-align:center;font-weight:700">' + values[i] + '</td>' +
-                '<td style="padding:9px 12px;text-align:center;color:var(--text-muted)">' + pct + '%</td>' +
-              '</tr>';
+              return '<div data-row data-color="' + colors[i] + '" data-label="' + escAttr(lbl) + '" data-value="' + values[i] + '" data-pct="' + pct + '" style="margin-bottom:14px">' +
+                '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
+                  '<span style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--text)">' +
+                    '<span style="width:10px;height:10px;border-radius:50%;background:' + colors[i] + ';flex-shrink:0"></span>' +
+                    escHtml(lbl) +
+                  '</span>' +
+                  '<span style="display:flex;align-items:baseline;gap:6px">' +
+                    '<span style="font-size:15px;font-weight:700;color:var(--text)">' + values[i] + '</span>' +
+                    '<span style="font-size:11px;color:var(--text-muted);width:34px;text-align:right">' + pct + '%</span>' +
+                  '</span>' +
+                '</div>' +
+                '<div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">' +
+                  '<div style="height:100%;width:' + pct + '%;background:' + colors[i] + ';border-radius:3px"></div>' +
+                '</div>' +
+              '</div>';
             }).join('') +
-            '</tbody><tfoot><tr style="background:var(--surface2);font-weight:700">' +
-              '<td style="padding:9px 12px">Total</td>' +
-              '<td style="padding:9px 12px;text-align:center">' + total + '</td>' +
-              '<td style="padding:9px 12px;text-align:center">100%</td>' +
-            '</tr></tfoot>' +
-          '</table>' +
+          '</div>' +
         '</div>' +
       '</div>' +
     '</div>';
@@ -727,9 +782,9 @@ function _anPresetStatusTpp(out) {
   var canvas = document.getElementById('an-canvas'); if (!canvas) return;
   _anActiveChart = new Chart(canvas.getContext('2d'), {
     type: 'doughnut',
-    data: { labels: labels, datasets:[{ data:values, backgroundColor: colors.map(function(c){ return c+'cc'; }), borderColor:colors, borderWidth:2, hoverOffset:6 }] },
+    data: { labels: labels, datasets:[{ data:values, backgroundColor: colors, borderColor:'#ffffff', borderWidth:2, hoverOffset:6 }] },
     options: {
-      responsive:true, maintainAspectRatio:true, cutout:'62%',
+      responsive:true, maintainAspectRatio:false, cutout:'62%',
       plugins: {
         legend:{ display:false },
         tooltip:{ callbacks:{ label: function(ctx){ return ' ' + ctx.label + ': ' + ctx.raw + ' (' + Math.round(ctx.raw/total*100) + '%)'; } } },
@@ -738,7 +793,7 @@ function _anPresetStatusTpp(out) {
   });
 
   window._anTppRows  = labels.map(function(l,i){ return { status:l, count:values[i] }; });
-  _anLastTitle = 'Status TPP';
+  _anLastTitle = 'Distribusi Status Tindak Lanjut Temuan';
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -849,11 +904,11 @@ function _anRenderCustomChart(rows, dim, metric, typeId, out) {
           '<button onclick="_anDownloadPng()" class="btn btn-outline btn-sm" style="font-size:11px">' +
             '<i data-lucide="image" style="width:11px;height:11px"></i> PNG</button>' +
           '<button onclick="_anDownloadCustomCsv()" class="btn btn-outline btn-sm" style="font-size:11px">' +
-            '<i data-lucide="download" style="width:11px;height:11px"></i> CSV</button>' +
+            '<i data-lucide="file-spreadsheet" style="width:11px;height:11px"></i> Excel</button>' +
         '</div>' +
       '</div>' +
-      '<div style="' + (isPie?'max-width:420px;margin:0 auto':'') + '">' +
-        '<canvas id="an-canvas" style="width:100%;max-height:380px"></canvas>' +
+      '<div style="' + (isPie?'max-width:420px;margin:0 auto;':'') + 'position:relative;height:380px">' +
+        '<canvas id="an-canvas"></canvas>' +
       '</div>' +
     '</div>';
 
@@ -876,7 +931,7 @@ function _anRenderCustomChart(rows, dim, metric, typeId, out) {
       borderSkipped: false,
     }]},
     options:{
-      indexAxis: isHBar?'y':'x', responsive:true, maintainAspectRatio:true,
+      indexAxis: isHBar?'y':'x', responsive:true, maintainAspectRatio:false,
       layout: { padding: { top: isPie?0:24, right: isHBar?32:8 } },
       plugins:{
         legend:{ display:isPie, position:'bottom', labels:{ font:{size:11}, usePointStyle:true, padding:14 } },
@@ -999,58 +1054,195 @@ function _anSaveCurrentAsPreset() {
 function _anDownloadPng() {
   var canvas = document.getElementById('an-canvas');
   if (!canvas) { toast('Tidak ada chart untuk didownload.','error'); return; }
+
+  var dpr = canvas.clientWidth ? (canvas.width / canvas.clientWidth) : (window.devicePixelRatio || 1);
+
+  // ── Kasus 1: legend baris di atas canvas (mis. Rekap Temuan) ──
+  var legendEl    = document.getElementById('an-legend');
+  var legendItems = legendEl
+    ? Array.from(legendEl.querySelectorAll('[data-legend-color]')).map(function(sw) {
+        return { color: sw.getAttribute('data-legend-color'), label: sw.getAttribute('data-legend-label') };
+      })
+    : [];
+
+  // ── Kasus 2: tabel keterangan di samping canvas (mis. Status TPP) ──
+  var tableEl   = document.getElementById('an-legend-table');
+  var tableRows = tableEl
+    ? Array.from(tableEl.querySelectorAll('[data-row]')).map(function(tr) {
+        return {
+          color: tr.getAttribute('data-color'),
+          label: tr.getAttribute('data-label'),
+          value: tr.getAttribute('data-value'),
+          pct:   tr.getAttribute('data-pct'),
+        };
+      })
+    : [];
+  var tableTotal = tableEl ? tableEl.getAttribute('data-total') : null;
+
+  var legendH = legendItems.length ? Math.round(36 * dpr) : 0;
+  var tableW  = tableRows.length  ? Math.round(340 * dpr) : 0;
+
   var off = document.createElement('canvas');
-  off.width=canvas.width; off.height=canvas.height;
-  var ctx=off.getContext('2d'); ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,off.width,off.height); ctx.drawImage(canvas,0,0);
-  var a=document.createElement('a');
-  var period=window._anPeriod;
-  a.download='Analytics_'+(period?period.nama_periode.replace(/[^a-zA-Z0-9_-]/g,'_'):'chart')+'_'+new Date().toISOString().slice(0,10)+'.png';
-  a.href=off.toDataURL('image/png'); document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  toast('Chart berhasil didownload.','success');
+  off.width  = canvas.width + tableW;
+  off.height = canvas.height + legendH;
+  var ctx = off.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, off.width, off.height);
+
+  // Gambar legend baris (kalau ada)
+  if (legendItems.length) {
+    var sw = 12 * dpr, gap = 8 * dpr, itemGap = 26 * dpr;
+    ctx.font = (12 * dpr) + 'px system-ui,-apple-system,sans-serif';
+    ctx.textBaseline = 'middle';
+    var totalW = legendItems.reduce(function(w, it) {
+      return w + sw + gap + ctx.measureText(it.label).width + itemGap;
+    }, -itemGap);
+    var lx = (off.width - tableW - totalW) / 2;
+    var ly = legendH / 2;
+    legendItems.forEach(function(it) {
+      ctx.fillStyle = it.color;
+      ctx.fillRect(lx, ly - sw / 2, sw, sw);
+      lx += sw + gap;
+      ctx.fillStyle = '#111827';
+      ctx.fillText(it.label, lx, ly);
+      lx += ctx.measureText(it.label).width + itemGap;
+    });
+  }
+
+  // Gambar chart aslinya
+  ctx.drawImage(canvas, 0, legendH);
+
+  // Gambar tabel keterangan di kanan (kalau ada)
+  if (tableRows.length) {
+    var tx0    = canvas.width + 24 * dpr;
+    var tRight = off.width - 20 * dpr;
+    var rowH   = 34 * dpr;
+    var ty     = legendH + (off.height - legendH - (rowH * (tableRows.length + 2))) / 2;
+
+    ctx.textBaseline = 'middle';
+
+    // Header
+    ctx.font = '700 ' + (10 * dpr) + 'px system-ui,-apple-system,sans-serif';
+    ctx.fillStyle = '#6b7280';
+    ctx.textAlign = 'left';
+    ctx.fillText('STATUS', tx0, ty);
+    ctx.textAlign = 'right';
+    ctx.fillText('JUMLAH', tRight - 50 * dpr, ty);
+    ctx.fillText('%', tRight, ty);
+    ty += rowH * 0.7;
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = 1 * dpr;
+    ctx.beginPath(); ctx.moveTo(tx0 - 4 * dpr, ty); ctx.lineTo(tRight, ty); ctx.stroke();
+    ty += rowH * 0.5;
+
+    // Baris data
+    tableRows.forEach(function(r) {
+      var dotR = 5 * dpr;
+      ctx.fillStyle = r.color;
+      ctx.beginPath(); ctx.arc(tx0 + dotR, ty, dotR, 0, Math.PI * 2); ctx.fill();
+
+      ctx.font = (12 * dpr) + 'px system-ui,-apple-system,sans-serif';
+      ctx.fillStyle = '#111827';
+      ctx.textAlign = 'left';
+      ctx.fillText(r.label, tx0 + dotR * 2 + 8 * dpr, ty);
+
+      ctx.font = '700 ' + (12 * dpr) + 'px system-ui,-apple-system,sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(r.value, tRight - 50 * dpr, ty);
+      ctx.font = (12 * dpr) + 'px system-ui,-apple-system,sans-serif';
+      ctx.fillStyle = '#6b7280';
+      ctx.fillText(r.pct + '%', tRight, ty);
+
+      ty += rowH;
+    });
+
+    // Total
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.beginPath(); ctx.moveTo(tx0 - 4 * dpr, ty - rowH * 0.35); ctx.lineTo(tRight, ty - rowH * 0.35); ctx.stroke();
+    ctx.font = '700 ' + (12 * dpr) + 'px system-ui,-apple-system,sans-serif';
+    ctx.fillStyle = '#111827';
+    ctx.textAlign = 'left';
+    ctx.fillText('Total', tx0, ty);
+    ctx.textAlign = 'right';
+    ctx.fillText(tableTotal, tRight - 50 * dpr, ty);
+    ctx.fillText('100%', tRight, ty);
+  }
+
+  var a = document.createElement('a');
+  var period = window._anPeriod;
+  a.download = 'Analytics_' + (period ? period.nama_periode.replace(/[^a-zA-Z0-9_-]/g,'_') : 'chart') + '_' + new Date().toISOString().slice(0,10) + '.png';
+  a.href = off.toDataURL('image/png');
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  toast('Chart berhasil didownload.', 'success');
+}
+
+// ── SheetJS (xlsx) loader ────────────────────────────────────
+var _anXlsxReady = false;
+function _anLoadXlsx(cb) {
+  if (typeof XLSX !== 'undefined') { cb(); return; }
+  if (_anXlsxReady) {
+    var t = setInterval(function() { if (typeof XLSX !== 'undefined') { clearInterval(t); cb(); } }, 80);
+    return;
+  }
+  _anXlsxReady = true;
+  var s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  s.onload = cb;
+  s.onerror = function() { toast('Gagal memuat modul Excel.', 'error'); };
+  document.head.appendChild(s);
 }
 
 function _anDownloadCustomCsv() {
   var rows=_anLastRows; var dim=_anLastDim; var metric=_anLastMetric;
   if (!rows||!rows.length) { toast('Tidak ada data.','error'); return; }
-  function q(v){ var s=String(v||''); return (s.indexOf(',')!==-1||s.indexOf('"')!==-1)?'"'+s.replace(/"/g,'""')+'"':s; }
-  var csv=[[q(dim.label),q(metric.label),'Jumlah di Grup'].join(',')]
-    .concat(rows.map(function(r){ return [q(r.label),q(r.value),q(r.count)].join(','); })).join('\r\n');
-  _anTriggerCsvDownload(csv, 'Custom_Analytics');
+  var aoa=[[dim.label, metric.label, 'Jumlah di Grup']]
+    .concat(rows.map(function(r){ return [r.label, r.value, r.count]; }));
+  _anLoadXlsx(function(){ _anTriggerXlsxDownload(aoa, 'Custom_Analytics', 'Analytics'); });
 }
 
 function _anDownloadTableCsv(type) {
-  var csv='', filename='';
-  function q(v){ var s=String(v||''); return (s.indexOf(',')!==-1||s.indexOf('"')!==-1)?'"'+s.replace(/"/g,'""')+'"':s; }
+  var aoa=null, filename='', sheetName='Data';
 
   if (type==='realisasi') {
     var rows=window._anRealisasiRows||[];
-    csv=[['No','Dept','Area','Auditor','Mulai Audit','Selesai Audit','Comply','Non Comply','OFI','Status'].join(',')]
-      .concat(rows.map(function(r,i){ return [i+1,q(r.dept),q(r.area),q(r.auditors),q(r.started),q(r.done),r.comply,r.nonComply,q(r.ofi),q(r.status)].join(','); })).join('\r\n');
-    filename='Realisasi_Audit';
+    aoa=[['No','Dept','Area','Auditor','Mulai Audit','Selesai Audit','Comply','Non Comply','OFI','Status']]
+      .concat(rows.map(function(r,i){ return [i+1,r.dept,r.area,r.auditors,r.started,r.done,r.comply,r.nonComply,r.ofi,r.status]; }));
+    filename='Realisasi_Audit'; sheetName='Realisasi Audit';
   } else if (type==='rekap') {
     var rows=window._anRekapRows||[];
-    csv=[['Dept','Non Comply','Comply'].join(',')]
-      .concat(rows.map(function(r){ return [q(r.dept),r.nonComply,r.comply].join(','); })).join('\r\n');
-    filename='Rekapitulasi_Temuan';
+    aoa=[['Dept','Non Comply','Comply']]
+      .concat(rows.map(function(r){ return [r.dept,r.nonComply,r.comply]; }));
+    filename='Rekapitulasi_Temuan'; sheetName='Rekapitulasi Temuan';
   } else if (type==='tpp') {
     var rows=window._anTppRows||[];
-    csv=[['Status','Jumlah'].join(',')]
-      .concat(rows.map(function(r){ return [q(r.status),r.count].join(','); })).join('\r\n');
-    filename='Status_TPP';
+    aoa=[['Status','Jumlah']]
+      .concat(rows.map(function(r){ return [r.status,r.count]; }));
+    filename='Status_TPP'; sheetName='Status TPP';
   }
-  if (csv) _anTriggerCsvDownload(csv, filename);
+  if (aoa) _anLoadXlsx(function(){ _anTriggerXlsxDownload(aoa, filename, sheetName); });
 }
 
-function _anTriggerCsvDownload(csv, filename) {
-  var period=window._anPeriod;
-  var bom='\uFEFF';
-  var blob=new Blob([bom+csv],{type:'text/csv;charset=utf-8;'});
-  var url=URL.createObjectURL(blob);
-  var a=document.createElement('a');
-  a.href=url;
-  a.download=(filename||'Analytics')+'_'+(period?period.nama_periode.replace(/[^a-zA-Z0-9_-]/g,'_'):'')+'_'+new Date().toISOString().slice(0,10)+'.csv';
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  toast('CSV berhasil didownload.','success');
+function _anTriggerXlsxDownload(aoa, filename, sheetName) {
+  var period = window._anPeriod;
+  var ws = XLSX.utils.aoa_to_sheet(aoa);
+
+  // Lebar kolom otomatis menyesuaikan isi terpanjang tiap kolom (maks 60 karakter)
+  var colWidths = aoa[0].map(function(_, colIdx) {
+    var maxLen = aoa.reduce(function(max, row) {
+      var cell = row[colIdx];
+      var len  = cell == null ? 0 : String(cell).length;
+      return Math.max(max, len);
+    }, 10);
+    return { wch: Math.min(maxLen + 2, 60) };
+  });
+  ws['!cols'] = colWidths;
+
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, (sheetName || 'Data').substring(0, 31));
+
+  var periodLabel = period ? period.nama_periode.replace(/[^a-zA-Z0-9_-]/g, '_') : '';
+  var fname = (filename || 'Analytics') + (periodLabel ? '_' + periodLabel : '') + '_' + new Date().toISOString().slice(0, 10) + '.xlsx';
+  XLSX.writeFile(wb, fname);
+  toast('Excel berhasil didownload.', 'success');
 }
 </script>
