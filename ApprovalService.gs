@@ -71,7 +71,6 @@ function massApprove({ spreadsheetId, resultIds, agendaIds, byEmail, komentar })
   return { results, approved: results.filter(r => r.success).length };
 }
 
-
 // ── Handlers ─────────────────────────────────────────────────────
 
 function _handleApprove({ spreadsheetId, result, agenda, flow, byEmail, komentar }) {
